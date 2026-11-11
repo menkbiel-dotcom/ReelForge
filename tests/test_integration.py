@@ -18,8 +18,32 @@ import engine
 ROOT = Path(__file__).resolve().parents[1]
 HAS_TKINTER = importlib.util.find_spec('tkinter') is not None
 HAS_DEMO_GAMEPLAY = (ROOT / 'assets/gameplay/parkour_teste.mp4').is_file()
-HAS_DEMO_AUDIO = (ROOT / 'assets/demo_ninja/voice_0.wav').is_file()
-AUDIO = (ROOT / 'assets/demo_ninja/voice_0.wav').read_bytes() if (ROOT / 'assets/demo_ninja/voice_0.wav').is_file() else b'RIFF$\x00\x00\x00WAVEfmt '
+
+def _make_silent_wav(duration=1.0, sample_rate=24000, channels=1, sampwidth=2):
+    import io, wave
+    buf = io.BytesIO()
+    with wave.open(buf, 'wb') as wf:
+        wf.setnchannels(channels)
+        wf.setsampwidth(sampwidth)
+        wf.setframerate(sample_rate)
+        wf.writeframes(b'\x00' * int(duration * sample_rate * channels * sampwidth))
+    return buf.getvalue()
+
+DEMO_AUDIO_FILE = ROOT / 'assets/demo_ninja/voice_0.wav'
+if not DEMO_AUDIO_FILE.is_file():
+    try:
+        import wave
+        DEMO_AUDIO_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with wave.open(str(DEMO_AUDIO_FILE), 'wb') as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(24000)
+            wf.writeframes(b'\x00' * int(1.0 * 24000 * 2))
+    except Exception:
+        pass
+
+HAS_DEMO_AUDIO = DEMO_AUDIO_FILE.is_file()
+AUDIO = DEMO_AUDIO_FILE.read_bytes() if DEMO_AUDIO_FILE.is_file() else _make_silent_wav(1.0)
 
 
 def profile(provider='elevenlabs'):
@@ -162,6 +186,60 @@ class AppTests(unittest.TestCase):
             self.assertEqual(lines[0]['audio_source'],'imported')
             self.assertEqual(app.preview_signature,'changed-caption-mode')
         finally:app.destroy()
+
+
+class Item6Tests(unittest.TestCase):
+    def test_captions_interpolated_words_expand_minimum_duration(self):
+        text = "Isso com o preço caiu no Brasil"
+        recognized = [
+            {'text': 'o', 'start': 0.0005, 'end': 0.3},
+            {'text': 'preço', 'start': 0.3, 'end': 0.75},
+            {'text': 'caiu', 'start': 0.75, 'end': 1.15},
+            {'text': 'no', 'start': 1.15, 'end': 1.35},
+            {'text': 'Brasil', 'start': 1.35, 'end': 1.8},
+        ]
+        duration = 1.8
+        res = captions.match_words(text, recognized, duration)
+        self.assertEqual([w['text'] for w in res], text.split())
+        isso = res[0]
+        com = res[1]
+        self.assertTrue(isso.get('estimated'))
+        self.assertTrue(com.get('estimated'))
+        self.assertGreaterEqual(isso['end'] - isso['start'], 0.08 - 1e-6)
+        self.assertGreaterEqual(com['end'] - com['start'], 0.08 - 1e-6)
+        self.assertLessEqual(res[-1]['end'], duration + 1e-6)
+        for i in range(len(res) - 1):
+            self.assertLessEqual(res[i]['end'], res[i + 1]['start'] + 1e-6)
+
+    def test_whisper_words_missing_model_raises_runtime_error_without_hf_traceback(self):
+        with tempfile.TemporaryDirectory() as td:
+            dummy_wav = Path(td) / 'test.wav'
+            dummy_wav.write_bytes(AUDIO)
+            with patch('captions.WhisperModel', side_effect=Exception('HuggingFace offline error'), create=True):
+                with patch('captions._models', {}):
+                    with self.assertRaises(RuntimeError) as ctx:
+                        captions.whisper_words(dummy_wav, 'teste', 'small', Path(td) / 'cache')
+                    err = str(ctx.exception)
+                    self.assertIn("não está baixado localmente", err)
+                    self.assertIn("instalar_legendas.bat", err)
+                    self.assertIn(".venv\\Scripts\\python.exe", err)
+                    self.assertIsNone(ctx.exception.__cause__)
+
+    def test_engine_character_thumbnail_size(self):
+        from PIL import Image
+        captured_sizes = []
+        orig_thumbnail = Image.Image.thumbnail
+
+        def fake_thumbnail(self, size, resample=3):
+            captured_sizes.append(size)
+            return orig_thumbnail(self, size, resample)
+
+        with tempfile.TemporaryDirectory() as td:
+            out_png = Path(td) / 'char.png'
+            with patch.object(engine, 'OUTPUT', Path(td)):
+                with patch.object(Image.Image, 'thumbnail', fake_thumbnail):
+                    engine.character(out_png, 0, mouth_open=False)
+            self.assertIn((510, 640), captured_sizes)
 
 
 if __name__=='__main__':unittest.main(verbosity=2)

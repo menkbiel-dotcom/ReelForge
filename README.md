@@ -13,7 +13,7 @@ Para roteiros novos, mantenha o Ollama (`http://localhost:11434`, modelo do reda
 
 Por motivos de privacidade e direitos de imagem/voz, os sprites dos personagens e os áudios de voz **não são rastreados no repositório Git** (estão listados no `.gitignore`):
 
-- **Sprites dos personagens (`assets/characters/*.png`):** fornecidos localmente pelo usuário em `assets/characters/` (`character_0_closed.png`, `character_0_open.png`, `character_1_closed.png`, `character_1_open.png`).
+- **Sprites dos personagens (`assets/characters/*.png`):** fornecidos localmente pelo usuário em `assets/characters/` (`sasuke.png` e `naruto.png`).
 - **Vozes de referência e amostras (`VoiceStudio` / `assets/demo*/voice_*.wav` e `fala_*.wav`):** fornecidas localmente pelo usuário nos perfis do VoiceStudio (`Sasuke` e `Naruto`) ou nas pastas de demonstração local.
 
 ## Como baixar o modelo Whisper (`small`) para uso offline (`local_files_only`)

@@ -35,18 +35,22 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
    - `voice_studio.py` possui autostart do backend local no Windows (1 tentativa por execução, até 45 esperas de 2 s), cache em memória do áudio bruto de referência (`_ref_cache`, TTL 120 s) e preparo único por voz (`_prepared_reference`: corte de 10 s, 24 kHz, mono + transcrição Whisper cacheada em disco `cache/ref_cache/<sha256[:24]>.wav` e `.txt` e em memória).
 4. **Alinhamento de Legendas (`captions.py`):**
    - Usa `faster-whisper` (`small` por padrão em `settings.json`, `local_files_only=True`) para alinhar palavra por palavra e gerar legendas `.ass` transparentes (máx. 3 palavras por bloco, texto branco com contorno preto e palavra ativa destacada em amarelo/ciano).
+   - `captions.match_words`: palavras interpoladas com duração inferior a 0,08 s ganham pelo menos 0,08 s (`expand_interpolated_words`), tomando tempo das vizinhas e preservando a ordem cronológica e o fim da fala.
+   - `captions.whisper_words`: se o modelo Whisper não estiver baixado localmente, levanta `RuntimeError` em português com o comando exato e referência a `instalar_legendas.bat`, sem traceback do HuggingFace.
+   - `instalar_legendas.bat`: lê o modelo de `settings.json` (`"whisper_model"`) e baixa automaticamente para `output/alignment_cache/models`.
 5. **Renderização (`render_pipeline.py` + `engine.py`):**
-   - `engine.character()` gera sombra suave projetada atrás do sprite (`GaussianBlur(9)`, opacidade `0.62`, deslocamento `+6px` para baixo) com cache em `output/cache/sprite_v2_<indice>_<mtime_ns>.png`.
+   - `engine.character()` redimensiona o sprite com `thumbnail((510, 640))` e gera sombra suave projetada atrás do sprite (`GaussianBlur(9)`, opacidade `0.62`, deslocamento `+6px` para baixo) com cache em `output/cache/sprite_v2_<indice>_<mtime_ns>.png`.
    - `render_pipeline.py` usa `-threads 0`, aplica `vignette=PI/6` no fundo, `highpass=f=80,acompressor=threshold=-18dB:ratio=2.2:attack=10:release=120` antes do `alimiter` nas vozes e `loudnorm=I=-14:TP=-1.5:LRA=11` no áudio final em 30 FPS padrão.
 
 ## Privacidade dos Assets
 
-- Os arquivos `assets/characters/*.png`, `assets/demo*/voice_*.wav` e `fala_*.wav` estão no `.gitignore` e não são rastreados no índice do repositório (permanecem apenas no disco local do usuário).
+- Os arquivos `assets/characters/*.png` (`sasuke.png` e `naruto.png`), `assets/demo*/voice_*.wav` e `fala_*.wav` estão no `.gitignore` e não são rastreados no índice do repositório (permanecem apenas no disco local do usuário).
 - O script `publicar_github.py` cria/atualiza o repositório como **privado por padrão** (use `--publico` para público), lê o token exclusivamente de `GITHUB_TOKEN` ou `getpass` (sem argumento `--token` e sem eco no terminal) e faz push sem `force`.
+- Testes que utilizam áudios de demonstração sintetizam automaticamente um WAV silencioso via módulo padrão `wave` quando o arquivo local não existir.
 
-## Suíte de Testes (53 Testes)
+## Suíte de Testes (56 Testes)
 
-- `tests/test_news_auto.py` (31 testes) e `tests/test_integration.py` (22 testes) — totalizando **53 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
+- `tests/test_news_auto.py` (31 testes) e `tests/test_integration.py` (25 testes) — totalizando **56 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'

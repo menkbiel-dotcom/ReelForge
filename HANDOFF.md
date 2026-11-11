@@ -19,10 +19,13 @@
   - **Arquivos tocados:** `news_auto.py`, `CLAUDE.md`, `HANDOFF.md`, `tests/test_news_auto.py`
   - **Testes:** 52 testes passando (incluindo `test_item4_step1_hook_and_contradiction`)
 - [x] **ITEM 5 — Limpar o corpo da matéria (`news_auto.py`, `article_text`)**: feito
-  - **Commit:** a registrar após push — *"Limpa chamadas e manchetes de leia tambem do corpo da materia no RSS"*
+  - **Commit:** `83f5e16176c873d7aefc866d9c3f2450da9ff065` — *"Limpa chamadas e manchetes de leia tambem do corpo da materia no RSS"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 53 testes passando (incluindo `test_item5_clean_article_body_html_and_flat_text`)
-- [ ] **ITEM 6 — Legendas e acabamento (`captions.py`, `instalar_legendas.bat`, `README.md`, `engine.py`, testes)**: pendente / próximo
+- [x] **ITEM 6 — Legendas e acabamento (`captions.py`, `instalar_legendas.bat`, `README.md`, `engine.py`, testes)**: feito
+  - **Commit:** a registrar após push — *"Ajusta duracao minima de palavras nas legendas, modelo do whisper e documentacao"*
+  - **Arquivos tocados:** `captions.py`, `instalar_legendas.bat`, `README.md`, `engine.py`, `tests/test_integration.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 56 testes passando (incluindo `test_captions_interpolated_words_expand_minimum_duration`, `test_whisper_words_missing_model_raises_runtime_error_without_hf_traceback` e `test_engine_character_thumbnail_size`)
 
 ---
 
@@ -85,11 +88,13 @@
 - **Próxima ação concreta:** Implementar ITEM 6 (`captions.py`, `instalar_legendas.bat`, `README.md`, `engine.py`, `tests/test_integration.py`).
 
 ### ITEM 6 — Legendas e acabamento
-- **Status:** pendente
-- **Escopo:**
-  - `captions.match_words`: palavras interpoladas com menos de 0,08 s ganham pelo menos 0,08 s, tomando tempo das vizinhas.
-  - `instalar_legendas.bat`: baixa modelo lido de `settings.json`. Em `whisper_words`, RuntimeError amigável se ausente.
-  - `README.md`: sprites são `sasuke.png` e `naruto.png`.
-  - `engine.character`: thumbnail volta para `(510, 640)`.
-  - Testes com WAV demo geram WAV silencioso quando arquivo não existir.
-- **Arquivos a tocar:** `captions.py`, `instalar_legendas.bat`, `README.md`, `engine.py`, `tests/test_integration.py`.
+- **Status:** feito
+- **O que foi feito:**
+  - `captions.expand_interpolated_words`: palavras interpoladas com duração menor que 0,08 s ganham pelo menos 0,08 s tomando tempo das vizinhas (à esquerda e depois à direita), mantendo estritamente a ordem cronológica e o fim da fala.
+  - Teste com a fala `"Isso com o preço..."` onde `"Isso com"` tinha 0,0005 s: palavras ganham >= 0,08 s e preservam o fim da fala.
+  - `captions.whisper_words`: se o modelo não estiver baixado localmente, levanta `RuntimeError` amigável em português informando o comando exato e `instalar_legendas.bat`, sem traceback do HuggingFace (`from None`).
+  - `instalar_legendas.bat`: após o pip install, baixa o modelo lido de `settings.json` (`whisper_model`).
+  - `README.md`: atualizado para documentar que os sprites são `sasuke.png` e `naruto.png`.
+  - `engine.character`: thumbnail dos sprites restaurada para `(510, 640)`.
+  - `tests/test_integration.py`: testes que dependem do áudio demo agora geram automaticamente um arquivo WAV silencioso usando o módulo padrão `wave` quando ausente no disco, permitindo a execução de `test_imported_audio_never_synthesized`.
+- **Status final:** TODOS OS ITENS DE 1 A 6 CONCLUÍDOS COM SUCESSO.

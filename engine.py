@@ -296,7 +296,7 @@ def character(path, index, mouth_open):
         shutil.copyfile(cached, path)
         return
     image = Image.open(source).convert('RGBA')
-    image.thumbnail((500, 630), Image.Resampling.LANCZOS)
+    image.thumbnail((510, 640), Image.Resampling.LANCZOS)
     canvas = Image.new('RGBA', (540, 670))
     ox, oy = (540 - image.width) // 2, 662 - image.height
     # Sombra suave projetada atrás do personagem para destacar sobre qualquer gameplay.

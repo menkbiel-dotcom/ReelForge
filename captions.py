@@ -81,6 +81,105 @@ def _merge_split_words(expected_norm, recognized):
     return merged
 
 
+def expand_interpolated_words(result, duration, min_dur=0.08):
+    """Garante que palavras interpoladas ganhem pelo menos min_dur segundos, tomando tempo das vizinhas."""
+    if not result:
+        return result
+
+    n = len(result)
+    needs_adjust = any(
+        w.get('estimated') and (w['end'] - w['start'] < min_dur - 1e-5)
+        for w in result
+    )
+    if not needs_adjust:
+        return result
+
+    if duration < n * min_dur:
+        step = duration / n
+        for i, w in enumerate(result):
+            w['start'] = i * step
+            w['end'] = (i + 1) * step
+        return result
+
+    for i in range(n):
+        if not result[i].get('estimated'):
+            continue
+        dur = result[i]['end'] - result[i]['start']
+        if dur >= min_dur - 1e-5:
+            continue
+        needed = min_dur - dur
+
+        # Tenta tomar tempo de vizinhas à esquerda primeiro (preserva âncoras medidas à direita)
+        left_idx = i - 1
+        while needed > 1e-6 and left_idx >= 0:
+            gap = result[left_idx + 1]['start'] - result[left_idx]['end']
+            if gap > 1e-6:
+                take_gap = min(needed, gap)
+                for k in range(left_idx + 1, i + 1):
+                    result[k]['start'] -= take_gap
+                    if k < i:
+                        result[k]['end'] -= take_gap
+                needed -= take_gap
+                if needed <= 1e-6:
+                    break
+
+            l_dur = result[left_idx]['end'] - result[left_idx]['start']
+            avail = max(0.0, l_dur - min_dur)
+            if avail > 1e-6:
+                take = min(needed, avail)
+                result[left_idx]['end'] -= take
+                for k in range(left_idx + 1, i + 1):
+                    result[k]['start'] -= take
+                    if k < i:
+                        result[k]['end'] -= take
+                needed -= take
+                if needed <= 1e-6:
+                    break
+            left_idx -= 1
+
+        # Tenta tomar tempo de vizinhas à direita
+        right_idx = i + 1
+        while needed > 1e-6 and right_idx < n:
+            gap = result[right_idx]['start'] - result[right_idx - 1]['end']
+            if gap > 1e-6:
+                take_gap = min(needed, gap)
+                for k in range(i, right_idx):
+                    result[k]['end'] += take_gap
+                    if k > i:
+                        result[k]['start'] += take_gap
+                needed -= take_gap
+                if needed <= 1e-6:
+                    break
+
+            r_dur = result[right_idx]['end'] - result[right_idx]['start']
+            avail = max(0.0, r_dur - min_dur)
+            if avail > 1e-6:
+                take = min(needed, avail)
+                result[right_idx]['start'] += take
+                for k in range(i, right_idx):
+                    result[k]['end'] += take
+                    if k > i:
+                        result[k]['start'] += take
+                needed -= take
+                if needed <= 1e-6:
+                    break
+            right_idx += 1
+
+    prev = 0.0
+    for w in result:
+        w['start'] = max(prev, w['start'])
+        w['end'] = max(w['start'], w['end'])
+        prev = w['end']
+    if result and result[-1]['end'] > duration:
+        result[-1]['end'] = duration
+        for k in range(n - 2, -1, -1):
+            if result[k]['end'] > result[k + 1]['start']:
+                result[k]['end'] = result[k + 1]['start']
+                result[k]['start'] = min(result[k]['start'], result[k]['end'])
+
+    return result
+
+
 def match_words(text, recognized, duration, min_ratio=.65):
     """Preserve the approved script; explicitly mark any interpolated words."""
     expected = text.split()
@@ -128,6 +227,7 @@ def match_words(text, recognized, duration, min_ratio=.65):
         word['start'] = max(previous, word['start'])
         word['end'] = max(word['start'], word['end'])
         previous = word['end']
+    expand_interpolated_words(result, duration, min_dur=0.08)
     return result
 
 
@@ -143,8 +243,16 @@ def whisper_words(audio, text, model_name, cache):
         return json.loads(dest.read_text(encoding='utf-8'))
     with _lock:
         if model_name not in _models:
-            _models[model_name] = WhisperModel(model_name, device='cpu', compute_type='int8',
-                                             download_root=str(cache / 'models'), local_files_only=True)
+            download_root = str(cache / 'models')
+            try:
+                _models[model_name] = WhisperModel(model_name, device='cpu', compute_type='int8',
+                                                 download_root=download_root, local_files_only=True)
+            except Exception:
+                cmd = f'.venv\\Scripts\\python.exe -c "from faster_whisper import WhisperModel; WhisperModel(\'{model_name}\', device=\'cpu\', compute_type=\'int8\', download_root=\'{download_root}\')"'
+                raise RuntimeError(
+                    f"O modelo Whisper '{model_name}' não está baixado localmente. "
+                    f"Execute instalar_legendas.bat ou rode o comando:\n{cmd}"
+                ) from None
         segments, _ = _models[model_name].transcribe(str(audio), language='pt',
                                                     beam_size=5, word_timestamps=True,
                                                     vad_filter=False, condition_on_previous_text=False)
