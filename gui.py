@@ -1,4 +1,5 @@
 """ReelForge GUI for Windows; standard-library Tkinter with modern Dark Studio theme."""
+import copy
 import ctypes
 import json
 import os
@@ -17,6 +18,34 @@ load_dotenv(HOME / '.env')
 CONFIG = HOME / 'settings.json'
 
 TOPIC_PRESETS = ['tecnologia', 'economia', 'ciência', 'educação', 'mundo', 'cultura', 'esporte']
+
+
+def merge_settings(current: dict, from_ui: dict) -> dict:
+    """Mescla configurações atuais de settings.json com as alterações da UI sem perder chaves desconhecidas."""
+    merged = copy.deepcopy(current) if isinstance(current, dict) else {}
+    if not isinstance(from_ui, dict):
+        return merged
+    for k, v in from_ui.items():
+        if k == 'voice_profiles' and isinstance(v, dict):
+            existing_profiles = merged.get('voice_profiles')
+            if not isinstance(existing_profiles, dict):
+                existing_profiles = {}
+            new_profiles = copy.deepcopy(existing_profiles)
+            for prov, prof in v.items():
+                if isinstance(prof, dict):
+                    prov_existing = new_profiles.get(prov, {})
+                    if isinstance(prov_existing, dict):
+                        merged_prof = copy.deepcopy(prov_existing)
+                        merged_prof.update(prof)
+                        new_profiles[prov] = merged_prof
+                    else:
+                        new_profiles[prov] = copy.deepcopy(prof)
+                else:
+                    new_profiles[prov] = prof
+            merged['voice_profiles'] = new_profiles
+        else:
+            merged[k] = v
+    return merged
 
 
 class App(tk.Tk):
@@ -441,18 +470,26 @@ class App(tk.Tk):
         from render_pipeline import background_color, music_volume
         brightness, gamma = background_color(self.bg_brightness.get(), self.bg_gamma.get())
         self.voice_profiles[self.tts_provider.get()] = self._voice_form()
-        cfg = {'topic': self.topic.get(), 'provider': self.provider.get(), 'ollama_model': self.ollama_model.get(),
-               'gameplay': self.gameplay.get(), 'fps': int(self.fps.get()),
-               'gameplay_brightness': brightness, 'gameplay_gamma': gamma,
-               'loop': self.loop.get(), 'script_loop': self.script_loop.get(),
-               'music_enabled': self.music_enabled.get(),
-               'music_volume': round(music_volume(self.music_volume.get()) * 100, 1),
-               'max_seconds': engine.validate_duration(self.max_seconds.get()),
-               'impact_opening': self.impact_opening.get(),
-               'director_enabled': self.director_enabled.get(), 'content_kind': self.content_kind.get(),
-               'tts_provider': self.tts_provider.get(), 'voice_profiles': self.voice_profiles,
-               'caption_timing': self.caption_timing.get(), 'whisper_model': self.whisper_model.get()}
+        ui_cfg = {'topic': self.topic.get(), 'provider': self.provider.get(), 'ollama_model': self.ollama_model.get(),
+                  'gameplay': self.gameplay.get(), 'fps': int(self.fps.get()),
+                  'gameplay_brightness': brightness, 'gameplay_gamma': gamma,
+                  'loop': self.loop.get(), 'script_loop': self.script_loop.get(),
+                  'music_enabled': self.music_enabled.get(),
+                  'music_volume': round(music_volume(self.music_volume.get()) * 100, 1),
+                  'max_seconds': engine.validate_duration(self.max_seconds.get()),
+                  'impact_opening': self.impact_opening.get(),
+                  'director_enabled': self.director_enabled.get(), 'content_kind': self.content_kind.get(),
+                  'tts_provider': self.tts_provider.get(), 'voice_profiles': self.voice_profiles,
+                  'caption_timing': self.caption_timing.get(), 'whisper_model': self.whisper_model.get()}
         engine.validate_hook(self.hook_text.get())
+        current = {}
+        if CONFIG.exists():
+            try:
+                current = json.loads(CONFIG.read_text(encoding='utf-8'))
+            except (OSError, ValueError):
+                current = {}
+        cfg = merge_settings(current, ui_cfg)
+        self.voice_profiles = cfg.get('voice_profiles', self.voice_profiles)
         CONFIG.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding='utf-8')
         os.environ.update(REELFORGE_BG_BRIGHTNESS=str(brightness), REELFORGE_BG_GAMMA=str(gamma))
         os.environ.update(REELFORGE_LOOP='1' if cfg['loop'] else '0',

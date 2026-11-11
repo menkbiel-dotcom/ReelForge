@@ -130,8 +130,11 @@
   - **Arquivos tocados:** `news_auto.py`, `settings.json`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 62 testes passando (incluindo `test_item6_round2_fact_check_fails_closed`)
 - [x] **ITEM 7 — Prompt do redator e transparência (`news_auto.py`, `engine.py`)**: feito
-  - **Commit:** pendente de push — *"Atualiza prompt few-shot do redator e registra modelos e fatos no JSON final"*
+  - **Commit:** `14f05174c45688d08234fa8b7fa5f12f62d52c32` — *"Atualiza prompt few-shot do redator e registra modelos e fatos no JSON final"*
   - **Arquivos tocados:** `news_auto.py`, `engine.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 63 testes passando (incluindo `test_item7_round2_writer_prompt_and_transparency`)
-- [ ] **ITEM 8 — A tela não pode apagar configurações (`gui.py`, `_save`)**: pendente
+- [x] **ITEM 8 — A tela não pode apagar configurações (`gui.py`, `_save`)**: feito
+  - **Commit:** pendente de envio
+  - **Arquivos tocados:** `gui.py`, `tests/test_integration.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 65 testes passando (incluindo `test_merge_settings_preserves_unknown_keys_and_other_providers` e `test_gui_save_preserves_unknown_settings_on_disk`)
 - [ ] **ITEM 9 — Campos de modelo na tela (`gui.py`)**: pendente

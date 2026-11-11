@@ -46,15 +46,18 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
    - `engine.character()` redimensiona o sprite com `thumbnail((510, 640))` e gera sombra suave projetada atrás do sprite (`GaussianBlur(9)`, opacidade `0.62`, deslocamento `+6px` para baixo) com cache em `output/cache/sprite_v2_<indice>_<mtime_ns>.png`.
    - `render_pipeline.py` usa `-threads 0`, aplica `vignette=PI/6` no fundo, `highpass=f=80,acompressor=threshold=-18dB:ratio=2.2:attack=10:release=120` antes do `alimiter` nas vozes e `loudnorm=I=-14:TP=-1.5:LRA=11` no áudio final em 30 FPS padrão.
 
+6. **Interface Gráfica (`gui.py`):**
+   - `merge_settings(current, from_ui)`: Ao salvar configurações pela GUI (`_save`), mescla as alterações com o `settings.json` existente sem apagar chaves desconhecidas pela tela (como `aceitar_nota_baixa`, `permitir_sem_checagem_de_fatos`, `judge_model`, `whisper_model`), preservando também provedores adicionais e parâmetros ocultos em `voice_profiles`.
+
 ## Privacidade dos Assets
 
 - Os arquivos `assets/characters/*.png` (`sasuke.png` e `naruto.png`), `assets/demo*/voice_*.wav` e `fala_*.wav` estão no `.gitignore` e não são rastreados no índice do repositório (permanecem apenas no disco local do usuário).
 - O script `publicar_github.py` cria/atualiza o repositório como **privado por padrão** (use `--publico` para público), lê o token exclusivamente de `GITHUB_TOKEN` ou `getpass` (sem argumento `--token` e sem eco no terminal) e faz push sem `force`.
 - Testes que utilizam áudios de demonstração sintetizam automaticamente um WAV silencioso via módulo padrão `wave` quando o arquivo local não existir.
 
-## Suíte de Testes (63 Testes)
+## Suíte de Testes (65 Testes)
 
-- `tests/test_news_auto.py` (38 testes) e `tests/test_integration.py` (25 testes) — totalizando **63 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
+- `tests/test_news_auto.py` (38 testes) e `tests/test_integration.py` (27 testes) — totalizando **65 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'

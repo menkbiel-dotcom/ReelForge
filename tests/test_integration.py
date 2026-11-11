@@ -242,4 +242,92 @@ class Item6Tests(unittest.TestCase):
             self.assertIn((510, 640), captured_sizes)
 
 
+class Item8Tests(unittest.TestCase):
+    def test_merge_settings_preserves_unknown_keys_and_other_providers(self):
+        import gui
+        current = {
+            'topic': 'economia',
+            'ollama_model': 'qwen3.5:4b',
+            'judge_model': 'qwen3:8b',
+            'permitir_sem_checagem_de_fatos': True,
+            'aceitar_nota_baixa': True,
+            'custom_unrecognized_key': 42,
+            'voice_profiles': {
+                'voicestudio': {
+                    'a': 'old_a',
+                    'b': 'old_b',
+                    'extra_param': 'secret',
+                },
+                'custom_cloud_provider': {
+                    'endpoint': 'https://custom.tts',
+                }
+            }
+        }
+        from_ui = {
+            'topic': 'tecnologia',
+            'ollama_model': 'qwen3.5:4b',
+            'voice_profiles': {
+                'voicestudio': {
+                    'a': 'new_a',
+                    'b': 'new_b',
+                    'model': 'm1',
+                    'rate_a': '18',
+                    'rate_b': '18',
+                    'pitch_a': '0',
+                    'pitch_b': '0',
+                }
+            }
+        }
+        merged = gui.merge_settings(current, from_ui)
+        self.assertEqual(merged['topic'], 'tecnologia')
+        self.assertEqual(merged['judge_model'], 'qwen3:8b')
+        self.assertTrue(merged['permitir_sem_checagem_de_fatos'])
+        self.assertTrue(merged['aceitar_nota_baixa'])
+        self.assertEqual(merged['custom_unrecognized_key'], 42)
+        self.assertIn('custom_cloud_provider', merged['voice_profiles'])
+        self.assertEqual(merged['voice_profiles']['custom_cloud_provider']['endpoint'], 'https://custom.tts')
+        vs = merged['voice_profiles']['voicestudio']
+        self.assertEqual(vs['a'], 'new_a')
+        self.assertEqual(vs['b'], 'new_b')
+        self.assertEqual(vs['extra_param'], 'secret')
+
+    @unittest.skipUnless(HAS_TKINTER, 'Tkinter necessário para instanciar GUI')
+    def test_gui_save_preserves_unknown_settings_on_disk(self):
+        import gui
+        with tempfile.TemporaryDirectory() as td:
+            cfg_file = Path(td) / 'settings.json'
+            initial_data = {
+                'topic': 'esporte',
+                'ollama_model': 'qwen3.5:4b',
+                'judge_model': 'qwen3:8b',
+                'permitir_sem_checagem_de_fatos': False,
+                'aceitar_nota_baixa': True,
+                'custom_setting_123': 'dont_delete_me',
+                'voice_profiles': {
+                    'other_provider': {'voice': 'narrator'},
+                    'voicestudio': {'a': 'old_v', 'hidden_meta': 999}
+                }
+            }
+            cfg_file.write_text(json.dumps(initial_data, indent=2), encoding='utf-8')
+            with patch.object(gui, 'CONFIG', cfg_file):
+                app = gui.App()
+                try:
+                    app.topic.set('cultura')
+                    saved_cfg = app._save()
+                    self.assertEqual(saved_cfg['topic'], 'cultura')
+                    self.assertEqual(saved_cfg['judge_model'], 'qwen3:8b')
+                    self.assertFalse(saved_cfg['permitir_sem_checagem_de_fatos'])
+                    self.assertTrue(saved_cfg['aceitar_nota_baixa'])
+                    self.assertEqual(saved_cfg['custom_setting_123'], 'dont_delete_me')
+                    self.assertIn('other_provider', saved_cfg['voice_profiles'])
+                    self.assertEqual(saved_cfg['voice_profiles']['voicestudio']['hidden_meta'], 999)
+
+                    disk_cfg = json.loads(cfg_file.read_text(encoding='utf-8'))
+                    self.assertEqual(disk_cfg['topic'], 'cultura')
+                    self.assertEqual(disk_cfg['custom_setting_123'], 'dont_delete_me')
+                    self.assertEqual(disk_cfg['voice_profiles']['voicestudio']['hidden_meta'], 999)
+                finally:
+                    app.destroy()
+
+
 if __name__=='__main__':unittest.main(verbosity=2)
