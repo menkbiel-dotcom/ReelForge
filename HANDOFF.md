@@ -10,8 +10,11 @@
   - **Commit:** `7b0d04a4224fc1275a526b348b5a875bf372f2f9` — *"Valida quantidades e magnitudes com qualificadores e restringe unidades temporais"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 50 testes passando (incluindo `test_item2_quantity_pairs_and_qualifier_rules` e `test_item2_temporal_units_restriction`)
-- [ ] **ITEM 3 — Juiz que checa fatos (`news_auto.py` + `settings.json`)**: em andamento / próximo
-- [ ] **ITEM 4 — Passo 1 devolve o ângulo (`news_auto.py`)**: pendente
+- [x] **ITEM 3 — Juiz que checa fatos (`news_auto.py` + `settings.json`)**: feito
+  - **Commit:** a registrar após push — *"Adiciona juiz de verificacao de fatos, fallback para juiz fraco e novos criterios de nota"*
+  - **Arquivos tocados:** `news_auto.py`, `settings.json`, `README.md`, `CLAUDE.md`, `HANDOFF.md`, `tests/test_news_auto.py`
+  - **Testes:** 51 testes passando (incluindo `test_item3_fact_checking_judge_and_criteria`)
+- [ ] **ITEM 4 — Passo 1 devolve o ângulo (`news_auto.py`)**: em andamento / próximo
 - [ ] **ITEM 5 — Limpar o corpo da matéria (`news_auto.py`, `article_text`)**: pendente
 - [ ] **ITEM 6 — Legendas e acabamento (`captions.py`, `instalar_legendas.bat`, `README.md`, `engine.py`, testes)**: pendente
 
@@ -47,12 +50,13 @@
   - `_facts()` agora também computa quantidades reconhecidas por `_quantity_pairs`.
 
 ### ITEM 3 — Juiz que checa fatos (`news_auto.py` + `settings.json`)
-- **Status:** pendente
-- **Escopo:**
-  - Nova função `verificar_fatos(lines, facts, ask)`: para cada fala, o modelo devolve `{"falas":[{"i":0,"suportada":true,"motivo":""}]}`. Qualquer `"suportada": false` regenera o roteiro passando o índice, o texto da fala e o motivo como correção. Conta dentro do limite atual de regenerações.
-  - Incluir no avaliador de nota o critério "responde as perguntas feitas?" e "contradiz a matéria?". Falha limita a nota a 5.
-  - `judge_model` em `settings.json` vira `"qwen3:8b"`. Se HTTP 404 no Ollama, logar "juiz padrão indisponível, usando o modelo do redator" e gravar `"juiz_fraco": true` no JSON de saída. Documentar no README: `ollama pull qwen3:8b`.
-- **Arquivos a tocar:** `news_auto.py`, `settings.json`, `README.md`, `tests/test_news_auto.py`.
+- **Status:** feito
+- **O que foi feito:**
+  - Implementada função `verificar_fatos(lines, facts, ask)`: para cada fala, o modelo devolve `{"falas":[{"i":0,"suportada":true,"motivo":""}]}`. Se qualquer fala vier com `"suportada": false`, o roteiro é regenerado recebendo correção com índice, texto da fala e motivo, contando dentro do limite de 2 regenerações.
+  - Implementada função `call_judge` com fallback inteligente: se o modelo juiz responder HTTP 404 no Ollama, loga `"juiz padrão indisponível, usando o modelo do redator"`, faz fallback para o modelo do redator (`qwen3.5:4b`) e grava `{"juiz_fraco": true}` nos metadados do roteiro, reel e rejeições.
+  - `"judge_model": "qwen3:8b"` configurado em `settings.json`, com documentação de `ollama pull qwen3:8b` no `README.md`.
+  - Critérios do `evaluate_script()` atualizados: inclui checagem de "responde as perguntas feitas?" e "contradiz a matéria?". Falha em qualquer um limita a nota a no máximo **5**.
+  - Testes cobrindo: fala não suportada forçando regeneração com correção; HTTP 404 ativando fallback e gravando `juiz_fraco`; e notas limitadas a 5 quando pergunta fica sem resposta ou contradiz a matéria.
 
 ### ITEM 4 — Passo 1 devolve o ângulo (`news_auto.py`)
 - **Status:** pendente

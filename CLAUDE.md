@@ -9,7 +9,7 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
    - Em `parse_entry()`, itens do Google News (`feed_name=None`) **nunca** recebem `body` (seu resumo HTML é apenas lista de manchetes `<li>`), sendo barrados por `require_minimum_source()`.
    - Ranqueia as pautas por densidade informativa (`complexity_score`: números, entidades, tamanho do texto e frescor).
    - Em `automatic()`, se a pauta escolhida falhar em `require_minimum_source()`, o sistema tenta automaticamente a próxima candidata (até 3 tentativas) antes de falhar.
-2. **Seleção e Roteiro em 2 Passos + Filtro de Qualidade Fechado (`news_auto.py` + Ollama local `qwen3.5:4b`):**
+2. **Seleção e Roteiro em 2 Passos + Filtro de Qualidade Fechado (`news_auto.py` + Ollama local `qwen3.5:4b` e juiz `qwen3:8b`):**
    - `pick_story()`: O Ollama escolhe a melhor pauta com corpo completo.
    - **Passo 1 (`extract_facts()`):** O Ollama extrai de **5 a 6 fatos curtos** em JSON `{"fatos":[...]}` exclusivamente do título e corpo da matéria (`source_text`), validando números contra `_allowed_numbers(source)` e rejeitando unidades temporais inventadas (`TEMPORAL_UNITS`, com retry).
    - **Passo 2 (`write_script()`):** O Ollama escreve o diálogo entre Sasuke (direto e irônico) e Naruto (curioso e espontâneo) usando exemplos *few-shot* **totalmente fictícios** (`EXEMPLOS FICTÍCIOS: copie apenas o estilo e o ritmo, nunca os fatos`).
@@ -22,8 +22,10 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
      - Restringe unidades temporais (`TEMPORAL_UNITS`: `trimestre`, `semestre`, `década`, etc.): se ausentes da matéria, rejeita tanto em `extract_facts` (com retry) quanto em `validate_lines`.
      - Validação de quantidades e magnitudes com qualificadores (`_quantity_pairs`): compara pares numéricos e magnitudes (`mil`, `milhões`, `bilhões`, `trilhões`, `%`, `sacas...`), aceitando `"mais de X"` se `floor(fonte) == X`, `"quase X"` se `ceil(fonte) == X`, `"cerca de X"` se `round(fonte) == X`, ou valor exato sem qualificador.
      - Exige que a última fala termine com uma frase completa (pergunta aberta ou fecho), sem ponte truncada (`script_loop: false` por padrão).
-   - **Filtro de Qualidade Fechado (`evaluate_script()` + `deterministic_check()`):**
-     - Permite configurar um modelo juiz separado via `"judge_model"` em `settings.json` (padrão = `ollama_model`).
+   - **Checagem Factual e Filtro de Qualidade Fechado (`verificar_fatos()` + `evaluate_script()` + `deterministic_check()`):**
+     - `verificar_fatos()`: o modelo juiz avalia se cada fala é suportada pelos fatos da matéria (`{"falas":[{"i":0,"suportada":true,"motivo":""}]}`). Falas não suportadas forçam regeneração do roteiro com correção contendo `{i, text, motivo}`, contando dentro do limite de 2 regenerações.
+     - Permite configurar o modelo juiz via `"judge_model": "qwen3:8b"` em `settings.json`. Se o modelo retornar HTTP 404 no Ollama, loga `"juiz padrão indisponível, usando o modelo do redator"`, faz fallback para o redator (`qwen3.5:4b`) e grava `{"juiz_fraco": true}` nos metadados do roteiro e do Reel.
+     - `evaluate_script()` avalia naturalidade, gancho, final e os novos critérios: "responde as perguntas feitas?" e "contradiz a matéria?". Se o roteiro deixar perguntas sem resposta ou contradisser a matéria, a nota máxima permitida é limitada a **5**.
      - Se o Ollama falhar ou não retornar `"nota"` numérica válida, tenta mais 1 vez; se continuar falhando, retorna `{"nota": None, "problemas": ["avaliação indisponível"]}` e trata o roteiro como **NÃO aprovado** (nunca assume nota 8).
      - Executa `deterministic_check()` junto da nota do modelo (média de 6 a 16 palavras por fala, pelo menos uma pergunta com `?`, nenhuma fala repetida e nenhuma fala começando igual a duas anteriores); se falhar, desconta 2 pontos e adiciona os motivos em `"problemas"`.
      - Após 2 regenerações com `nota < 7` (ou `nota is None`), salva o roteiro reprovado em `output/rejected_<data>.json` com a nota e os problemas e levanta `RuntimeError` (a menos que `--aceitar-nota-baixa` na CLI ou `"aceitar_nota_baixa": true` em `settings.json` esteja ativo).
@@ -41,9 +43,9 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
 - Os arquivos `assets/characters/*.png`, `assets/demo*/voice_*.wav` e `fala_*.wav` estão no `.gitignore` e não são rastreados no índice do repositório (permanecem apenas no disco local do usuário).
 - O script `publicar_github.py` cria/atualiza o repositório como **privado por padrão** (use `--publico` para público), lê o token exclusivamente de `GITHUB_TOKEN` ou `getpass` (sem argumento `--token` e sem eco no terminal) e faz push sem `force`.
 
-## Suíte de Testes (50 Testes)
+## Suíte de Testes (51 Testes)
 
-- `tests/test_news_auto.py` (28 testes) e `tests/test_integration.py` (22 testes) — totalizando **50 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
+- `tests/test_news_auto.py` (29 testes) e `tests/test_integration.py` (22 testes) — totalizando **51 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'

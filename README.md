@@ -2,7 +2,12 @@
 
 Extraia o projeto e execute `iniciar_windows.bat`. Use **Exemplo offline** e **Gerar Reel** para testar as falas incluídas.
 
-Para roteiros novos, mantenha o Ollama (`http://localhost:11434`, modelo `qwen3.5:4b`) e o VoiceStudio (`http://127.0.0.1:3900`) abertos com os perfis `Sasuke` e `Naruto` disponíveis. Na aba **Vozes e legendas**, selecione `voicestudio` e informe os nomes ou IDs dos perfis. Os dois ritmos começam em `+18%`, com ajuste de tom em `0`. A prévia e a renderização reutilizam as falas geradas para o mesmo texto e perfil.
+Para roteiros novos, mantenha o Ollama (`http://localhost:11434`, modelo do redator `qwen3.5:4b`, juiz `qwen3:8b`) e o VoiceStudio (`http://127.0.0.1:3900`) abertos com os perfis `Sasuke` e `Naruto` disponíveis. Na aba **Vozes e legendas**, selecione `voicestudio` e informe os nomes ou IDs dos perfis. Os dois ritmos começam em `+18%`, com ajuste de tom em `0`. A prévia e a renderização reutilizam as falas geradas para o mesmo texto e perfil.
+
+## Modelos do Ollama (Redator e Juiz de Qualidade)
+
+- **Redator padrão:** `qwen3.5:4b` (`ollama pull qwen3.5:4b`).
+- **Juiz de qualidade e checagem factual:** `qwen3:8b` (`ollama pull qwen3:8b`), configurado como `"judge_model": "qwen3:8b"` em `settings.json`. Se o modelo de 8B não estiver baixado no Ollama (HTTP 404), o ReelForge automaticamente faz fallback para o modelo do redator e registra `"juiz_fraco": true` nos metadados do roteiro e do Reel.
 
 ## Personagens e Vozes de Referência (Fornecidos pelo Usuário)
 

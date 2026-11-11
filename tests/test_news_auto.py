@@ -816,6 +816,113 @@ class NewsAutoTests(unittest.TestCase):
         self.assertIn('quatro primeiros meses', facts[0].lower())
         self.assertEqual(len(calls), 2)
 
+    def test_item3_fact_checking_judge_and_criteria(self):
+        import json
+        story = {
+            'title': 'Exportações de café no Brasil batem recorde histórico',
+            'body': (
+                'O Brasil exportou 16,591 milhões de sacas nos quatro primeiros meses. '
+                'A receita cambial somou US$ 1,786 bilhão, superando o recorde anterior '
+                'de 1,657 bilhão registrado no ciclo passado. A queda de 9,5% no preço médio '
+                'aconteceu pelo aumento do conilon. Os embarques cresceram no período.'
+            ),
+            'extracted_facts': [
+                'O Brasil exportou 16,591 milhões de sacas nos quatro primeiros meses.',
+                'A receita cambial somou US$ 1,786 bilhão.',
+                'O recorde anterior era de 1,657 bilhão de dólares.',
+                'O preço médio caiu 9,5% pelo aumento do café conilon.',
+                'Os embarques bateram recorde histórico.',
+            ]
+        }
+        lines = [
+            {'speaker': 0, 'text': 'Viu o novo recorde no Brasil?', 'fato': 4},
+            {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
+            {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
+            {'speaker': 1, 'text': 'Mas o preço médio caiu 9,5% no ano.', 'fato': 3},
+            {'speaker': 0, 'text': 'Bateu a marca antiga de 1,657 bilhão.', 'fato': 2},
+            {'speaker': 1, 'text': 'Será que o preço do café continua caindo?', 'fato': 3},
+        ]
+
+        # 1. verificar_fatos direto
+        mock_facts_ans = {
+            'falas': [
+                {'i': 0, 'suportada': True, 'motivo': ''},
+                {'i': 1, 'suportada': True, 'motivo': ''},
+                {'i': 2, 'suportada': True, 'motivo': ''},
+                {'i': 3, 'suportada': False, 'motivo': 'Contradiz a matéria sobre conilon'},
+                {'i': 4, 'suportada': True, 'motivo': ''},
+                {'i': 5, 'suportada': True, 'motivo': ''},
+            ]
+        }
+        vf = news_auto.verificar_fatos(lines, story['extracted_facts'], ask=lambda i, p: mock_facts_ans)
+        self.assertEqual(len(vf['falas']), 6)
+        self.assertFalse(vf['falas'][3]['suportada'])
+        self.assertEqual(vf['falas'][3]['motivo'], 'Contradiz a matéria sobre conilon')
+
+        # 2. Fala não suportada forçando regeneração em write_script
+        corrections_received = []
+        def mock_writer(inst, payload_str):
+            pay = json.loads(payload_str)
+            if 'correcao' in pay:
+                corrections_received.append(pay['correcao'])
+            return {'lines': lines}
+
+        judge_calls = []
+        def mock_judge(inst, payload_str, model=None):
+            judge_calls.append(inst)
+            if 'checador de fatos' in inst.lower():
+                if len(corrections_received) == 0:
+                    return {
+                        'falas': [
+                            {'i': 0, 'suportada': True, 'motivo': ''},
+                            {'i': 1, 'suportada': True, 'motivo': ''},
+                            {'i': 2, 'suportada': False, 'motivo': 'Afirmação invertida'},
+                            {'i': 3, 'suportada': True, 'motivo': ''},
+                            {'i': 4, 'suportada': True, 'motivo': ''},
+                            {'i': 5, 'suportada': True, 'motivo': ''},
+                        ]
+                    }
+                return {'falas': [{'i': i, 'suportada': True, 'motivo': ''} for i in range(6)]}
+            return {'nota': 8, 'responde_perguntas': True, 'contradiz_materia': False, 'problemas': []}
+
+        out_lines = news_auto.write_script(story, max_words=100, ask=mock_writer, judge_ask=mock_judge, facts=story['extracted_facts'])
+        self.assertEqual(len(out_lines), 6)
+        self.assertEqual(len(corrections_received), 1)
+        self.assertIn('Fala 3', corrections_received[0])
+        self.assertIn('Afirmação invertida', corrections_received[0])
+
+        # 3. HTTP 404 no juiz aciona fallback e grava juiz_fraco
+        story_fallback = dict(story)
+        calls_404 = []
+        def mock_ask_404(inst, payload_str, model=None):
+            calls_404.append(model)
+            if model == 'qwen3:8b':
+                raise RuntimeError('Ollama local respondeu HTTP 404.')
+            return {'nota': 8, 'responde_perguntas': True, 'contradiz_materia': False, 'problemas': []}
+
+        review = news_auto.evaluate_script(lines, story_fallback, ask=mock_ask_404)
+        self.assertTrue(story_fallback.get('juiz_fraco'))
+        self.assertIn('qwen3:8b', calls_404)
+        self.assertIn('qwen3.5:4b', calls_404)
+        self.assertEqual(review['nota'], 8)
+
+        # 4. Nota limitada a 5 quando pergunta fica sem resposta ou contradiz a matéria
+        def mock_no_answer(inst, payload_str, model=None):
+            return {'nota': 9, 'responde_perguntas': False, 'contradiz_materia': False, 'problemas': []}
+        rev_a = news_auto.evaluate_script(lines, story, ask=mock_no_answer)
+        self.assertLessEqual(rev_a['nota'], 5)
+
+        def mock_contradicts(inst, payload_str, model=None):
+            return {'nota': 9, 'responde_perguntas': True, 'contradiz_materia': True, 'problemas': []}
+        rev_b = news_auto.evaluate_script(lines, story, ask=mock_contradicts)
+        self.assertLessEqual(rev_b['nota'], 5)
+
+        def mock_problem_text(inst, payload_str, model=None):
+            return {'nota': 8, 'problemas': ['A fala do Sasuke contradiz a matéria']}
+        rev_c = news_auto.evaluate_script(lines, story, ask=mock_problem_text)
+        self.assertLessEqual(rev_c['nota'], 5)
+
+
 
 
 if __name__ == '__main__':

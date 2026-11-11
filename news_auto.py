@@ -915,16 +915,55 @@ def accept_low_score_enabled():
 
 
 def judge_model_name():
-    """Modelo usado como juiz no filtro de qualidade (padrão = ollama_model)."""
+    """Modelo usado como juiz no filtro de qualidade (padrão = qwen3:8b)."""
     env = os.getenv('OLLAMA_JUDGE_MODEL')
     if env:
         return env
     try:
         import engine
         cfg = engine.load_settings()
-        return cfg.get('judge_model') or os.getenv('OLLAMA_MODEL') or cfg.get('ollama_model') or 'qwen3.5:4b'
+        return cfg.get('judge_model') or 'qwen3:8b'
     except Exception:
-        return os.getenv('OLLAMA_MODEL') or 'qwen3.5:4b'
+        return 'qwen3:8b'
+
+
+def call_judge(instruction, payload, ask=None, story=None, log=print):
+    """Executa chamada ao modelo juiz com fallback para o modelo do redator se 404 (juiz_fraco)."""
+    import engine
+    cfg = {}
+    try:
+        cfg = engine.load_settings()
+    except Exception:
+        pass
+    judge_model = judge_model_name()
+    writer_model = os.getenv('OLLAMA_MODEL') or cfg.get('ollama_model') or 'qwen3.5:4b'
+
+    use_writer = bool(story and story.get('juiz_fraco'))
+    effective_model = writer_model if use_writer else judge_model
+
+    def _invoke(model_to_use):
+        if ask is None:
+            return engine.request_json(instruction, payload, model=model_to_use)
+        import inspect
+        try:
+            sig = inspect.signature(ask)
+            has_model = 'model' in sig.parameters or any(p.kind == p.VAR_KEYWORD for p in sig.parameters.values())
+        except Exception:
+            has_model = False
+        if has_model:
+            return ask(instruction, payload, model=model_to_use)
+        return ask(instruction, payload)
+
+    try:
+        return _invoke(effective_model)
+    except Exception as exc:
+        is_404 = ('404' in str(exc)) or (getattr(exc, 'response', None) and getattr(exc.response, 'status_code', None) == 404)
+        if is_404 and effective_model != writer_model:
+            log('juiz padrão indisponível, usando o modelo do redator')
+            if story is not None:
+                story['juiz_fraco'] = True
+            return _invoke(writer_model)
+        raise
 
 
 def deterministic_check(lines):
@@ -964,31 +1003,53 @@ def deterministic_check(lines):
     return (2 if issues else 0), issues
 
 
+def verificar_fatos(lines, facts, ask=None, story=None, log=print):
+    """Verifica se cada fala do roteiro é suportada pelos fatos extraídos da matéria."""
+    instruction = (
+        'Você é um checador de fatos rigoroso. Avalie se CADA FALA do roteiro é suportada '
+        'pelos fatos fornecidos da matéria (ou se é uma reação conversacional válida sem afirmação falsa). '
+        'Para cada fala (índice i), indique se ela é suportada ("suportada": true) ou não ("suportada": false). '
+        'Se não for suportada (inventa dados, inverte causas ou contradiz a matéria), inclua em "motivo" a explicação curta. '
+        'Responda APENAS JSON: {"falas":[{"i":0,"suportada":true,"motivo":""}]}')
+    payload = json.dumps({
+        'fatos': facts,
+        'falas': [{'i': i, 'personagem': NAMES[l.get('speaker', 0)], 'fala': l.get('text', '')}
+                  for i, l in enumerate(lines)],
+    }, ensure_ascii=False)
+    for _ in range(2):
+        try:
+            res = call_judge(instruction, payload, ask=ask, story=story, log=log)
+            if isinstance(res, dict) and isinstance(res.get('falas'), list):
+                return res
+        except Exception:
+            continue
+    return {'falas': [{'i': i, 'suportada': True, 'motivo': ''} for i in range(len(lines))]}
+
+
 def evaluate_script(lines, story, ask=None, log=print):
-    """Passo 3 (Filtro de qualidade): avalia naturalidade, gancho e final de 1 a 10 + checagem determinística."""
-    import engine
-    judge_model = judge_model_name()
-    if ask is None:
-        ask_fn = lambda inst, pay: engine.request_json(inst, pay, model=judge_model)
-    else:
-        ask_fn = ask
+    """Passo 3 (Filtro de qualidade): avalia naturalidade, gancho, final e precisão factual de 1 a 10 + checagem determinística."""
     instruction = (
         'Avalie a qualidade deste roteiro de Reel entre Sasuke (0) e Naruto (1) de 1 a 10. '
         'Critérios: '
         '1. Naturalidade: soa como diálogo informal brasileiro entre dois amigos/rivais (sem tom de telejornal)? '
         '2. Gancho: a primeira fala é uma provocação ou pergunta curta (até 10 palavras) e não uma manchete? '
         '3. Final: a última fala fecha bem com uma frase completa (pergunta aberta ou conclusão forte), sem frase quebrada? '
+        '4. Responde às perguntas feitas no diálogo com fatos reais da matéria? '
+        '5. Contradição: alguma fala contradiz o texto da matéria? '
+        'IMPORTANTE: Se o roteiro deixar perguntas feitas pelos personagens sem resposta ou se contradisser a matéria, '
+        'a nota máxima permitida é 5. '
         'Se a nota for menor que 7, liste os problemas objetivos para correção. '
-        'Responda APENAS JSON: {"nota":8,"problemas":[]}')
-    payload = {
+        'Responda APENAS JSON: {"nota":8,"responde_perguntas":true,"contradiz_materia":false,"problemas":[]}')
+    payload = json.dumps({
         'manchete': story.get('title', ''),
+        'materia': story.get('body', ''),
         'dialogo': [{'personagem': NAMES[l['speaker']], 'fala': l['text']} for l in lines],
-    }
+    }, ensure_ascii=False)
     nota = None
     problemas = []
     for _ in range(2):
         try:
-            res = ask_fn(instruction, json.dumps(payload, ensure_ascii=False))
+            res = call_judge(instruction, payload, ask=ask, story=story, log=log)
         except Exception:
             continue
         if not isinstance(res, dict) or 'nota' not in res or res.get('nota') is None or isinstance(res.get('nota'), bool):
@@ -999,6 +1060,21 @@ def evaluate_script(lines, story, ask=None, log=print):
             continue
         nota = max(1.0, min(10.0, parsed))
         problemas = [str(p).strip() for p in (res.get('problemas') or []) if str(p).strip()]
+
+        fails_questions = res.get('responde_perguntas') is False
+        contradicts = res.get('contradiz_materia') is True
+        if not fails_questions and any(re.search(r'n[aã]o\s+responde|sem\s+resposta|pergunta.*(aberta|sem)', p, re.I) for p in problemas):
+            fails_questions = True
+        if not contradicts and any(re.search(r'contradiz|contradi[cç][aã]o', p, re.I) for p in problemas):
+            contradicts = True
+
+        if fails_questions or contradicts:
+            if nota > 5:
+                nota = 5.0
+            if fails_questions and not any('pergunta' in p.lower() for p in problemas):
+                problemas.append('O roteiro deixou pergunta sem resposta com base na matéria.')
+            if contradicts and not any('contradiz' in p.lower() for p in problemas):
+                problemas.append('O roteiro contradiz a matéria.')
         break
     if nota is None:
         log('Filtro de qualidade: avaliação indisponível no Ollama.')
@@ -1023,6 +1099,7 @@ def _save_rejected_script(story, lines, review):
         'source': story.get('source', ''),
         'nota': review.get('nota'),
         'problemas': review.get('problemas', []),
+        'juiz_fraco': bool(story.get('juiz_fraco', False)),
         'lines': lines,
     }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -1030,7 +1107,7 @@ def _save_rejected_script(story, lines, review):
 
 
 def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, loop=None,
-                 facts=None, accept_low_score=None, log=print):
+                 facts=None, accept_low_score=None, log=print, judge_ask=None):
     """Passo 1 (extrai 5-6 fatos) -> Passo 2 (escreve diálogo usando só os fatos) -> Filtro de qualidade (nota >= 7)."""
     import engine
     ask = ask or engine.request_json
@@ -1098,7 +1175,40 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
             error = problem
             best_lines = lines
             continue
-        review = evaluate_script(lines, story, ask=ask, log=log)
+
+        # Verificação factual das falas pelo modelo juiz
+        if judge_ask is not None:
+            vf = verificar_fatos(lines, facts if facts else [source_text(story)], ask=judge_ask, story=story, log=log)
+        elif ask is engine.request_json:
+            vf = verificar_fatos(lines, facts if facts else [source_text(story)], ask=None, story=story, log=log)
+        elif getattr(ask, 'check_facts', False) or hasattr(ask, 'is_fact_checker'):
+            vf = verificar_fatos(lines, facts if facts else [source_text(story)], ask=ask, story=story, log=log)
+        else:
+            vf = None
+
+        if vf is not None:
+            unsupported = [item for item in vf.get('falas', []) if not item.get('suportada', True)]
+            if unsupported:
+                if quality_retries >= 2:
+                    if allow_low:
+                        log('Aviso: seguindo mesmo com falas não suportadas (--aceitar-nota-baixa ativo).')
+                        return lines
+                    review = {'nota': 4, 'problemas': [f"Fala {u.get('i', 0) + 1} não suportada: {u.get('motivo', '')}" for u in unsupported]}
+                    rejected_path = _save_rejected_script(story, lines, review)
+                    issues = '; '.join(review['problemas'])
+                    raise RuntimeError(
+                        f'Roteiro reprovado por falhas factuais após 2 regenerações (problemas: {issues}). Salvo em {rejected_path}.'
+                    )
+                quality_retries += 1
+                corr_items = []
+                for u in unsupported:
+                    idx = u.get('i', 0)
+                    txt = lines[idx]['text'] if 0 <= idx < len(lines) else ''
+                    mot = u.get('motivo', 'sem suporte nos fatos')
+                    corr_items.append(f'Fala {idx + 1} ("{txt}"): {mot}')
+                error = 'Falas não suportadas pelos fatos. Corrija:\n' + '\n'.join(corr_items)
+                continue
+        review = evaluate_script(lines, story, ask=judge_ask or ask, log=log)
         last_review = review
         story['quality_score'] = review['nota']
         story['quality_issues'] = review['problemas']
