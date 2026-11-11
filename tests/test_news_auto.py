@@ -491,6 +491,32 @@ class NewsAutoTests(unittest.TestCase):
         news_auto.write_script(story, max_words=80, ask=capture_ask, loop=False, facts=['A Sony lançou o Walkman por R$ 32 mil no Brasil.'])
         self.assertIn('EXEMPLOS FICTÍCIOS: copie apenas o estilo e o ritmo, nunca os fatos', prompts[0])
 
+    def test_spelled_out_numbers_and_romans_in_article_are_accepted_while_absent_rejected(self):
+        story = {
+            'title': 'Petrobras anuncia três novas plataformas na Bacia de Santos',
+            'body': ('A Petrobras confirmou a construção de três novas plataformas na Bacia de Santos '
+                     'com investimento da estatal no Brasil durante o século XXI. ' * 4),
+            'related': ['Outra notícia cita sete navios no porto (UOL)'],
+        }
+        valid_with_digit = {'lines': [{'speaker': 0, 'text': t} for t in (
+            'Sabia que a Petrobras terá 3 novas plataformas?',
+            'A construção será lá na Bacia de Santos.',
+            'É um projeto grande da estatal no Brasil.',
+            'Será que isso aumenta a produção de energia?'
+        )]}
+        lines, problem = news_auto.validate_lines(valid_with_digit, story, 80)
+        self.assertEqual(problem, '')
+        self.assertEqual(len(lines), 4)
+
+        absent_digit = {'lines': [{'speaker': 0, 'text': t} for t in (
+            'Sabia que a Petrobras terá 7 novas plataformas?',
+            'A construção será lá na Bacia de Santos.',
+            'É um projeto grande da estatal no Brasil.',
+            'Será que isso aumenta a produção de energia?'
+        )]}
+        with self.assertRaisesRegex(ValueError, 'Números ausentes'):
+            news_auto.validate_lines(absent_digit, story, 80)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

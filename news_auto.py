@@ -86,6 +86,14 @@ KEY_ALIASES = {
     '6': {'6', 'vi', 'seis'},
     'comunismo': {'comunismo', 'comunista', 'comunistas', 'marx', 'sovietica'},
 }
+WORD_TO_NUM = {
+    'zero': '0', 'um': '1', 'uma': '1', 'primeiro': '1', 'primeira': '1',
+    'dois': '2', 'duas': '2', 'segundo': '2', 'segunda': '2',
+    'tres': '3', 'terceiro': '3', 'terceira': '3',
+    'quatro': '4', 'iv': '4', 'cinco': '5', 'seis': '6', 'vi': '6',
+    'sete': '7', 'oito': '8', 'nove': '9', 'dez': '10',
+    'xix': '19', 'xx': '20', 'cem': '100', 'mil': '1000',
+}
 SOCIAL = ('instagram', 'facebook', 'youtube', 'tiktok', 'twitter', 'threads', 'linkedin', 'kwai', 'pinterest', 'reddit')
 JUNK = re.compile(r'[\U0001F000-\U0001FFFF\u2600-\u27BF\u2060-\u206F\u200B-\u200F\uFE0F]')
 ADS = re.compile(r'\b(ofertas?|cupom|cupons|descontos?|black friday|promo[cç](ao|ão|oes|ões)|achadinhos|'
@@ -253,6 +261,19 @@ def _feed_plan(query):
 
 def _numbers(text):
     return {re.sub(r'[.,]', '', n).lstrip('0') or '0' for n in re.findall(r'\d[\d.,]*\d|\d', str(text))}
+
+
+def _allowed_numbers(source):
+    """Conjunto de números permitidos a partir do título e corpo da matéria (inclui inteiros de decimais, numerais por extenso e romanos)."""
+    allowed = set(_numbers(source))
+    for dec_int in re.findall(r'\b(\d+)[.,]\d+\b', str(source)):
+        allowed.add(dec_int.lstrip('0') or '0')
+    norm = unicodedata.normalize('NFKD', str(source)).casefold()
+    norm = ''.join(c for c in norm if not unicodedata.combining(c))
+    for tok in re.sub(r'[^a-z0-9 ]+', ' ', norm).split():
+        if tok in WORD_TO_NUM:
+            allowed.add(WORD_TO_NUM[tok])
+    return allowed
 
 
 def _entities(text):
@@ -454,7 +475,7 @@ def require_minimum_source(story):
 
 def _facts(texts, source):
     """Detalhes concretos do corpo/título da matéria presentes no roteiro: números e nomes próprios."""
-    found = set(_numbers(' '.join(texts))) & _numbers(source)
+    found = set(_numbers(' '.join(texts))) & _allowed_numbers(source)
     source_words = set(_tokens(source))
     known_entities = {e.casefold() for e in _entities(source)}
     for text in texts:
@@ -489,7 +510,7 @@ def extract_facts(story, ask=None):
     require_minimum_source(story)
     ask = ask or engine.request_json
     source = source_text(story)
-    allowed_nums = _numbers(source)
+    allowed_nums = _allowed_numbers(source)
     instruction = (
         'Passo 1 — Extração de fatos: leia o título e o corpo da matéria e extraia de 5 a 6 fatos curtos '
         'e concretos em português brasileiro. '
@@ -572,13 +593,14 @@ def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12):
     if total > budget:
         raise ValueError(f'O roteiro tem {total} palavras; o máximo é {budget}.')
     source = source_text(story)
+    allowed_nums = _allowed_numbers(source)
     script_vocab = set(_tokens(' '.join(texts))) | _numbers(' '.join(texts))
-    source_vocab = set(_tokens(source)) | _numbers(source)
+    source_vocab = set(_tokens(source)) | allowed_nums
     leaked_examples = (set(FICTIONAL_EXAMPLE_TERMS) & script_vocab) - source_vocab
     if leaked_examples:
         raise ValueError('O roteiro copiou termos ou números dos exemplos fictícios do prompt: ' +
                          ', '.join(sorted(leaked_examples)))
-    invented = _numbers(' '.join(texts)) - _numbers(source)
+    invented = _numbers(' '.join(texts)) - allowed_nums
     if invented:
         raise ValueError('Números ausentes na matéria: ' + ', '.join(sorted(invented)) +
                          '. Use apenas números presentes no corpo e título da matéria.')
