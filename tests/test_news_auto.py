@@ -351,6 +351,98 @@ class NewsAutoTests(unittest.TestCase):
         self.assertIn('loudnorm=I=-14:TP=-1.5:LRA=11', final_cmd)
         self.assertIn('-threads 0', final_cmd)
 
+    def test_evaluate_script_fails_closed_after_retry_when_ollama_errors(self):
+        lines = [
+            {'speaker': 0, 'text': 'Por que gastar 3,4 bilhões só em gerador?'},
+            {'speaker': 1, 'text': 'Cara, a Anthropic comprou tudo da Caterpillar!'},
+            {'speaker': 0, 'text': 'A rede elétrica do Texas não aguenta mais.'},
+            {'speaker': 1, 'text': 'Será que vai faltar luz pro resto do estado?'},
+        ]
+        logs = []
+        calls = {'n': 0}
+
+        def failing_ask(inst, payload):
+            calls['n'] += 1
+            raise RuntimeError('Ollama offline')
+
+        res = news_auto.evaluate_script(lines, {'title': 'T'}, ask=failing_ask, log=logs.append)
+        self.assertEqual(calls['n'], 2)
+        self.assertIsNone(res['nota'])
+        self.assertIn('avaliação indisponível', res['problemas'])
+        self.assertTrue(any('indisponível' in m for m in logs))
+
+        # Se falhar na 1ª e responder na 2ª tentativa, aproveita a nota real:
+        seq = iter([ ValueError('json inválido'), {'nota': 9, 'problemas': []} ])
+        def flaky_ask(inst, payload):
+            item = next(seq)
+            if isinstance(item, Exception):
+                raise item
+            return item
+
+        res_ok = news_auto.evaluate_script(lines, {'title': 'T'}, ask=flaky_ask, log=logs.append)
+        self.assertEqual(res_ok['nota'], 9)
+
+    def test_low_score_after_two_regenerations_saves_rejected_and_raises_unless_flag(self):
+        story = {
+            'title': 'Anthropic fecha acordo de US$ 3,4 bilhões em geradores no Texas',
+            'body': ('A Anthropic assinou um contrato de US$ 3,4 bilhões com a Caterpillar no Texas '
+                     'para garantir energia até 2045 em seus data centers de inteligência artificial. ' * 5),
+        }
+        facts = [
+            'A Anthropic fechou contrato de US$ 3,4 bilhões.',
+            'Os equipamentos são da Caterpillar.',
+            'A instalação fica no Texas.',
+            'O acordo garante energia até 2045.',
+            'O objetivo é abastecer data centers de IA.',
+        ]
+        script = {'lines': [{'speaker': 0, 'text': t} for t in (
+            'Por que gastar 3,4 bilhões só em gerador?',
+            'Cara, a Anthropic comprou tudo da Caterpillar!',
+            'É que a rede elétrica do Texas não aguenta mais.',
+            'Eles garantiram energia até 2045 pros data centers.',
+            'Mano, é muita energia só pra rodar IA!',
+            'Será que vai faltar luz pro resto do estado?'
+        )]}
+        low_eval = {'nota': 5, 'problemas': ['Diálogo pouco natural']}
+        out_dir = Path(self.temp.name) / 'out_rej'
+        # Inicial + 2 regenerações = 3 roteiros avaliados com nota 5 -> levanta RuntimeError e salva rejected_*.json
+        responses = iter([script, low_eval, script, low_eval, script, low_eval])
+        with patch.object(engine, 'OUTPUT', out_dir), patch.dict('os.environ', {'REELFORGE_ACCEPT_LOW_SCORE': '0'}):
+            with self.assertRaisesRegex(RuntimeError, 'reprovado no filtro de qualidade'):
+                news_auto.write_script(story, max_words=100, ask=lambda i, p: next(responses),
+                                       loop=False, facts=facts, log=lambda *a: None)
+        rejected_files = list(out_dir.glob('rejected_*.json'))
+        self.assertEqual(len(rejected_files), 1)
+        saved = news_auto.json.loads(rejected_files[0].read_text(encoding='utf-8'))
+        self.assertEqual(saved['nota'], 5)
+        self.assertIn('Diálogo pouco natural', saved['problemas'])
+
+        # Com a flag ativa (--aceitar-nota-baixa / REELFORGE_ACCEPT_LOW_SCORE=1), permite seguir:
+        responses_flag = iter([script, low_eval, script, low_eval, script, low_eval])
+        with patch.object(engine, 'OUTPUT', out_dir), patch.dict('os.environ', {'REELFORGE_ACCEPT_LOW_SCORE': '1'}):
+            accepted = news_auto.write_script(story, max_words=100, ask=lambda i, p: next(responses_flag),
+                                              loop=False, facts=facts, log=lambda *a: None)
+        self.assertEqual(len(accepted), 6)
+
+    def test_deterministic_check_deducts_two_points_and_lists_reasons(self):
+        # Sem pergunta, com fala repetida e 3 falas começando com "Cara":
+        bad_lines = [
+            {'speaker': 0, 'text': 'Cara isso aqui mudou tudo no mercado agora.'},
+            {'speaker': 1, 'text': 'Cara isso aqui mudou tudo no mercado agora.'},
+            {'speaker': 0, 'text': 'Cara ninguém esperava esse resultado tão cedo.'},
+            {'speaker': 1, 'text': 'Fato curto.'},
+        ]
+        review = news_auto.evaluate_script(
+            bad_lines, {'title': 'T'},
+            ask=lambda i, p: {'nota': 8, 'problemas': []},
+            log=lambda *a: None,
+        )
+        self.assertEqual(review['nota'], 6)
+        joined = ' | '.join(review['problemas'])
+        self.assertIn('pergunta', joined)
+        self.assertIn('repetida', joined)
+        self.assertIn('duas anteriores', joined)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

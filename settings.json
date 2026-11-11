@@ -2,6 +2,8 @@
   "topic": "Brasil",
   "provider": "ollama",
   "ollama_model": "qwen3.5:4b",
+  "judge_model": "qwen3.5:4b",
+  "aceitar_nota_baixa": false,
   "gameplay": "",
   "fps": 30,
   "gameplay_brightness": -0.06,

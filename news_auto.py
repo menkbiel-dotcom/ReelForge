@@ -14,6 +14,7 @@ import re
 import time
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from urllib.parse import quote
 
 import feedparser
@@ -604,10 +605,77 @@ def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12):
     return result, problem
 
 
-def evaluate_script(lines, story, ask=None):
-    """Passo 3 (Filtro de qualidade): avalia naturalidade, gancho e final de 1 a 10."""
+def accept_low_score_enabled():
+    """Controla se roteiros com nota < 7 podem seguir (--aceitar-nota-baixa ou aceitar_nota_baixa em settings.json)."""
+    env = os.getenv('REELFORGE_ACCEPT_LOW_SCORE')
+    if env is not None:
+        return env.strip().lower() in ('1', 'true', 'yes', 'sim')
+    try:
+        import engine
+        cfg = engine.load_settings()
+        return bool(cfg.get('aceitar_nota_baixa', False))
+    except Exception:
+        return False
+
+
+def judge_model_name():
+    """Modelo usado como juiz no filtro de qualidade (padrão = ollama_model)."""
+    env = os.getenv('OLLAMA_JUDGE_MODEL')
+    if env:
+        return env
+    try:
+        import engine
+        cfg = engine.load_settings()
+        return cfg.get('judge_model') or os.getenv('OLLAMA_MODEL') or cfg.get('ollama_model') or 'qwen3.5:4b'
+    except Exception:
+        return os.getenv('OLLAMA_MODEL') or 'qwen3.5:4b'
+
+
+def deterministic_check(lines):
+    """Checagem determinística complementar ao modelo juiz (desconta 2 pontos se falhar)."""
+    issues = []
+    texts = [str(l.get('text', '')).strip() for l in lines if isinstance(l, dict)]
+    if not texts:
+        return 2, ['Roteiro sem falas para avaliação determinística.']
+    counts = [len(t.split()) for t in texts]
+    avg = sum(counts) / len(counts)
+    if not (6 <= avg <= 16):
+        issues.append(f'Média de palavras por fala ({avg:.1f}) fora da faixa de 6 a 16.')
+    if not any('?' in t for t in texts):
+        issues.append('O roteiro precisa ter pelo menos uma pergunta.')
+    seen_lines = set()
+    repeated = False
+    for t in texts:
+        norm = re.sub(r'\s+', ' ', re.sub(r'[^\wÀ-ú ]+', '', t).strip().casefold())
+        if norm in seen_lines:
+            repeated = True
+        seen_lines.add(norm)
+    if repeated:
+        issues.append('Há fala repetida no roteiro.')
+    starts = []
+    repeated_start = False
+    for t in texts:
+        words = [re.sub(r'^[^\wÀ-ú]+|[^\wÀ-ú]+$', '', w).casefold() for w in t.split()]
+        words = [w for w in words if w]
+        if not words:
+            continue
+        first = words[0]
+        if starts.count(first) >= 2:
+            repeated_start = True
+        starts.append(first)
+    if repeated_start:
+        issues.append('Fala começando igual a duas anteriores.')
+    return (2 if issues else 0), issues
+
+
+def evaluate_script(lines, story, ask=None, log=print):
+    """Passo 3 (Filtro de qualidade): avalia naturalidade, gancho e final de 1 a 10 + checagem determinística."""
     import engine
-    ask = ask or engine.request_json
+    judge_model = judge_model_name()
+    if ask is None:
+        ask_fn = lambda inst, pay: engine.request_json(inst, pay, model=judge_model)
+    else:
+        ask_fn = ask
     instruction = (
         'Avalie a qualidade deste roteiro de Reel entre Sasuke (0) e Naruto (1) de 1 a 10. '
         'Critérios: '
@@ -620,26 +688,58 @@ def evaluate_script(lines, story, ask=None):
         'manchete': story.get('title', ''),
         'dialogo': [{'personagem': NAMES[l['speaker']], 'fala': l['text']} for l in lines],
     }
-    try:
-        res = ask(instruction, json.dumps(payload, ensure_ascii=False))
-    except Exception:
-        return {'nota': 8, 'problemas': []}
-    if not isinstance(res, dict) or 'nota' not in res:
-        return {'nota': 8, 'problemas': []}
-    try:
-        nota = float(res.get('nota', 8))
-    except (TypeError, ValueError):
-        nota = 8.0
-    nota = max(1.0, min(10.0, nota))
-    problemas = [str(p).strip() for p in (res.get('problemas') or []) if str(p).strip()]
-    return {'nota': int(nota) if nota.is_integer() else round(nota, 1), 'problemas': problemas}
+    nota = None
+    problemas = []
+    for _ in range(2):
+        try:
+            res = ask_fn(instruction, json.dumps(payload, ensure_ascii=False))
+        except Exception:
+            continue
+        if not isinstance(res, dict) or 'nota' not in res or res.get('nota') is None or isinstance(res.get('nota'), bool):
+            continue
+        try:
+            parsed = float(res['nota'])
+        except (TypeError, ValueError):
+            continue
+        nota = max(1.0, min(10.0, parsed))
+        problemas = [str(p).strip() for p in (res.get('problemas') or []) if str(p).strip()]
+        break
+    if nota is None:
+        log('Filtro de qualidade: avaliação indisponível no Ollama.')
+        problemas = ['avaliação indisponível']
+    penalty, det_issues = deterministic_check(lines)
+    if det_issues:
+        problemas.extend(det_issues)
+        if nota is not None:
+            nota = max(0.0, nota - penalty)
+    if nota is not None:
+        nota = int(nota) if float(nota).is_integer() else round(nota, 1)
+    return {'nota': nota, 'problemas': problemas}
 
 
-def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, loop=None, facts=None):
+def _save_rejected_script(story, lines, review):
+    import engine
+    engine.OUTPUT.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+    path = engine.OUTPUT / f'rejected_{stamp}.json'
+    payload = {
+        'title': story.get('title', ''),
+        'source': story.get('source', ''),
+        'nota': review.get('nota'),
+        'problemas': review.get('problemas', []),
+        'lines': lines,
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
+    return path
+
+
+def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, loop=None,
+                 facts=None, accept_low_score=None, log=print):
     """Passo 1 (extrai 5-6 fatos) -> Passo 2 (escreve diálogo usando só os fatos) -> Filtro de qualidade (nota >= 7)."""
     import engine
     ask = ask or engine.request_json
     loop = loop_enabled() if loop is None else loop
+    allow_low = accept_low_score_enabled() if accept_low_score is None else bool(accept_low_score)
     if facts is None and previous is None and story.get('body'):
         facts = extract_facts(story, ask=ask)
     min_lines, max_lines = turn_range(story, max_words, previous)
@@ -680,8 +780,9 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
         payload['pedido'] = f'Reescreva mais curto, com no máximo {target} palavras, mantendo a provocação inicial e os fatos.'
     error = ''
     best_lines = None
+    last_review = None
     quality_retries = 0
-    max_attempts = 6
+    max_attempts = 8
     for _ in range(max_attempts):
         if error:
             payload['correcao'] = error
@@ -696,15 +797,36 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
             error = problem
             best_lines = lines
             continue
-        review = evaluate_script(lines, story, ask=ask)
+        review = evaluate_script(lines, story, ask=ask, log=log)
+        last_review = review
         story['quality_score'] = review['nota']
         story['quality_issues'] = review['problemas']
         best_lines = lines
-        if review['nota'] >= 7 or quality_retries >= 2:
+        approved = review['nota'] is not None and review['nota'] >= 7
+        if approved:
             return lines
+        if quality_retries >= 2:
+            if allow_low:
+                log(f'Aviso: seguindo com nota {review["nota"]} (--aceitar-nota-baixa / aceitar_nota_baixa ativo).')
+                return lines
+            rejected_path = _save_rejected_script(story, lines, review)
+            issues = '; '.join(review['problemas']) or 'nota abaixo do mínimo'
+            raise RuntimeError(
+                f'Roteiro reprovado no filtro de qualidade após 2 regenerações '
+                f'(nota {review["nota"]}/10; problemas: {issues}). Salvo em {rejected_path}.'
+            )
         quality_retries += 1
         issues = '; '.join(review['problemas']) or 'Melhore a naturalidade, o gancho provocativo e o fecho.'
         error = f'Nota de qualidade {review["nota"]}/10 (mínimo 7). Corrija: {issues}'
+    if best_lines is not None and last_review is not None:
+        if allow_low:
+            return best_lines
+        rejected_path = _save_rejected_script(story, best_lines, last_review)
+        issues = '; '.join(last_review['problemas']) or 'nota abaixo do mínimo'
+        raise RuntimeError(
+            f'Roteiro reprovado no filtro de qualidade (nota {last_review["nota"]}/10; '
+            f'problemas: {issues}). Salvo em {rejected_path}.'
+        )
     if best_lines:
         return best_lines
     raise RuntimeError('O Ollama não produziu um roteiro válido: ' + error)

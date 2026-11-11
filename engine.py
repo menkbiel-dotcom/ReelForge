@@ -94,6 +94,8 @@ def apply_settings():
     values = {
         'AI_PROVIDER': cfg.get('provider', 'ollama'),
         'OLLAMA_MODEL': cfg.get('ollama_model', 'qwen3.5:4b'),
+        'OLLAMA_JUDGE_MODEL': cfg.get('judge_model') or cfg.get('ollama_model', 'qwen3.5:4b'),
+        'REELFORGE_ACCEPT_LOW_SCORE': None if cfg.get('aceitar_nota_baixa') is None else ('1' if cfg['aceitar_nota_baixa'] else '0'),
         'TTS_PROVIDER': tts_provider,
         'TTS_VOICE_A': voice.get('a'),
         'TTS_VOICE_B': voice.get('b'),
@@ -224,10 +226,10 @@ def validate_hook(text):
     return text
 
 
-def request_json(instruction, payload):
+def request_json(instruction, payload, model=None):
     import requests
     cfg = load_settings()
-    model = os.getenv("OLLAMA_MODEL") or cfg.get("ollama_model") or "qwen3.5:4b"
+    model = model or os.getenv("OLLAMA_MODEL") or cfg.get("ollama_model") or "qwen3.5:4b"
     with requests.Session() as session:
         session.trust_env = False
         base = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
@@ -352,7 +354,10 @@ def main():
     parser.add_argument("--max-seconds", type=validate_duration, default=float(cfg.get("max_seconds", 60)), help="Duração máxima, de 10 a 180 segundos")
     parser.add_argument('--impact-opening', action='store_true', help='Destacar gancho nos primeiros 3 segundos')
     parser.add_argument('--hook-text', type=validate_hook, default='', help='Gancho visual opcional, até 8 palavras/70 caracteres')
+    parser.add_argument('--aceitar-nota-baixa', action='store_true', help='Seguir mesmo se a nota de qualidade ficar abaixo de 7')
     args = parser.parse_args()
+    if args.aceitar_nota_baixa:
+        os.environ['REELFORGE_ACCEPT_LOW_SCORE'] = '1'
     if args.check:
         check()
         return
