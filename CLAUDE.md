@@ -11,8 +11,8 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
    - Em `automatic()`, se a pauta escolhida falhar em `require_minimum_source()`, o sistema tenta automaticamente a próxima candidata (até 3 tentativas) antes de falhar.
 2. **Seleção e Roteiro em 2 Passos + Filtro de Qualidade Fechado (`news_auto.py` + Ollama local `qwen3.5:4b` e juiz `qwen3:8b`):**
    - `pick_story()`: O Ollama escolhe a melhor pauta com corpo completo.
-   - **Passo 1 (`extract_facts()`):** O Ollama extrai de **5 a 6 fatos curtos** em JSON `{"fatos":[...]}` exclusivamente do título e corpo da matéria (`source_text`), validando números contra `_allowed_numbers(source)` e rejeitando unidades temporais inventadas (`TEMPORAL_UNITS`, com retry).
-   - **Passo 2 (`write_script()`):** O Ollama escreve o diálogo entre Sasuke (direto e irônico) e Naruto (curioso e espontâneo) usando exemplos *few-shot* **totalmente fictícios** (`EXEMPLOS FICTÍCIOS: copie apenas o estilo e o ritmo, nunca os fatos`).
+   - **Passo 1 (`extract_facts()`):** O Ollama extrai de **5 a 6 fatos curtos**, identifica `"contradicao"` e gera `"gancho"` em JSON `{"fatos":[...],"contradicao":"...","gancho":"..."}` exclusivamente do título e corpo da matéria (`source_text`), validando números contra `_allowed_numbers(source)` e rejeitando unidades temporais inventadas (`TEMPORAL_UNITS`, com retry). Valida o gancho (`validate_hook`: até 10 palavras, sem números inventados e sem repetir a manchete) e grava `"contradicao"` e `"gancho"` no story e no JSON de saída do reel.
+   - **Passo 2 (`write_script()`):** O Ollama escreve o diálogo entre Sasuke (direto e irônico) e Naruto (curioso e espontâneo) usando exemplos *few-shot* **totalmente fictícios** (`EXEMPLOS FICTÍCIOS: copie apenas o estilo e o ritmo, nunca os fatos`). Se o gancho do Passo 1 for validado, ele é injetado como primeira fala obrigatória. O prompt exige que perguntas feitas por um personagem sejam respondidas pelo outro usando um dos fatos.
    - **Validação (`validate_lines()`):**
      - Primeira fala deve ser uma provocação ou pergunta de até 10 palavras (nunca a manchete copiada nem iniciada por `"Mas..."`).
      - Cada fala é amarrada a um fato (`{"fato": N}`) ou é uma reação curta (`{"reacao": true}`, máx. 6 palavras, sem dígitos, máx. 2 por roteiro, nunca consecutivas e nunca na última fala).
@@ -43,9 +43,9 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
 - Os arquivos `assets/characters/*.png`, `assets/demo*/voice_*.wav` e `fala_*.wav` estão no `.gitignore` e não são rastreados no índice do repositório (permanecem apenas no disco local do usuário).
 - O script `publicar_github.py` cria/atualiza o repositório como **privado por padrão** (use `--publico` para público), lê o token exclusivamente de `GITHUB_TOKEN` ou `getpass` (sem argumento `--token` e sem eco no terminal) e faz push sem `force`.
 
-## Suíte de Testes (51 Testes)
+## Suíte de Testes (52 Testes)
 
-- `tests/test_news_auto.py` (29 testes) e `tests/test_integration.py` (22 testes) — totalizando **51 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
+- `tests/test_news_auto.py` (30 testes) e `tests/test_integration.py` (22 testes) — totalizando **52 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'

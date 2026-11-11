@@ -922,6 +922,76 @@ class NewsAutoTests(unittest.TestCase):
         rev_c = news_auto.evaluate_script(lines, story, ask=mock_problem_text)
         self.assertLessEqual(rev_c['nota'], 5)
 
+    def test_item4_step1_hook_and_contradiction(self):
+        import json
+        story = {
+            'title': 'Brasil bate recorde de exportação de café em outubro',
+            'body': (
+                'O Brasil exportou 34,478 milhões de sacas de café, alta de 3,5%, '
+                'mas a receita caiu 6,3%, para US$ 11,917 bilhões no período. '
+                'O preço médio da saca caiu 9,5% com o aumento da venda de café conilon, '
+                'que tem cotações inferiores no mercado global.'
+            ),
+        }
+        source = news_auto.source_text(story)
+
+        # 1. Validação de gancho válido e inválidos
+        valid_hook = 'Por que vendemos mais café e faturamos menos?'
+        self.assertEqual(news_auto.validate_hook(valid_hook, story, source), valid_hook)
+
+        # Gancho com mais de 10 palavras -> inválido
+        long_hook = 'Por que o Brasil exportou tanto café para o mundo todo e ainda faturou muito menos?'
+        self.assertIsNone(news_auto.validate_hook(long_hook, story, source))
+
+        # Gancho com número inventado -> inválido
+        invented_num_hook = 'Por que 99% das vendas caíram?'
+        self.assertIsNone(news_auto.validate_hook(invented_num_hook, story, source))
+
+        # 2. extract_facts devolve fatos, contradicao e gancho
+        mock_step1 = {
+            'fatos': [
+                'O Brasil exportou 34,478 milhões de sacas de café.',
+                'O volume representou alta de 3,5%.',
+                'A receita caiu 6,3%, para US$ 11,917 bilhões.',
+                'O preço médio da saca caiu 9,5%.',
+                'A maior fatia foi de cafés conilon mais baratos.',
+            ],
+            'contradicao': 'O volume de café exportado subiu 3,5%, mas a receita caiu 6,3%.',
+            'gancho': valid_hook,
+        }
+
+        facts_res = news_auto.extract_facts(story, ask=lambda i, p: mock_step1)
+        self.assertEqual(len(facts_res), 5)
+        self.assertEqual(facts_res['contradicao'], 'O volume de café exportado subiu 3,5%, mas a receita caiu 6,3%.')
+        self.assertEqual(facts_res['gancho'], valid_hook)
+        self.assertEqual(story.get('contradicao'), 'O volume de café exportado subiu 3,5%, mas a receita caiu 6,3%.')
+        self.assertEqual(story.get('gancho'), valid_hook)
+
+        # 3. write_script repassa o gancho como primeira fala obrigatória no payload e instruction
+        received_payloads = []
+        received_instructions = []
+
+        def mock_writer(inst, payload_str):
+            received_instructions.append(inst)
+            received_payloads.append(json.loads(payload_str))
+            return {'lines': [
+                {'speaker': 0, 'text': valid_hook, 'fato': 2},
+                {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
+                {'speaker': 0, 'text': 'A receita caiu 6,3% para US$ 11,917 bilhões.', 'fato': 2},
+                {'speaker': 1, 'text': 'O preço médio da saca caiu 9,5%.', 'fato': 3},
+                {'speaker': 0, 'text': 'O Brasil exportou 34,478 milhões de sacas.', 'fato': 0},
+                {'speaker': 1, 'text': 'Será que as cotações sobem de novo?', 'fato': 0},
+            ]}
+
+        mock_judge = lambda i, p, model=None: {'nota': 9, 'responde_perguntas': True, 'contradiz_materia': False, 'problemas': []}
+        lines = news_auto.write_script(story, max_words=100, ask=mock_writer, judge_ask=mock_judge, facts=facts_res)
+        self.assertEqual(lines[0]['text'], valid_hook)
+        self.assertIn('primeira_fala_obrigatoria_gancho', received_payloads[0])
+        self.assertEqual(received_payloads[0]['primeira_fala_obrigatoria_gancho'], valid_hook)
+        self.assertIn('PRIMEIRA FALA OBRIGATÓRIA', received_instructions[0])
+        self.assertIn('Perguntas feitas por um personagem DEVEM ser respondidas', received_instructions[0])
+
+
 
 
 

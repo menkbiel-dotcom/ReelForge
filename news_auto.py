@@ -692,8 +692,44 @@ def _ForbiddenVehicleMatch(text, story):
     return False
 
 
+class FactsResult(dict):
+    def __init__(self, fatos, contradicao=None, gancho=None):
+        super().__init__(fatos=fatos, contradicao=contradicao, gancho=gancho)
+
+    def __getitem__(self, item):
+        if isinstance(item, (int, slice)):
+            return self['fatos'][item]
+        return super().__getitem__(item)
+
+    def __iter__(self):
+        return iter(self['fatos'])
+
+    def __len__(self):
+        return len(self['fatos'])
+
+
+def validate_hook(gancho, story, source):
+    """Valida se o gancho tem até 10 palavras, não repete manchete e usa apenas números da matéria."""
+    if not isinstance(gancho, str):
+        return None
+    import engine
+    g = engine.clean(gancho)
+    words = g.split()
+    if not (1 <= len(words) <= 10):
+        return None
+    if HOOK_BAD_START_RE.search(g):
+        return None
+    if story.get('title') and _similar(g, story['title']) > 0.72 and '?' not in g and '!' not in g:
+        return None
+    allowed = _allowed_numbers(source)
+    hook_nums = _numbers(g)
+    if hook_nums - allowed:
+        return None
+    return g
+
+
 def extract_facts(story, ask=None):
-    """Passo 1: extrai de 5 a 6 fatos curtos e verificáveis EXCLUSIVAMENTE do texto da matéria."""
+    """Passo 1: extrai de 5 a 6 fatos curtos, contradição e gancho EXCLUSIVAMENTE do texto da matéria."""
     import engine
     require_minimum_source(story)
     ask = ask or engine.request_json
@@ -701,13 +737,15 @@ def extract_facts(story, ask=None):
     allowed_nums = _allowed_numbers(source)
     source_temporal = set(_normalize_plain(source).split()) & TEMPORAL_UNITS
     instruction = (
-        'Passo 1 — Extração de fatos: leia o título e o corpo da matéria e extraia de 5 a 6 fatos curtos '
-        'e concretos em português brasileiro. '
-        'Regras obrigatórias: '
-        '- Cada fato deve ser copiado ou parafraseado DIRETAMENTE do texto da matéria (nunca invente dados e nunca use manchetes externas). '
-        '- Priorize números exatos, valores, datas, nomes de órgãos/empresas/pessoas, a causa e a consequência. '
-        '- Não inclua o nome do veículo jornalístico nos fatos. '
-        'Responda APENAS JSON: {"fatos":["fato 1","fato 2","fato 3","fato 4","fato 5"]}')
+        'Passo 1 — Extração de fatos e ângulo: leia o título e o corpo da matéria e extraia de 5 a 6 fatos curtos '
+        'e concretos em português brasileiro, identificando contradições reais e um gancho provocativo.\n'
+        'Regras obrigatórias:\n'
+        '- Cada fato deve ser copiado ou parafraseado DIRETAMENTE do texto da matéria (nunca invente dados e nunca use manchetes externas).\n'
+        '- Priorize números exatos, valores, datas, nomes de órgãos/empresas/pessoas, a causa e a consequência.\n'
+        '- Não inclua o nome do veículo jornalístico nos fatos.\n'
+        '- "contradicao": aponte uma contradição ou paradoxo real da matéria (ex.: volume recorde mas faturamento em queda), ou null se não houver.\n'
+        '- "gancho": pergunta instigante de até 10 palavras para abrir o Reel, baseada na contradição ou no fato mais surpreendente (não repita a manchete e só cite números presentes na matéria).\n'
+        'Responda APENAS JSON: {"fatos":["fato 1","fato 2","fato 3","fato 4","fato 5"],"contradicao":"...","gancho":"..."}')
     payload = {'manchete': story.get('title', ''), 'materia': story.get('body', '')}
     error = ''
     for _ in range(3):
@@ -729,7 +767,20 @@ def extract_facts(story, ask=None):
         if temporal_invented:
             error = 'Fatos contêm unidades temporais ausentes na matéria: ' + ', '.join(sorted(temporal_invented))
             continue
-        return cleaned[:6]
+        contradicao = raw.get('contradicao') if isinstance(raw, dict) else None
+        if contradicao is not None:
+            contradicao = engine.clean(str(contradicao))
+            if contradicao.lower() in ('null', 'none', ''):
+                contradicao = None
+
+        raw_gancho = raw.get('gancho') if isinstance(raw, dict) else None
+        valid_hook = validate_hook(raw_gancho, story, source) if raw_gancho else None
+
+        result = FactsResult(cleaned[:6], contradicao=contradicao, gancho=valid_hook)
+        story['extracted_facts'] = cleaned[:6]
+        story['contradicao'] = contradicao
+        story['gancho'] = valid_hook
+        return result
     raise ValueError('O Ollama não extraiu uma lista válida de 5 a 6 fatos da matéria.')
 
 
@@ -1100,6 +1151,8 @@ def _save_rejected_script(story, lines, review):
         'nota': review.get('nota'),
         'problemas': review.get('problemas', []),
         'juiz_fraco': bool(story.get('juiz_fraco', False)),
+        'contradicao': story.get('contradicao'),
+        'gancho': story.get('gancho'),
         'lines': lines,
     }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -1116,7 +1169,8 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
     if facts is None and previous is None and story.get('body'):
         facts = extract_facts(story, ask=ask)
     if facts is not None:
-        story['extracted_facts'] = facts
+        story['extracted_facts'] = facts if isinstance(facts, list) else facts.get('fatos', facts)
+    valid_hook = story.get('gancho')
     min_lines, max_lines = turn_range(story, max_words, previous)
     target = max(12, min(int(max_words * 0.9), max_lines * 12))
     few_shot = (
@@ -1133,6 +1187,11 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
         '{"speaker":0,"text":"A rede de Luminopolis não aguenta a demanda da NeoQuimera.","fato":1},'
         '{"speaker":1,"text":"E aí apelaram pro estoque gigante de 2089 pra segurar a barra?","fato":2}]\n'
     )
+    hook_instruction = (
+        f'- PRIMEIRA FALA OBRIGATÓRIA: a primeira fala (speaker 0) DEVE ser exatamente este gancho: "{valid_hook}". Não altere essa pergunta.\n'
+        if valid_hook else
+        '- A primeira fala DEVE ser uma provocação ou pergunta instigante de até 10 palavras (NUNCA uma manchete e nunca comece com "Mas...").\n'
+    )
     instruction = (
         'Passo 2 — Roteiro de diálogo: escreva um diálogo para Reel vertical de ' + kind.lower() + ' em português brasileiro. '
         'Sasuke (speaker 0, direto e irônico) e Naruto (speaker 1, curioso e espontâneo) conversam ALTERNANDO as falas.\n'
@@ -1141,7 +1200,8 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
         '- Cada fala DEVE ter "fato": N (índice 0 a 5 do fato da matéria correspondente) OU "reacao": true.\n'
         '- Falas com "reacao": true devem ter no máximo 6 palavras, NUNCA conter números e no máximo 2 no roteiro todo (nunca consecutivas e nunca na última fala).\n'
         '- Falas com "fato": N só podem citar números e nomes próprios presentes no fato N (ou no título da matéria).\n'
-        '- A primeira fala DEVE ser uma provocação ou pergunta instigante de até 10 palavras (NUNCA uma manchete e nunca comece com "Mas...").\n'
+        '- Perguntas feitas por um personagem DEVEM ser respondidas pelo outro personagem usando um dos fatos da matéria.\n'
+        + hook_instruction +
         '- PROIBIDO citar o nome do veículo (ex.: g1, UOL, CNN, CPG) ou frases de telejornal ("confirmado por", "segundo o", "nesta segunda-feira").\n'
         '- PROIBIDO fechos de enchimento ("que legal", "que bom", "incrível", "show", "demais"). Termine com pergunta reflexiva ou fecho forte.\n'
         f'- Use entre {min_lines} e {max_lines} falas curtas e naturais, com total máximo de {target} palavras.\n'
@@ -1152,6 +1212,10 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
         'manchete_referencia': story.get('title', ''),
         'fatos_da_materia': facts if facts else [source_text(story)],
     }
+    if valid_hook:
+        payload['primeira_fala_obrigatoria_gancho'] = valid_hook
+    if story.get('contradicao'):
+        payload['contradicao_da_materia'] = story['contradicao']
     if story.get('related_context'):
         payload['contexto_tematico_nao_usar_nomes_nem_numeros'] = story['related_context']
     if previous:

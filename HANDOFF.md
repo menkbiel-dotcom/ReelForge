@@ -14,8 +14,11 @@
   - **Commit:** `38a5e39cc632f5aad2c3342679f09473333cd35f` — *"Adiciona juiz de verificacao de fatos, fallback para juiz fraco e novos criterios de nota"*
   - **Arquivos tocados:** `news_auto.py`, `settings.json`, `README.md`, `CLAUDE.md`, `HANDOFF.md`, `tests/test_news_auto.py`
   - **Testes:** 51 testes passando (incluindo `test_item3_fact_checking_judge_and_criteria`)
-- [ ] **ITEM 4 — Passo 1 devolve o ângulo (`news_auto.py`)**: em andamento / próximo
-- [ ] **ITEM 5 — Limpar o corpo da matéria (`news_auto.py`, `article_text`)**: pendente
+- [x] **ITEM 4 — Passo 1 devolve o ângulo (`news_auto.py`)**: feito
+  - **Commit:** a registrar após push — *"Extrai angulo e contradicao no passo 1 e exige resposta para perguntas no roteiro"*
+  - **Arquivos tocados:** `news_auto.py`, `CLAUDE.md`, `HANDOFF.md`, `tests/test_news_auto.py`
+  - **Testes:** 52 testes passando (incluindo `test_item4_step1_hook_and_contradiction`)
+- [ ] **ITEM 5 — Limpar o corpo da matéria (`news_auto.py`, `article_text`)**: em andamento / próximo
 - [ ] **ITEM 6 — Legendas e acabamento (`captions.py`, `instalar_legendas.bat`, `README.md`, `engine.py`, testes)**: pendente
 
 ---
@@ -59,12 +62,13 @@
   - Testes cobrindo: fala não suportada forçando regeneração com correção; HTTP 404 ativando fallback e gravando `juiz_fraco`; e notas limitadas a 5 quando pergunta fica sem resposta ou contradiz a matéria.
 
 ### ITEM 4 — Passo 1 devolve o ângulo (`news_auto.py`)
-- **Status:** pendente
-- **Escopo:**
-  - `extract_facts` devolve `{"fatos":[5 a 6], "contradicao":"... ou null", "gancho":"pergunta de até 10 palavras baseada na contradição ou no fato mais surpreendente"}`.
-  - Gancho validado e passado ao redator como primeira fala obrigatória.
-  - Gravar `"contradicao"` e `"gancho"` no JSON de saída.
-- **Arquivos a tocar:** `news_auto.py`, `tests/test_news_auto.py`.
+- **Status:** feito
+- **O que foi feito:**
+  - `extract_facts()` devolve objeto `FactsResult` contendo `{"fatos": [5 a 6], "contradicao": "... ou null", "gancho": "pergunta de até 10 palavras baseada na contradição ou no fato mais surpreendente"}` e compatível com indexação/iteração de lista.
+  - Função `validate_hook()`: valida se o gancho tem até 10 palavras, só usa números da matéria e não repete a manchete.
+  - No Passo 2 (`write_script()`), se o gancho do Passo 1 for validado, ele é injetado como primeira fala obrigatória (`primeira_fala_obrigatoria_gancho` no payload e instrução explícita). Se for inválido, o redator escreve como antes.
+  - Instrução no Passo 2 exige que perguntas feitas por um personagem sejam respondidas pelo outro usando os fatos da matéria.
+  - Campos `"contradicao"` e `"gancho"` são salvos em `story`, no JSON de saída do reel e nos scripts rejeitados.
 
 ### ITEM 5 — Limpar o corpo da matéria (`news_auto.py`, `article_text`)
 - **Status:** pendente
