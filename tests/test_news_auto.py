@@ -56,8 +56,8 @@ class NewsAutoTests(unittest.TestCase):
     def test_script_alternates_speakers_and_rejects_invented_numbers(self):
         story = {'title': 'Sony relança Walkman com preço de R$ 32 mil no Brasil',
                  'body': 'A Sony confirmou o novo Walkman por R$ 32 mil no mercado brasileiro com foco em áudio de estúdio. ' * 3}
-        facts = ['A Sony relançou o Walkman no Brasil.', 'O aparelho custa R$ 32 mil.',
-                 'O foco é áudio de alta definição.', 'O modelo chega este mês.', 'É voltado a profissionais.']
+        facts_resp = {'fatos': ['A Sony relançou o Walkman no Brasil.', 'O aparelho custa R$ 32 mil.',
+                                'O foco é áudio de alta definição.', 'O modelo chega este mês.', 'É voltado a profissionais.']}
         bad = {'lines': [{'speaker': 0, 'text': 'Pagaria 50 mil reais num Walkman?'}] + [{'speaker': 0, 'text': 'Fala.'}] * 5}
         good = {'lines': [{'speaker': 1, 'text': 'Naruto: Pagaria 32 mil reais num Walkman hoje?'},
                           {'speaker': 1, 'text': 'Cara, R$ 32 mil é preço de carro!'},
@@ -65,8 +65,8 @@ class NewsAutoTests(unittest.TestCase):
                           {'speaker': 0, 'text': 'Mesmo assim, quem no Brasil vai encarar esse valor?'},
                           {'speaker': 1, 'text': 'Só colecionador muito fanático mesmo!'},
                           {'speaker': 0, 'text': 'Você compraria se tivesse essa grana sobrando?'}]}
-        answers = iter([bad, good, {'nota': 9, 'problemas': []}])
-        lines = news_auto.write_script(story, max_words=80, ask=lambda i, p: next(answers), loop=False, facts=facts)
+        answers = iter([facts_resp, bad, good, {'nota': 9, 'problemas': []}])
+        lines = news_auto.write_script(story, max_words=80, ask=lambda i, p: next(answers), loop=False)
         self.assertEqual([l['speaker'] for l in lines], [1, 0, 1, 0, 1, 0])
         self.assertEqual(lines[0]['text'], 'Pagaria 32 mil reais num Walkman hoje?')
 
@@ -388,13 +388,13 @@ class NewsAutoTests(unittest.TestCase):
             'body': ('A Anthropic assinou um contrato de US$ 3,4 bilhões com a Caterpillar no Texas '
                      'para garantir energia até 2045 em seus data centers de inteligência artificial. ' * 5),
         }
-        facts = [
+        facts_resp = {'fatos': [
             'A Anthropic fechou contrato de US$ 3,4 bilhões.',
             'Os equipamentos são da Caterpillar.',
             'A instalação fica no Texas.',
             'O acordo garante energia até 2045.',
             'O objetivo é abastecer data centers de IA.',
-        ]
+        ]}
         script = {'lines': [{'speaker': 0, 'text': t} for t in (
             'Por que gastar 3,4 bilhões só em gerador?',
             'Cara, a Anthropic comprou tudo da Caterpillar!',
@@ -406,11 +406,11 @@ class NewsAutoTests(unittest.TestCase):
         low_eval = {'nota': 5, 'problemas': ['Diálogo pouco natural']}
         out_dir = Path(self.temp.name) / 'out_rej'
         # Inicial + 2 regenerações = 3 roteiros avaliados com nota 5 -> levanta RuntimeError e salva rejected_*.json
-        responses = iter([script, low_eval, script, low_eval, script, low_eval])
+        responses = iter([facts_resp, script, low_eval, script, low_eval, script, low_eval])
         with patch.object(engine, 'OUTPUT', out_dir), patch.dict('os.environ', {'REELFORGE_ACCEPT_LOW_SCORE': '0'}):
             with self.assertRaisesRegex(RuntimeError, 'reprovado no filtro de qualidade'):
                 news_auto.write_script(story, max_words=100, ask=lambda i, p: next(responses),
-                                       loop=False, facts=facts, log=lambda *a: None)
+                                       loop=False, log=lambda *a: None)
         rejected_files = list(out_dir.glob('rejected_*.json'))
         self.assertEqual(len(rejected_files), 1)
         saved = news_auto.json.loads(rejected_files[0].read_text(encoding='utf-8'))
@@ -418,10 +418,10 @@ class NewsAutoTests(unittest.TestCase):
         self.assertIn('Diálogo pouco natural', saved['problemas'])
 
         # Com a flag ativa (--aceitar-nota-baixa / REELFORGE_ACCEPT_LOW_SCORE=1), permite seguir:
-        responses_flag = iter([script, low_eval, script, low_eval, script, low_eval])
+        responses_flag = iter([facts_resp, script, low_eval, script, low_eval, script, low_eval])
         with patch.object(engine, 'OUTPUT', out_dir), patch.dict('os.environ', {'REELFORGE_ACCEPT_LOW_SCORE': '1'}):
             accepted = news_auto.write_script(story, max_words=100, ask=lambda i, p: next(responses_flag),
-                                              loop=False, facts=facts, log=lambda *a: None)
+                                              loop=False, log=lambda *a: None)
         self.assertEqual(len(accepted), 6)
 
     def test_deterministic_check_deducts_two_points_and_lists_reasons(self):
@@ -476,20 +476,27 @@ class NewsAutoTests(unittest.TestCase):
             news_auto.validate_lines(leaked, story, 80)
 
         prompts = []
+        facts_resp = {'fatos': [
+            'A Sony lançou o Walkman no Brasil.',
+            'O preço oficial é de R$ 32 mil.',
+            'O modelo é focado em áudio de estúdio.',
+            'O público-alvo são profissionais de som.',
+            'O aparelho chegou ao mercado nacional.',
+        ]}
         good = {'lines': [{'speaker': 0, 'text': t} for t in (
             'Pagaria R$ 32 mil num Walkman novo?',
             'A Sony trouxe o aparelho de volta ao Brasil.',
             'O foco é som de estúdio profissional.',
             'Vale tudo isso só para ouvir música?'
         )]}
-        seq = iter([good, {'nota': 9, 'problemas': []}])
+        seq = iter([facts_resp, good, {'nota': 9, 'problemas': []}])
 
         def capture_ask(inst, payload):
             prompts.append(inst)
             return next(seq)
 
-        news_auto.write_script(story, max_words=80, ask=capture_ask, loop=False, facts=['A Sony lançou o Walkman por R$ 32 mil no Brasil.'])
-        self.assertIn('EXEMPLOS FICTÍCIOS: copie apenas o estilo e o ritmo, nunca os fatos', prompts[0])
+        news_auto.write_script(story, max_words=80, ask=capture_ask, loop=False)
+        self.assertIn('EXEMPLOS FICTÍCIOS: copie apenas o estilo e o ritmo, nunca os fatos', prompts[1])
 
     def test_spelled_out_numbers_and_romans_in_article_are_accepted_while_absent_rejected(self):
         story = {
@@ -516,6 +523,40 @@ class NewsAutoTests(unittest.TestCase):
         )]}
         with self.assertRaisesRegex(ValueError, 'Números ausentes'):
             news_auto.validate_lines(absent_digit, story, 80)
+
+    def test_automatic_retries_next_candidate_when_chosen_story_lacks_minimum_source(self):
+        cands = [
+            {'id': '1', 'title': 'Só título curto', 'source': 'G1', 'url': 'https://a/1', 'published': '', 'body': ''},
+            {'id': '2', 'title': 'Sony relança Walkman por R$ 32 mil no Brasil', 'source': 'O Globo', 'url': 'https://a/2',
+             'published': '', 'body': 'A Sony confirmou o lançamento do Walkman por R$ 32 mil no Brasil com foco em estúdio. ' * 4},
+        ]
+        facts_resp = {'fatos': [
+            'A Sony relançou o Walkman no Brasil.',
+            'O aparelho custa R$ 32 mil.',
+            'O foco é áudio de estúdio.',
+            'A venda ocorre no mercado nacional.',
+            'O produto mira audiófilos.',
+        ]}
+        script_resp = {'lines': [{'speaker': 0, 'text': t} for t in (
+            'Pagaria R$ 32 mil num Walkman novo?',
+            'A Sony trouxe o aparelho de volta ao Brasil.',
+            'O foco é áudio de estúdio profissional.',
+            'Mesmo assim o preço assustou todo mundo.',
+            'Só colecionador muito fanático vai encarar!',
+            'Vale tudo isso só para ouvir música?'
+        )]}
+        seq = iter([
+            {'index': 0, 'reason': 'primeira sem corpo'},
+            {'index': 0, 'reason': 'segunda com corpo'},
+            facts_resp,
+            script_resp,
+            {'nota': 9, 'problemas': []},
+        ])
+        with patch('news_auto.gather_candidates', return_value=cands), \
+             patch('news_auto.enrich', return_value=[]):
+            story, lines = news_auto.automatic('tecnologia', max_seconds=45, log=lambda *a: None, ask=lambda i, p: next(seq))
+        self.assertEqual(story['id'], '2')
+        self.assertEqual(len(lines), 6)
 
 
 if __name__ == '__main__':

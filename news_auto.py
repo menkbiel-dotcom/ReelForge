@@ -524,11 +524,6 @@ def extract_facts(story, ask=None):
     for _ in range(3):
         req = dict(payload, correcao=error) if error else payload
         raw = ask(instruction, json.dumps(req, ensure_ascii=False))
-        if isinstance(raw, dict) and 'lines' in raw and 'fatos' not in raw:
-            # Compatibilidade com mocks de teste que devolvem {"lines": ...} direto.
-            story['_prefetched_raw'] = raw
-            sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', source) if s.strip()]
-            return (sentences[:6] or [story.get('title', '')])
         fatos = raw.get('fatos') if isinstance(raw, dict) else None
         if not isinstance(fatos, list) or not 5 <= len(fatos) <= 6:
             error = 'Retorne uma lista "fatos" contendo exatamente de 5 a 6 fatos curtos.'
@@ -815,8 +810,7 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
     for _ in range(max_attempts):
         if error:
             payload['correcao'] = error
-        prefetched = story.pop('_prefetched_raw', None)
-        raw = prefetched if prefetched is not None else ask(instruction, json.dumps(payload, ensure_ascii=False))
+        raw = ask(instruction, json.dumps(payload, ensure_ascii=False))
         try:
             lines, problem = validate_lines(raw, story, max_words, loop, min_lines, max_lines)
         except ValueError as exc:
@@ -873,8 +867,23 @@ def automatic(topic, kind='Notícia', max_seconds=45, allow_repeat=False, log=pr
     candidates = gather_candidates(topic, kind, 15, allow_repeat)
     full = sum(1 for c in candidates if c['body'])
     log(f'{len(candidates)} pautas analisadas ({full} com matéria completa). Ollama escolhendo...')
-    story = pick_story(candidates, kind, ask)
-    require_minimum_source(story)
+    remaining = list(candidates)
+    story = None
+    last_err = None
+    for _ in range(min(3, len(remaining))):
+        picked = pick_story(remaining, kind, ask)
+        try:
+            require_minimum_source(picked)
+            story = picked
+            break
+        except ValueError as exc:
+            last_err = exc
+            log(f'Pauta descartada por falta de corpo ("{picked.get("title", "")}"); tentando próxima candidata...')
+            remaining = [c for c in remaining if c.get('id') != picked.get('id') and c.get('title') != picked.get('title')]
+            if not remaining:
+                break
+    if story is None:
+        raise last_err or ValueError('Matéria sem corpo suficiente.')
     log('Pauta escolhida: ' + story['title'] + (' — ' + story['source'] if story['source'] else '') +
         ('\nMotivo: ' + story['selection_reason'] if story.get('selection_reason') else ''))
     story['related_context'] = enrich(story, limit=4)
