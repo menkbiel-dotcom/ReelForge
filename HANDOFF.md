@@ -7,7 +7,7 @@
   - **Arquivos tocados:** `news_auto.py`, `engine.py`, `tests/test_news_auto.py`
   - **Testes:** 48 testes passando (incluindo `test_item1_tied_to_fact_and_reaction_rules`)
 - [x] **ITEM 2 — Validação de quantidades e unidades (`news_auto.py`)**: feito
-  - **Commit:** a registrar após push — *"Valida quantidades e magnitudes com qualificadores e restringe unidades temporais"*
+  - **Commit:** `7b0d04a4224fc1275a526b348b5a875bf372f2f9` — *"Valida quantidades e magnitudes com qualificadores e restringe unidades temporais"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 50 testes passando (incluindo `test_item2_quantity_pairs_and_qualifier_rules` e `test_item2_temporal_units_restriction`)
 - [ ] **ITEM 3 — Juiz que checa fatos (`news_auto.py` + `settings.json`)**: em andamento / próximo
