@@ -1,8 +1,15 @@
 # ReelForge com VoiceStudio e gameplay aleatória
 
-Extraia o ZIP e execute `iniciar_windows.bat`. Use **Exemplo offline** e **Gerar Reel** para testar as falas incluídas.
+Extraia o projeto e execute `iniciar_windows.bat`. Use **Exemplo offline** e **Gerar Reel** para testar as falas incluídas.
 
 Para roteiros novos, mantenha o Ollama (`http://localhost:11434`, modelo `qwen3.5:4b`) e o VoiceStudio (`http://127.0.0.1:3900`) abertos com os perfis `Sasuke` e `Naruto` disponíveis. Na aba **Vozes e legendas**, selecione `voicestudio` e informe os nomes ou IDs dos perfis. Os dois ritmos começam em `+18%`, com ajuste de tom em `0`. A prévia e a renderização reutilizam as falas geradas para o mesmo texto e perfil.
+
+## Personagens e Vozes de Referência (Fornecidos pelo Usuário)
+
+Por motivos de privacidade e direitos de imagem/voz, os sprites dos personagens e os áudios de voz **não são rastreados no repositório Git** (estão listados no `.gitignore`):
+
+- **Sprites dos personagens (`assets/characters/*.png`):** fornecidos localmente pelo usuário em `assets/characters/` (`character_0_closed.png`, `character_0_open.png`, `character_1_closed.png`, `character_1_open.png`).
+- **Vozes de referência e amostras (`VoiceStudio` / `assets/demo*/voice_*.wav` e `fala_*.wav`):** fornecidas localmente pelo usuário nos perfis do VoiceStudio (`Sasuke` e `Naruto`) ou nas pastas de demonstração local.
 
 ## Como baixar o modelo Whisper (`small`) para uso offline (`local_files_only`)
 
@@ -17,7 +24,7 @@ Caso queira usar o modelo `base` já instalado em `output/alignment_cache/models
 ## Vídeo, Loop e Áudio
 
 - **Taxa de quadros:** O padrão é **30 FPS** (com opção de **60 FPS** mantida na interface e na CLI via `--fps 60`).
-- **Normalização de áudio:** O áudio final aplica `loudnorm` (`I=-14, TP=-1.5`) para manter volume uniforme com a música de fundo.
-- **Gameplay de fundo:** O fundo padrão é `assets/gameplay/gameplay_principal.mp4`, sorteando um trecho diferente a cada Reel (`gameplay_start` no JSON de saída), com brilho `-0,06`, gama `0,85` e crossfade visual/musical no loop (`"loop": true`). A ponte falada no texto fica desligada por padrão (`"script_loop": false` em `settings.json`).
+- **Normalização de áudio:** O áudio final aplica `highpass=f=80,acompressor` na mistura das vozes e `loudnorm` (`I=-14, TP=-1.5`) na saída final com a música de fundo.
+- **Gameplay de fundo:** O fundo padrão é `assets/gameplay/gameplay_principal.mp4`, sorteando um trecho diferente a cada Reel (`gameplay_start` no JSON de saída), com brilho `-0,06`, gama `0,85`, `vignette=PI/6` e crossfade visual/musical no loop (`"loop": true`). A ponte falada no texto fica desligada por padrão (`"script_loop": false` em `settings.json`).
 
 Fonte da gameplay: https://youtu.be/zxmENLsNzPo

@@ -6,39 +6,41 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
 
 1. **Coleta RSS (`news_auto.py`):**
    - Lê feeds RSS de veículos brasileiros que trazem o texto completo da matéria (`content:encoded` de g1, CNN Brasil, Agência Brasil, Poder360, InfoMoney, Tecnoblog, Canaltech, Olhar Digital, ge) + Google News RSS.
+   - Em `parse_entry()`, itens do Google News (`feed_name=None`) **nunca** recebem `body` (seu resumo HTML é apenas lista de manchetes `<li>`), sendo barrados por `require_minimum_source()`.
    - Ranqueia as pautas por densidade informativa (`complexity_score`: números, entidades, tamanho do texto e frescor).
-2. **Seleção e Roteiro em 2 Passos + Filtro de Qualidade (`news_auto.py` + Ollama local `qwen3.5:4b`):**
+   - Em `automatic()`, se a pauta escolhida falhar em `require_minimum_source()`, o sistema tenta automaticamente a próxima candidata (até 3 tentativas) antes de falhar.
+2. **Seleção e Roteiro em 2 Passos + Filtro de Qualidade Fechado (`news_auto.py` + Ollama local `qwen3.5:4b`):**
    - `pick_story()`: O Ollama escolhe a melhor pauta com corpo completo.
-   - **Passo 1 (`extract_facts()`):** O Ollama extrai de **5 a 6 fatos curtos** em JSON `{"fatos":[...]}` exclusivamente do título e corpo da matéria (`source_text`), sem usar manchetes relacionadas.
-   - **Passo 2 (`write_script()`):** O Ollama escreve o diálogo entre Sasuke (direto e irônico) e Naruto (curioso e espontâneo) usando *few-shot examples* em português brasileiro informal.
+   - **Passo 1 (`extract_facts()`):** O Ollama extrai de **5 a 6 fatos curtos** em JSON `{"fatos":[...]}` exclusivamente do título e corpo da matéria (`source_text`), validando números contra `_allowed_numbers(source)`.
+   - **Passo 2 (`write_script()`):** O Ollama escreve o diálogo entre Sasuke (direto e irônico) e Naruto (curioso e espontâneo) usando exemplos *few-shot* **totalmente fictícios** (`EXEMPLOS FICTÍCIOS: copie apenas o estilo e o ritmo, nunca os fatos`).
    - **Validação (`validate_lines()`):**
      - Primeira fala deve ser uma provocação ou pergunta de até 10 palavras (nunca a manchete copiada nem iniciada por `"Mas..."`).
      - Proíbe citar o nome do veículo ou expressões de telejornal (`"confirmado por"`, `"segundo o"`, `"nesta segunda-feira"`).
-     - Rejeita números inventados e qualquer entidade/número vindo apenas de manchetes relacionadas (`enrich()`).
-     - Exige que a última fala termine com uma frase completa (pergunta aberta ou fecho), sem ponte truncada.
-   - **Filtro de Qualidade (`evaluate_script()`):** O Ollama avalia o roteiro em `{"nota": 1-10, "problemas": [...]}`. Se `nota < 7`, regenera o roteiro (máx. 2 vezes) passando os problemas como correção e grava a nota no JSON final (`output/reel_*.json`).
+     - Rejeita termos/números vazados dos exemplos fictícios do prompt (`FICTIONAL_EXAMPLE_TERMS`) quando não estiverem na matéria.
+     - Valida números usando `_allowed_numbers(source)` (`WORD_TO_NUM`: numerais por extenso como `"três" -> "3"`, inteiros de decimais e algarismos romanos), calculado exclusivamente sobre título e corpo da matéria, nunca sobre manchetes relacionadas (`enrich()`).
+     - Exige que a última fala termine com uma frase completa (pergunta aberta ou fecho), sem ponte truncada (`script_loop: false` por padrão).
+   - **Filtro de Qualidade Fechado (`evaluate_script()` + `deterministic_check()`):**
+     - Permite configurar um modelo juiz separado via `"judge_model"` em `settings.json` (padrão = `ollama_model`).
+     - Se o Ollama falhar ou não retornar `"nota"` numérica válida, tenta mais 1 vez; se continuar falhando, retorna `{"nota": None, "problemas": ["avaliação indisponível"]}` e trata o roteiro como **NÃO aprovado** (nunca assume nota 8).
+     - Executa `deterministic_check()` junto da nota do modelo (média de 6 a 16 palavras por fala, pelo menos uma pergunta com `?`, nenhuma fala repetida e nenhuma fala começando igual a duas anteriores); se falhar, desconta 2 pontos e adiciona os motivos em `"problemas"`.
+     - Após 2 regenerações com `nota < 7` (ou `nota is None`), salva o roteiro reprovado em `output/rejected_<data>.json` com a nota e os problemas e levanta `RuntimeError` (a menos que `--aceitar-nota-baixa` na CLI ou `"aceitar_nota_baixa": true` em `settings.json` esteja ativo).
 3. **Síntese de Voz (`speech.py` + `voice_studio.py`):**
    - Lê o provedor e os perfis de `settings.json` (`voicestudio` em `http://127.0.0.1:3900`, perfis `Sasuke` e `Naruto` com ritmo `+18%`).
+   - `voice_studio.py` possui autostart do backend local no Windows (1 tentativa por execução, até 45 esperas de 2 s), cache em memória do áudio bruto de referência (`_ref_cache`, TTL 120 s) e preparo único por voz (`_prepared_reference`: corte de 10 s, 24 kHz, mono + transcrição Whisper cacheada em disco `cache/ref_cache/<sha256[:24]>.wav` e `.txt` e em memória).
 4. **Alinhamento de Legendas (`captions.py`):**
    - Usa `faster-whisper` (`small` por padrão em `settings.json`, `local_files_only=True`) para alinhar palavra por palavra e gerar legendas `.ass` transparentes (máx. 3 palavras por bloco, texto branco com contorno preto e palavra ativa destacada em amarelo/ciano).
-5. **Renderização (`render_pipeline.py`):**
-   - Sorteia um ponto aleatório de `assets/gameplay/gameplay_principal.mp4` (`brilho -0.06`, `gama 0.85`), aplica crossfade visual e musical de loop (`xfade` + `acrossfade`), anima a entrada lateral com mola amortecida de um personagem por vez, mistura música de fundo baixa (`music.py`, volume padrão `8%`) e aplica normalização de loudness `loudnorm=I=-14:TP=-1.5:LRA=11`.
+5. **Renderização (`render_pipeline.py` + `engine.py`):**
+   - `engine.character()` gera sombra suave projetada atrás do sprite (`GaussianBlur(9)`, opacidade `0.62`, deslocamento `+6px` para baixo) com cache em `output/cache/sprite_v2_<indice>_<mtime_ns>.png`.
+   - `render_pipeline.py` usa `-threads 0`, aplica `vignette=PI/6` no fundo, `highpass=f=80,acompressor=threshold=-18dB:ratio=2.2:attack=10:release=120` antes do `alimiter` nas vozes e `loudnorm=I=-14:TP=-1.5:LRA=11` no áudio final em 30 FPS padrão.
 
-## Mapa de Arquivos
+## Privacidade dos Assets
 
-- `news_auto.py` — Busca RSS, extração de fatos em 2 passos, validação estrita e filtro de nota (1–10).
-- `engine.py` — CLI (`--check`, `--preview`, `--generate`), integração com Ollama local (`http://127.0.0.1:11434`), leitura de `settings.json` e preparação de sprites.
-- `render_pipeline.py` — Pipeline FFmpeg de vídeo/áudio, janelas de turno dos personagens (`turns`), crossfade de loop e `loudnorm`.
-- `captions.py` — Alinhamento Faster-Whisper (`match_words`, `_clean_recognized`, `_merge_split_words`) e geração de legendas `.ass`.
-- `speech.py` — Gerenciamento de perfis de voz (lidos de `settings.json`) e cache de síntese.
-- `voice_studio.py` — Cliente HTTP para a API local do VoiceStudio (`http://127.0.0.1:3900`).
-- `director.py` — Modo opcional de direção criativa para textos colados manualmente na interface.
-- `music.py` — Seleção ou geração local de trilha lo-fi contínua para música de fundo.
-- `gui.py` — Interface gráfica Tkinter para Windows (tema Dark Studio).
-- `settings.json` / `.env.example` — Configurações persistidas do projeto.
-- `tests/test_news_auto.py` e `tests/test_integration.py` — Suíte de 37 testes unitários e de integração.
+- Os arquivos `assets/characters/*.png`, `assets/demo*/voice_*.wav` e `fala_*.wav` estão no `.gitignore` e não são rastreados no índice do repositório (permanecem apenas no disco local do usuário).
+- O script `publicar_github.py` cria/atualiza o repositório como **privado por padrão** (use `--publico` para público), lê o token exclusivamente de `GITHUB_TOKEN` ou `getpass` (sem argumento `--token` e sem eco no terminal) e faz push sem `force`.
 
-## Como Executar os Testes
+## Suíte de Testes (47 Testes)
+
+- `tests/test_news_auto.py` (25 testes) e `tests/test_integration.py` (22 testes) — totalizando **47 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'

@@ -1,6 +1,7 @@
 """Publica ou atualiza o repositório ReelForge no GitHub via API HTTPS (sem depender do git.exe)."""
 import argparse
 import base64
+import getpass
 import os
 import sys
 from pathlib import Path
@@ -8,19 +9,23 @@ from pathlib import Path
 import requests
 
 ROOT = Path(__file__).resolve().parent
-IGNORE_DIRS = {'.venv', '__pycache__', 'output', '.git', 'logs'}
+IGNORE_DIRS = {'.venv', '__pycache__', 'output', '.git', 'logs', '_original'}
 IGNORE_FILES = {'.env', 'history.sqlite3', 'ReelForge_apenas_codigo.zip'}
 IGNORE_EXTS = {'.mp4', '.mov', '.mkv', '.webm', '.wav', '.mp3', '.pyc', '.pyo', '.dll', '.zip'}
 
 
 def should_include(path: Path) -> bool:
     rel = path.relative_to(ROOT)
+    rel_posix = rel.as_posix()
     if any(part in IGNORE_DIRS for part in rel.parts):
         return False
     if path.name in IGNORE_FILES:
         return False
-    # Mantém os áudios pequenos de teste em assets/demo*, mas ignora vídeos/músicas grandes.
-    if path.suffix.lower() in IGNORE_EXTS and not any(p.startswith('demo') for p in rel.parts):
+    if rel_posix.startswith('assets/characters/') and path.suffix.lower() == '.png':
+        return False
+    if path.name.startswith(('voice_', 'fala_')) and path.suffix.lower() == '.wav':
+        return False
+    if path.suffix.lower() in IGNORE_EXTS:
         return False
     if path.stat().st_size > 5 * 1024 * 1024:
         return False
@@ -35,7 +40,8 @@ def collect_files():
     return files
 
 
-def publish(token: str, repo_name: str = 'ReelForge', private: bool = False):
+def publish(token: str, repo_name: str = 'ReelForge', private: bool = True,
+            message: str = 'Protege token no publicar_github, torna repositório privado por padrão e remove assets de personagens/vozes do índice'):
     headers = {
         'Authorization': f'Bearer {token.strip()}',
         'Accept': 'application/vnd.github+json',
@@ -51,7 +57,7 @@ def publish(token: str, repo_name: str = 'ReelForge', private: bool = False):
 
     repo_resp = session.get(f'https://api.github.com/repos/{owner}/{repo_name}', timeout=15)
     if repo_resp.status_code == 404:
-        print(f'Criando repositório {owner}/{repo_name} no GitHub...')
+        print(f'Criando repositório {owner}/{repo_name} no GitHub (privado={private})...')
         create_resp = session.post('https://api.github.com/user/repos', json={
             'name': repo_name,
             'description': 'ReelForge — Gerador de Reels verticais (RSS + Ollama + VoiceStudio + Faster-Whisper + FFmpeg)',
@@ -64,13 +70,20 @@ def publish(token: str, repo_name: str = 'ReelForge', private: bool = False):
     elif repo_resp.status_code == 200:
         repo_data = repo_resp.json()
         print(f'Repositório {owner}/{repo_name} já existe; atualizando arquivos...')
+        if repo_data.get('private') != private:
+            vis_resp = session.patch(
+                f'https://api.github.com/repos/{owner}/{repo_name}',
+                json={'private': private},
+                timeout=15,
+            )
+            if vis_resp.status_code == 200:
+                repo_data = vis_resp.json()
     else:
         raise RuntimeError(f'Erro ao consultar repositório (HTTP {repo_resp.status_code}): {repo_resp.text}')
 
     branch = repo_data.get('default_branch') or 'main'
     ref_resp = session.get(f'https://api.github.com/repos/{owner}/{repo_name}/git/ref/heads/{branch}', timeout=15)
     if ref_resp.status_code != 200:
-        # Caso o repositório esteja vazio, cria o README inicial via Contents API para inicializar o branch.
         readme = (ROOT / 'README.md').read_bytes() if (ROOT / 'README.md').is_file() else b'# ReelForge\n'
         init_resp = session.put(
             f'https://api.github.com/repos/{owner}/{repo_name}/contents/README.md',
@@ -82,11 +95,9 @@ def publish(token: str, repo_name: str = 'ReelForge', private: bool = False):
         ref_resp = session.get(f'https://api.github.com/repos/{owner}/{repo_name}/git/ref/heads/{branch}', timeout=15)
 
     base_commit_sha = ref_resp.json()['object']['sha']
-    commit_resp = session.get(f'https://api.github.com/repos/{owner}/{repo_name}/git/commits/{base_commit_sha}', timeout=15)
-    base_tree_sha = commit_resp.json()['tree']['sha']
 
     files = collect_files()
-    print(f'Enviando {len(files)} arquivos para {owner}/{repo_name}...')
+    print(f'Enviando {len(files)} arquivos rastreados para {owner}/{repo_name}...')
     tree_items = []
     for path in files:
         rel_posix = path.relative_to(ROOT).as_posix()
@@ -105,9 +116,10 @@ def publish(token: str, repo_name: str = 'ReelForge', private: bool = False):
             'sha': blob_resp.json()['sha'],
         })
 
+    # Sem base_tree: arquivos ignorados (equivalente a git rm --cached) saem do índice atual sem apagar o histórico.
     tree_resp = session.post(
         f'https://api.github.com/repos/{owner}/{repo_name}/git/trees',
-        json={'base_tree': base_tree_sha, 'tree': tree_items},
+        json={'tree': tree_items},
         timeout=30,
     )
     if tree_resp.status_code != 201:
@@ -116,7 +128,7 @@ def publish(token: str, repo_name: str = 'ReelForge', private: bool = False):
     new_commit_resp = session.post(
         f'https://api.github.com/repos/{owner}/{repo_name}/git/commits',
         json={
-            'message': 'Atualiza ReelForge (roteiro em 2 passos, filtro de qualidade, limpeza e guia CLAUDE.md)',
+            'message': message,
             'tree': tree_resp.json()['sha'],
             'parents': [base_commit_sha],
         },
@@ -125,32 +137,34 @@ def publish(token: str, repo_name: str = 'ReelForge', private: bool = False):
     if new_commit_resp.status_code != 201:
         raise RuntimeError(f'Erro ao criar commit: {new_commit_resp.text}')
 
+    commit_sha = new_commit_resp.json()['sha']
     update_ref = session.patch(
         f'https://api.github.com/repos/{owner}/{repo_name}/git/refs/heads/{branch}',
-        json={'sha': new_commit_resp.json()['sha'], 'force': True},
+        json={'sha': commit_sha, 'force': False},
         timeout=20,
     )
     if update_ref.status_code != 200:
         raise RuntimeError(f'Erro ao atualizar branch {branch}: {update_ref.text}')
 
     html_url = repo_data['html_url']
-    print(f'\nSucesso! Repositório publicado em: {html_url}')
-    return html_url
+    print(f'\nSucesso! Commit {commit_sha} publicado em: {html_url}')
+    return commit_sha
 
 
 def main():
     parser = argparse.ArgumentParser(description='Publica o ReelForge no GitHub via API HTTPS')
-    parser.add_argument('--token', default=os.getenv('GITHUB_TOKEN', ''), help='Personal Access Token do GitHub')
     parser.add_argument('--repo', default='ReelForge', help='Nome do repositório (padrão: ReelForge)')
-    parser.add_argument('--private', action='store_true', help='Criar como repositório privado')
+    parser.add_argument('--publico', action='store_true', help='Tornar o repositório público (padrão: privado)')
+    parser.add_argument('--mensagem', default='Protege token no publicar_github, torna repositório privado por padrão e remove assets de personagens/vozes do índice',
+                        help='Mensagem do commit em português')
     args = parser.parse_args()
-    token = args.token.strip()
+    token = os.getenv('GITHUB_TOKEN', '').strip()
     if not token:
-        token = input('Cole seu GitHub Personal Access Token (com permissão repo/public_repo): ').strip()
+        token = getpass.getpass('GitHub Personal Access Token (oculto): ').strip()
     if not token:
-        print('Erro: informe um token do GitHub.', file=sys.stderr)
+        print('Erro: defina a variável de ambiente GITHUB_TOKEN ou digite o token no prompt oculto.', file=sys.stderr)
         sys.exit(1)
-    publish(token, args.repo, args.private)
+    publish(token, args.repo, private=not args.publico, message=args.mensagem)
 
 
 if __name__ == '__main__':
