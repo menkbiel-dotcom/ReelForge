@@ -23,7 +23,7 @@
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 53 testes passando (incluindo `test_item5_clean_article_body_html_and_flat_text`)
 - [x] **ITEM 6 — Legendas e acabamento (`captions.py`, `instalar_legendas.bat`, `README.md`, `engine.py`, testes)**: feito
-  - **Commit:** a registrar após push — *"Ajusta duracao minima de palavras nas legendas, modelo do whisper e documentacao"*
+  - **Commit:** `cbb109ef19c9d6f09979a79b85ab416ad0f3e363` — *"Ajusta duracao minima de palavras nas legendas, modelo do whisper e documentacao"*
   - **Arquivos tocados:** `captions.py`, `instalar_legendas.bat`, `README.md`, `engine.py`, `tests/test_integration.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 56 testes passando (incluindo `test_captions_interpolated_words_expand_minimum_duration`, `test_whisper_words_missing_model_raises_runtime_error_without_hf_traceback` e `test_engine_character_thumbnail_size`)
 
