@@ -9,6 +9,7 @@ import calendar
 import hashlib
 import html
 import json
+import math
 import os
 import re
 import time
@@ -87,13 +88,194 @@ KEY_ALIASES = {
     'comunismo': {'comunismo', 'comunista', 'comunistas', 'marx', 'sovietica'},
 }
 WORD_TO_NUM = {
-    'zero': '0', 'um': '1', 'uma': '1', 'primeiro': '1', 'primeira': '1',
-    'dois': '2', 'duas': '2', 'segundo': '2', 'segunda': '2',
-    'tres': '3', 'terceiro': '3', 'terceira': '3',
+    'zero': '0',
+    'dois': '2', 'duas': '2',
+    'tres': '3',
     'quatro': '4', 'iv': '4', 'cinco': '5', 'seis': '6', 'vi': '6',
     'sete': '7', 'oito': '8', 'nove': '9', 'dez': '10',
     'xix': '19', 'xx': '20', 'cem': '100', 'mil': '1000',
 }
+TEMPORAL_UNITS = {
+    'trimestre', 'trimestres',
+    'semestre', 'semestres',
+    'bimestre', 'bimestres',
+    'quadrimestre', 'quadrimestres',
+    'decada', 'decadas',
+    'seculo', 'seculos',
+    'quinzena', 'quinzenas',
+}
+
+EXTENSO_MAP = {
+    'zero': 0, 'um': 1, 'uma': 1, 'dois': 2, 'duas': 2, 'tres': 3, 'três': 3, 'quatro': 4,
+    'cinco': 5, 'seis': 6, 'sete': 7, 'oito': 8, 'nove': 9, 'dez': 10,
+    'onze': 11, 'doze': 12, 'treze': 13, 'quatorze': 14, 'catorze': 14,
+    'quinze': 15, 'dezesseis': 16, 'dezessete': 17, 'dezoito': 18, 'dezenove': 19,
+    'vinte': 20, 'trinta': 30, 'quarenta': 40, 'cinquenta': 50,
+    'sessenta': 60, 'setenta': 70, 'oitenta': 80, 'noventa': 90,
+    'cem': 100, 'cento': 100, 'duzentos': 200, 'duzentas': 200,
+    'trezentos': 300, 'trezentas': 300, 'quatrocentos': 400, 'quatrocentas': 400,
+    'quinhentos': 500, 'quinhentas': 500, 'seiscentos': 600, 'seiscentas': 600,
+    'setecentos': 700, 'setecentas': 700, 'oitocentos': 800, 'oitocentas': 800,
+    'novecentos': 900, 'novecentas': 900,
+}
+
+
+def _normalize_plain(text):
+    norm = unicodedata.normalize('NFKD', str(text)).casefold()
+    norm = ''.join(c for c in norm if not unicodedata.combining(c))
+    return re.sub(r'[^a-z0-9]+', ' ', norm)
+
+
+def _parse_extenso(text):
+    words = [w for w in re.split(r'\s+', str(text).strip().lower()) if w and w != 'e']
+    total = 0
+    for w in words:
+        norm = unicodedata.normalize('NFKD', w)
+        norm = ''.join(c for c in norm if not unicodedata.combining(c))
+        val = EXTENSO_MAP.get(w) or EXTENSO_MAP.get(norm)
+        if val is None:
+            return None
+        total += val
+    return float(total) if total > 0 or 'zero' in words else None
+
+
+class NormalizedMagnitude(str):
+    def __eq__(self, other):
+        if super().__eq__(other):
+            return True
+        s1 = unicodedata.normalize('NFKD', str(self)).casefold()
+        s1 = ''.join(c for c in s1 if not unicodedata.combining(c)).rstrip('s')
+        s2 = unicodedata.normalize('NFKD', str(other)).casefold()
+        s2 = ''.join(c for c in s2 if not unicodedata.combining(c)).rstrip('s')
+        if s1 == s2:
+            return True
+        if s1 in ('%', 'por cento', 'porcento') and s2 in ('%', 'por cento', 'porcento'):
+            return True
+        return False
+
+    def __hash__(self):
+        s1 = unicodedata.normalize('NFKD', str(self)).casefold()
+        s1 = ''.join(c for c in s1 if not unicodedata.combining(c)).rstrip('s')
+        if s1 in ('%', 'por cento', 'porcento'):
+            return hash('%')
+        return hash(s1)
+
+
+class Quantity(tuple):
+    def __new__(cls, val, mag, qualifier=None):
+        return super().__new__(cls, (val, mag))
+
+    @property
+    def val(self):
+        return self[0]
+
+    @property
+    def mag(self):
+        return self[1]
+
+    @property
+    def qualifier(self):
+        return self._qualifier
+
+    def __init__(self, val, mag, qualifier=None):
+        self._qualifier = qualifier
+
+    def __repr__(self):
+        if self._qualifier:
+            return f"Quantity({self[0]}, {repr(self[1])}, qualifier={repr(self._qualifier)})"
+        return f"Quantity({self[0]}, {repr(self[1])})"
+
+
+MAGNITUDES_MAP = {
+    'mil': 'mil',
+    'milhao': 'milhão', 'milhões': 'milhão', 'milhoes': 'milhão', 'milhão': 'milhão',
+    'bilhao': 'bilhão', 'bilhões': 'bilhão', 'bilhoes': 'bilhão', 'bilhão': 'bilhão',
+    'trilhao': 'trilhão', 'trilhões': 'trilhão', 'trilhoes': 'trilhão', 'trilhão': 'trilhão',
+    '%': '%', 'por cento': '%', 'porcento': '%',
+    'saca': 'sacas', 'sacas': 'sacas',
+    'quilo': 'quilos', 'quilos': 'quilos', 'kg': 'quilos', 'kgs': 'quilos',
+    'tonelada': 'toneladas', 'toneladas': 'toneladas',
+}
+
+MAG_PATTERN = r'(?:milh[oõ]es|milh[aã]o|bilh[oõ]es|bilh[aã]o|trilh[oõ]es|trilh[aã]o|mil|por\s+cento|porcento|%|sacas?|quilos?|kgs?|toneladas?)'
+QUAL_PATTERN = r'(?:mais\s+de|acima\s+de|superior\s+a|quase|cerca\s+de|aproximadamente|por\s+volta\s+de|em\s+torno\s+de)'
+
+QUANTITY_REGEX = re.compile(
+    r'(?:(' + QUAL_PATTERN + r')\s+)?'
+    r'(?:(?:us\$|r\$|\$)\s*)?'
+    r'(\d+(?:[.,]\d+)*|(?:[a-zà-ú]+(?:\s+e\s+[a-zà-ú]+)*))\s*'
+    r'(' + MAG_PATTERN + r')',
+    re.IGNORECASE
+)
+
+
+def _quantity_pairs(text, include_qualifiers=False):
+    pairs = []
+    for m in QUANTITY_REGEX.finditer(str(text)):
+        raw_qual, raw_val, raw_mag = m.group(1), m.group(2).strip(), m.group(3).strip()
+        qual = None
+        if raw_qual:
+            q_norm = raw_qual.lower()
+            if any(q in q_norm for q in ('mais de', 'acima de', 'superior a')):
+                qual = 'mais de'
+            elif 'quase' in q_norm:
+                qual = 'quase'
+            elif any(q in q_norm for q in ('cerca de', 'aproximadamente', 'por volta de', 'em torno de')):
+                qual = 'cerca de'
+
+        mag_norm = unicodedata.normalize('NFKD', raw_mag).casefold()
+        mag_norm = ''.join(c for c in mag_norm if not unicodedata.combining(c)).strip()
+        canonical_mag = MAGNITUDES_MAP.get(raw_mag.lower()) or MAGNITUDES_MAP.get(mag_norm) or mag_norm
+        mag_obj = NormalizedMagnitude(canonical_mag)
+
+        if re.match(r'^\d+(?:[.,]\d+)*$', raw_val):
+            v_str = raw_val
+            if ',' in v_str:
+                v_str = v_str.replace('.', '').replace(',', '.')
+            val = float(v_str)
+        else:
+            ext_norm = unicodedata.normalize('NFKD', raw_val).casefold()
+            ext_norm = ''.join(c for c in ext_norm if not unicodedata.combining(c)).strip()
+            if ext_norm in ('um', 'uma') and mag_norm not in ('mil', 'milhao', 'milhoes', 'bilhao', 'bilhoes', 'trilhao', 'trilhoes'):
+                continue
+            parsed = _parse_extenso(raw_val)
+            if parsed is None:
+                continue
+            val = parsed
+
+        pairs.append(Quantity(val, mag_obj, qual))
+
+    if include_qualifiers:
+        return [(p.val, p.mag, p.qualifier) for p in pairs]
+    return pairs
+
+
+def _match_quantity_rule(line_qty, source_quantities):
+    matching_sources = [sq for sq in source_quantities if sq.mag == line_qty.mag]
+    if not matching_sources:
+        return False, f'magnitude "{line_qty.mag}" ausente na matéria'
+
+    qual = line_qty.qualifier
+    line_v = line_qty.val
+
+    for sq in matching_sources:
+        src_v = sq.val
+        if qual == 'mais de':
+            if math.floor(src_v) == int(round(line_v)):
+                return True, 'OK'
+        elif qual == 'quase':
+            if math.ceil(src_v) == int(round(line_v)):
+                return True, 'OK'
+        elif qual == 'cerca de':
+            if round(src_v) == int(round(line_v)):
+                return True, 'OK'
+        else:
+            if abs(src_v - line_v) < 0.001:
+                return True, 'OK'
+
+    qual_str = f' com qualificador "{qual}"' if qual else ''
+    return False, f'valor {line_v}{qual_str} não condiz com as fontes {[s.val for s in matching_sources]}'
+
 SOCIAL = ('instagram', 'facebook', 'youtube', 'tiktok', 'twitter', 'threads', 'linkedin', 'kwai', 'pinterest', 'reddit')
 JUNK = re.compile(r'[\U0001F000-\U0001FFFF\u2600-\u27BF\u2060-\u206F\u200B-\u200F\uFE0F]')
 ADS = re.compile(r'\b(ofertas?|cupom|cupons|descontos?|black friday|promo[cç](ao|ão|oes|ões)|achadinhos|'
@@ -480,6 +662,8 @@ def require_minimum_source(story):
 def _facts(texts, source):
     """Detalhes concretos do corpo/título da matéria presentes no roteiro: números e nomes próprios."""
     found = set(_numbers(' '.join(texts))) & _allowed_numbers(source)
+    for q in _quantity_pairs(' '.join(texts)):
+        found.add(f'{q.val}_{q.mag}')
     source_words = set(_tokens(source))
     known_entities = {e.casefold() for e in _entities(source)}
     for text in texts:
@@ -515,6 +699,7 @@ def extract_facts(story, ask=None):
     ask = ask or engine.request_json
     source = source_text(story)
     allowed_nums = _allowed_numbers(source)
+    source_temporal = set(_normalize_plain(source).split()) & TEMPORAL_UNITS
     instruction = (
         'Passo 1 — Extração de fatos: leia o título e o corpo da matéria e extraia de 5 a 6 fatos curtos '
         'e concretos em português brasileiro. '
@@ -539,6 +724,10 @@ def extract_facts(story, ask=None):
         invented = _numbers(' '.join(cleaned)) - allowed_nums
         if invented:
             error = 'Fatos contêm números ausentes na matéria: ' + ', '.join(sorted(invented))
+            continue
+        temporal_invented = (set(_normalize_plain(' '.join(cleaned)).split()) & TEMPORAL_UNITS) - source_temporal
+        if temporal_invented:
+            error = 'Fatos contêm unidades temporais ausentes na matéria: ' + ', '.join(sorted(temporal_invented))
             continue
         return cleaned[:6]
     raise ValueError('O Ollama não extraiu uma lista válida de 5 a 6 fatos da matéria.')
@@ -612,6 +801,14 @@ def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12, fa
     if invented:
         raise ValueError('Números ausentes na matéria: ' + ', '.join(sorted(invented)) +
                          '. Use apenas números presentes no corpo e título da matéria.')
+
+    # Validação de unidades temporais
+    source_temporal = set(_normalize_plain(source).split()) & TEMPORAL_UNITS
+    script_temporal = set(_normalize_plain(' '.join(texts)).split()) & TEMPORAL_UNITS
+    temporal_diff = script_temporal - source_temporal
+    if temporal_diff:
+        raise ValueError('Unidades temporais ausentes na matéria: ' + ', '.join(sorted(temporal_diff)))
+
     # Rejeita nomes próprios vindos das manchetes relacionadas que não existem no corpo/título da matéria.
     related_text = '\n'.join(story.get('related', []) + story.get('related_context', []))
     if related_text:
@@ -623,7 +820,8 @@ def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12, fa
             raise ValueError('Contaminação de manchete relacionada detectada: ' + ', '.join(sorted(leaked)) +
                              '. Use apenas fatos do corpo da matéria principal.')
 
-    # 2. Validação individual de cada fala: amarração ao fato ou reação
+    # 2. Validação individual de cada fala: amarração ao fato ou reação, e quantidades
+    source_quantities = _quantity_pairs(source)
     reacoes_count = 0
     for i, line in enumerate(lines):
         text = texts[i]
@@ -663,6 +861,13 @@ def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12, fa
                     raise ValueError(f'A fala citou nome/entidade "{ent}" ausente no fato {f_idx} (ou título).')
         else:
             raise ValueError(f'A fala {i + 1} deve indicar "fato": N ou "reacao": true.')
+
+        if not is_reacao:
+            line_quantities = _quantity_pairs(text)
+            for lq in line_quantities:
+                valid, msg = _match_quantity_rule(lq, source_quantities)
+                if not valid:
+                    raise ValueError(f'Quantidade na fala {i + 1} não condiz com a matéria: {msg}')
 
     if reacoes_count > 2:
         raise ValueError(f'O roteiro tem {reacoes_count} falas de reação; o limite é no máximo 2 por roteiro.')

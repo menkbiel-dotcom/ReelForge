@@ -692,6 +692,131 @@ class NewsAutoTests(unittest.TestCase):
         self.assertTrue(lines[1].get('reacao'))
         self.assertEqual(lines[2].get('fato'), 1)
 
+    def test_item2_quantity_pairs_and_qualifier_rules(self):
+        # 1. _quantity_pairs direto
+        pairs = news_auto._quantity_pairs('quase um bilhão')
+        self.assertEqual(len(pairs), 1)
+        self.assertEqual(pairs[0][0], 1.0)
+        self.assertEqual(pairs[0][1], 'bilhão')
+        self.assertEqual(pairs[0].qualifier, 'quase')
+
+        pairs_ext = news_auto._quantity_pairs('mais de dezesseis milhões')
+        self.assertEqual(len(pairs_ext), 1)
+        self.assertEqual(pairs_ext[0][0], 16.0)
+        self.assertEqual(pairs_ext[0][1], 'milhão')
+        self.assertEqual(pairs_ext[0].qualifier, 'mais de')
+
+        pairs_curr = news_auto._quantity_pairs('US$ 1,786 bilhão')
+        self.assertEqual(len(pairs_curr), 1)
+        self.assertEqual(pairs_curr[0][0], 1.786)
+        self.assertEqual(pairs_curr[0][1], 'bilhão')
+        self.assertIsNone(pairs_curr[0].qualifier)
+
+        # 2. Casos obrigatórios com validate_lines
+        story = {
+            'title': 'Exportações de café no Brasil batem recorde histórico',
+            'body': (
+                'O Brasil exportou 16,591 milhões de sacas nos primeiros quatro meses. '
+                'A receita cambial somou US$ 1,786 bilhão, superando o recorde anterior '
+                'de 1,657 bilhão registrado no ciclo passado. Os embarques cresceram no período.'
+            ),
+            'extracted_facts': [
+                'O Brasil exportou 16,591 milhões de sacas nos primeiros quatro meses.',
+                'A receita cambial somou US$ 1,786 bilhão.',
+                'O recorde anterior era de 1,657 bilhão de dólares.',
+                'Os embarques bateram recorde histórico.',
+                'O mercado manteve ritmo forte nas vendas.',
+            ]
+        }
+
+        # Caso 1 obrigatório: "quase um bilhão" com fonte 1,657 bilhão -> REJEITA (ceil(1.657) == 2, não 1)
+        bad_quase_um = {'lines': [
+            {'speaker': 0, 'text': 'Viu o novo recorde do café?', 'fato': 3},
+            {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
+            {'speaker': 0, 'text': 'Superou a marca anterior de quase um bilhão.', 'fato': 2},
+            {'speaker': 1, 'text': 'Será que o preço do café continua caindo?', 'fato': 3},
+        ]}
+        with self.assertRaisesRegex(ValueError, 'Quantidade na fala 3 não condiz com a matéria'):
+            news_auto.validate_lines(bad_quase_um, story, 80)
+
+        # Caso 2 obrigatório: "mais de dezesseis milhões" com fonte 16,591 milhões -> ACEITA (floor(16.591) == 16)
+        valid_mais_de = {'lines': [
+            {'speaker': 0, 'text': 'Viu o novo recorde no Brasil?', 'fato': 3},
+            {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
+            {'speaker': 0, 'text': 'Foram mais de dezesseis milhões de sacas.', 'fato': 0},
+            {'speaker': 1, 'text': 'A receita foi de US$ 1,786 bilhão!', 'fato': 1},
+            {'speaker': 0, 'text': 'Bateu a marca antiga de 1,657 bilhão.', 'fato': 2},
+            {'speaker': 1, 'text': 'Será que o preço do café continua caindo?', 'fato': 3},
+        ]}
+        lines, prob = news_auto.validate_lines(valid_mais_de, story, 100)
+        self.assertEqual(prob, '')
+        self.assertEqual(len(lines), 6)
+
+        # Caso 3 obrigatório: "US$ 1,786 bilhão" com fonte 1,786 bilhão -> ACEITA
+        valid_exact = {'lines': [
+            {'speaker': 0, 'text': 'Viu o novo recorde no Brasil?', 'fato': 3},
+            {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
+            {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
+            {'speaker': 1, 'text': 'Foram 16,591 milhões de sacas embarcadas.', 'fato': 0},
+            {'speaker': 0, 'text': 'Bateu a marca antiga de 1,657 bilhão.', 'fato': 2},
+            {'speaker': 1, 'text': 'Será que o preço do café continua caindo?', 'fato': 3},
+        ]}
+        lines, prob = news_auto.validate_lines(valid_exact, story, 100)
+        self.assertEqual(prob, '')
+        self.assertEqual(len(lines), 6)
+
+    def test_item2_temporal_units_restriction(self):
+        story = {
+            'title': 'Exportações de café batem recorde em quatro primeiros meses',
+            'body': (
+                'O setor exportou nos quatro primeiros meses do ano volumes históricos. '
+                'As remessas aumentaram sem interrupções durante os quatro primeiros meses.'
+            ),
+            'extracted_facts': [
+                'O setor exportou nos quatro primeiros meses do ano.',
+                'Volumes foram históricos nos quatro primeiros meses.',
+                'As remessas aumentaram sem interrupções.',
+                'O comércio de café segue forte.',
+                'Produtores comemoram os resultados.',
+            ]
+        }
+
+        # 1. Roteiro com "primeiro trimestre" com fonte "quatro primeiros meses" -> REJEITA
+        bad_temporal_script = {'lines': [
+            {'speaker': 0, 'text': 'Viu o recorde no primeiro trimestre?', 'fato': 0},
+            {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
+            {'speaker': 0, 'text': 'As remessas aumentaram sem interrupções.', 'fato': 2},
+            {'speaker': 1, 'text': 'Será que o volume continua alto?', 'fato': 0},
+        ]}
+        with self.assertRaisesRegex(ValueError, 'Unidades temporais ausentes na matéria: trimestre'):
+            news_auto.validate_lines(bad_temporal_script, story, 80)
+
+        # 2. extract_facts com fato contendo "primeiro trimestre" quando fonte tem apenas "quatro primeiros meses"
+        calls = []
+        def mock_ask(instruction, payload_str):
+            calls.append(payload_str)
+            if len(calls) < 2:
+                return {'fatos': [
+                    'Recorde histórico no primeiro trimestre.',
+                    'Quatro primeiros meses tiveram alta.',
+                    'As remessas aumentaram sem parar.',
+                    'O café brasileiro bateu recorde.',
+                    'Os produtores comemoram o resultado.',
+                ]}
+            return {'fatos': [
+                'Recorde histórico nos quatro primeiros meses.',
+                'Setor registrou volumes expressivos.',
+                'As remessas aumentaram sem parar.',
+                'O café brasileiro bateu recorde.',
+                'Os produtores comemoram o resultado.',
+            ]}
+
+        facts = news_auto.extract_facts(story, ask=mock_ask)
+        self.assertEqual(len(facts), 5)
+        self.assertIn('quatro primeiros meses', facts[0].lower())
+        self.assertEqual(len(calls), 2)
+
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

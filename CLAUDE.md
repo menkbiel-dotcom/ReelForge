@@ -11,13 +11,16 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
    - Em `automatic()`, se a pauta escolhida falhar em `require_minimum_source()`, o sistema tenta automaticamente a próxima candidata (até 3 tentativas) antes de falhar.
 2. **Seleção e Roteiro em 2 Passos + Filtro de Qualidade Fechado (`news_auto.py` + Ollama local `qwen3.5:4b`):**
    - `pick_story()`: O Ollama escolhe a melhor pauta com corpo completo.
-   - **Passo 1 (`extract_facts()`):** O Ollama extrai de **5 a 6 fatos curtos** em JSON `{"fatos":[...]}` exclusivamente do título e corpo da matéria (`source_text`), validando números contra `_allowed_numbers(source)`.
+   - **Passo 1 (`extract_facts()`):** O Ollama extrai de **5 a 6 fatos curtos** em JSON `{"fatos":[...]}` exclusivamente do título e corpo da matéria (`source_text`), validando números contra `_allowed_numbers(source)` e rejeitando unidades temporais inventadas (`TEMPORAL_UNITS`, com retry).
    - **Passo 2 (`write_script()`):** O Ollama escreve o diálogo entre Sasuke (direto e irônico) e Naruto (curioso e espontâneo) usando exemplos *few-shot* **totalmente fictícios** (`EXEMPLOS FICTÍCIOS: copie apenas o estilo e o ritmo, nunca os fatos`).
    - **Validação (`validate_lines()`):**
      - Primeira fala deve ser uma provocação ou pergunta de até 10 palavras (nunca a manchete copiada nem iniciada por `"Mas..."`).
-     - Proíbe citar o nome do veículo ou expressões de telejornal (`"confirmado por"`, `"segundo o"`, `"nesta segunda-feira"`).
+     - Cada fala é amarrada a um fato (`{"fato": N}`) ou é uma reação curta (`{"reacao": true}`, máx. 6 palavras, sem dígitos, máx. 2 por roteiro, nunca consecutivas e nunca na última fala).
+     - Proíbe citar o nome do veículo, expressões de telejornal (`"confirmado por"`, `"segundo o"`, `"nesta segunda-feira"`) e fechos de enchimento na última fala (`FILLER_CLOSE`: `"que legal"`, `"show"`, `"incrível"`).
      - Rejeita termos/números vazados dos exemplos fictícios do prompt (`FICTIONAL_EXAMPLE_TERMS`) quando não estiverem na matéria.
-     - Valida números usando `_allowed_numbers(source)` (`WORD_TO_NUM`: numerais por extenso como `"três" -> "3"`, inteiros de decimais e algarismos romanos), calculado exclusivamente sobre título e corpo da matéria, nunca sobre manchetes relacionadas (`enrich()`).
+     - Valida números usando `_allowed_numbers(source)` (`WORD_TO_NUM` sem numerais ambíguos como `"um"`, `"primeiro"`, `"segundo"`), inteiros de decimais e algarismos romanos, calculado exclusivamente sobre título e corpo da matéria, nunca sobre manchetes relacionadas (`enrich()`).
+     - Restringe unidades temporais (`TEMPORAL_UNITS`: `trimestre`, `semestre`, `década`, etc.): se ausentes da matéria, rejeita tanto em `extract_facts` (com retry) quanto em `validate_lines`.
+     - Validação de quantidades e magnitudes com qualificadores (`_quantity_pairs`): compara pares numéricos e magnitudes (`mil`, `milhões`, `bilhões`, `trilhões`, `%`, `sacas...`), aceitando `"mais de X"` se `floor(fonte) == X`, `"quase X"` se `ceil(fonte) == X`, `"cerca de X"` se `round(fonte) == X`, ou valor exato sem qualificador.
      - Exige que a última fala termine com uma frase completa (pergunta aberta ou fecho), sem ponte truncada (`script_loop: false` por padrão).
    - **Filtro de Qualidade Fechado (`evaluate_script()` + `deterministic_check()`):**
      - Permite configurar um modelo juiz separado via `"judge_model"` em `settings.json` (padrão = `ollama_model`).
@@ -38,9 +41,9 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
 - Os arquivos `assets/characters/*.png`, `assets/demo*/voice_*.wav` e `fala_*.wav` estão no `.gitignore` e não são rastreados no índice do repositório (permanecem apenas no disco local do usuário).
 - O script `publicar_github.py` cria/atualiza o repositório como **privado por padrão** (use `--publico` para público), lê o token exclusivamente de `GITHUB_TOKEN` ou `getpass` (sem argumento `--token` e sem eco no terminal) e faz push sem `force`.
 
-## Suíte de Testes (47 Testes)
+## Suíte de Testes (50 Testes)
 
-- `tests/test_news_auto.py` (25 testes) e `tests/test_integration.py` (22 testes) — totalizando **47 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
+- `tests/test_news_auto.py` (28 testes) e `tests/test_integration.py` (22 testes) — totalizando **50 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'
