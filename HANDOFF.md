@@ -106,10 +106,13 @@
 ## Status Geral dos Itens (Rodada 2)
 
 - [x] **ITEM 1 — Cobertura do tema (`news_auto.py`, `validate_lines`)**: feito
-  - **Commit:** pendente de push
+  - **Commit:** `4a1d9262e49fae3b4d210786c4c7574a23996418` — *"Exige cobertura das palavras-chave do titulo nos primeiros turnos e no roteiro"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `settings.json`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 57 testes passando (incluindo `test_item1_round2_theme_coverage`)
-- [ ] **ITEM 2 — Gancho respondido (`news_auto.py`, `validate_lines`)**: pendente
+- [x] **ITEM 2 — Gancho respondido (`news_auto.py`, `validate_lines`)**: feito
+  - **Commit:** pendente de push
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 58 testes passando (incluindo `test_item2_round2_answered_hook_requirement`)
 - [ ] **ITEM 3 — Marcação "fato" não pode ser decorativa (`news_auto.py`, `validate_lines`)**: pendente
 - [ ] **ITEM 4 — Variedade e muletas (`news_auto.py`, `validate_lines`)**: pendente
 - [ ] **ITEM 5 — Juiz com evidência (`news_auto.py`, `evaluate_script`)**: pendente

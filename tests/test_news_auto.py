@@ -178,7 +178,7 @@ class NewsAutoTests(unittest.TestCase):
         }
         step1_facts = {'fatos': [
             'A Anthropic fechou contrato de US$ 3,4 bilhões.',
-            'Os equipamentos são da Caterpillar.',
+            'A Caterpillar fornecerá geradores de US$ 3,4 bilhões.',
             'A instalação fica no Texas.',
             'O acordo garante energia até 2045.',
             'O objetivo é abastecer data centers de IA.',
@@ -391,7 +391,7 @@ class NewsAutoTests(unittest.TestCase):
         }
         facts_resp = {'fatos': [
             'A Anthropic fechou contrato de US$ 3,4 bilhões.',
-            'Os equipamentos são da Caterpillar.',
+            'A Caterpillar fornecerá geradores de US$ 3,4 bilhões.',
             'A instalação fica no Texas.',
             'O acordo garante energia até 2045.',
             'O objetivo é abastecer data centers de IA.',
@@ -484,12 +484,12 @@ class NewsAutoTests(unittest.TestCase):
             'O público-alvo são profissionais de som.',
             'O aparelho chegou ao mercado nacional.',
         ]}
-        good = {'lines': [{'speaker': 0, 'text': t, 'fato': 0} for t in (
-            'Pagaria R$ 32 mil num Walkman novo?',
-            'A Sony trouxe o aparelho de volta ao Brasil.',
-            'O foco é som de estúdio profissional.',
-            'Vale tudo isso só para ouvir música?'
-        )]}
+        good = {'lines': [
+            {'speaker': 0, 'text': 'Pagaria R$ 32 mil num Walkman novo?', 'fato': 1},
+            {'speaker': 1, 'text': 'O preço oficial é de R$ 32 mil no Brasil.', 'fato': 1},
+            {'speaker': 0, 'text': 'O foco é som de estúdio profissional.', 'fato': 2},
+            {'speaker': 1, 'text': 'Vale tudo isso só para ouvir música?', 'fato': 1}
+        ]}
         seq = iter([facts_resp, good, {'nota': 9, 'problemas': []}])
 
         def capture_ask(inst, payload):
@@ -540,7 +540,7 @@ class NewsAutoTests(unittest.TestCase):
         ]}
         script_resp = {'lines': [
             {'speaker': 0, 'text': 'Pagaria R$ 32 mil num Walkman novo?', 'fato': 1},
-            {'speaker': 0, 'text': 'A Sony trouxe o aparelho de volta ao Brasil.', 'fato': 0},
+            {'speaker': 0, 'text': 'O preço oficial é de R$ 32 mil no Brasil.', 'fato': 1},
             {'speaker': 0, 'text': 'O foco é áudio de estúdio profissional.', 'fato': 2},
             {'speaker': 0, 'text': 'Mesmo assim o preço assustou todo mundo.', 'fato': 1},
             {'speaker': 0, 'text': 'Caramba, só colecionador!', 'reacao': True},
@@ -680,7 +680,7 @@ class NewsAutoTests(unittest.TestCase):
 
         # 11. Roteiro válido
         valid = {'lines': [
-            {'speaker': 0, 'text': 'Viu o recorde de 5,3 milhões de sacas?', 'fato': 0},
+            {'speaker': 0, 'text': 'Olha o recorde de 5,3 milhões de sacas!', 'fato': 0},
             {'speaker': 1, 'text': 'Caramba, isso tudo?!', 'reacao': True},
             {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
             {'speaker': 1, 'text': 'E a Europa comprou 17,8 milhões de sacas!', 'fato': 2},
@@ -742,7 +742,7 @@ class NewsAutoTests(unittest.TestCase):
 
         # Caso 2 obrigatório: "mais de dezesseis milhões" com fonte 16,591 milhões -> ACEITA (floor(16.591) == 16)
         valid_mais_de = {'lines': [
-            {'speaker': 0, 'text': 'Viu o novo recorde no Brasil?', 'fato': 3},
+            {'speaker': 0, 'text': 'Olha o novo recorde no Brasil!', 'fato': 3},
             {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
             {'speaker': 0, 'text': 'Foram mais de dezesseis milhões de sacas.', 'fato': 0},
             {'speaker': 1, 'text': 'A receita foi de US$ 1,786 bilhão!', 'fato': 1},
@@ -755,7 +755,7 @@ class NewsAutoTests(unittest.TestCase):
 
         # Caso 3 obrigatório: "US$ 1,786 bilhão" com fonte 1,786 bilhão -> ACEITA
         valid_exact = {'lines': [
-            {'speaker': 0, 'text': 'Viu o novo recorde no Brasil?', 'fato': 3},
+            {'speaker': 0, 'text': 'Olha o novo recorde no Brasil!', 'fato': 3},
             {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
             {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
             {'speaker': 1, 'text': 'Foram 16,591 milhões de sacas embarcadas.', 'fato': 0},
@@ -836,7 +836,7 @@ class NewsAutoTests(unittest.TestCase):
             ]
         }
         lines = [
-            {'speaker': 0, 'text': 'Viu o novo recorde no Brasil?', 'fato': 4},
+            {'speaker': 0, 'text': 'Olha o novo recorde no Brasil!', 'fato': 4},
             {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
             {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
             {'speaker': 1, 'text': 'Mas o preço médio caiu 9,5% no ano.', 'fato': 3},
@@ -937,7 +937,7 @@ class NewsAutoTests(unittest.TestCase):
         source = news_auto.source_text(story)
 
         # 1. Validação de gancho válido e inválidos
-        valid_hook = 'Por que vendemos mais café e faturamos menos?'
+        valid_hook = 'Por que a receita caiu 6,3% com mais café?'
         self.assertEqual(news_auto.validate_hook(valid_hook, story, source), valid_hook)
 
         # Gancho com mais de 10 palavras -> inválido
@@ -1120,7 +1120,7 @@ class NewsAutoTests(unittest.TestCase):
 
         # 4. Quando cobre as palavras-chave nos primeiros turnos e no total, é aceito
         valid_lines = {'lines': [
-            {'speaker': 0, 'text': 'O Brasil vai investir pesado agora?', 'fato': 0},
+            {'speaker': 0, 'text': 'O Brasil vai investir 460 bilhões?', 'fato': 0},
             {'speaker': 1, 'text': 'Sim, R$ 460 bilhões para fertilizantes!', 'fato': 0},
             {'speaker': 0, 'text': 'Isso vai levar cerca de 20 anos.', 'fato': 0},
             {'speaker': 1, 'text': 'Será que melhora a segurança alimentar?', 'fato': 5},
@@ -1142,13 +1142,77 @@ class NewsAutoTests(unittest.TestCase):
         }
         facts_anth = [
             'A Anthropic fechou acordo de US$ 3,4 bilhões.',
-            'A Caterpillar vende geradores para a empresa.',
+            'A Caterpillar vende geradores no acordo de US$ 3,4 bilhões.',
             'A rede elétrica do Texas enfrenta limitações.',
             'A energia atenderá data centers até 2045.',
         ]
         res_anth, prob_anth = news_auto.validate_lines(anth_data, story_anth, budget=120, facts=facts_anth)
         self.assertEqual(prob_anth, '')
         self.assertEqual(len(res_anth), 6)
+
+    def test_item2_round2_answered_hook_requirement(self):
+        # 1. Roteiro fixture de Fertilizantes tem gancho em pergunta não respondido
+        fixture_path = Path(__file__).parent / 'fixtures' / 'rejected_20261111_192441_627729.json'
+        with open(fixture_path, encoding='utf-8') as f:
+            fert_data = json.load(f)
+
+        # Ajusta para incluir a palavra fertilizantes na fala 2 para passar pelo Item 1
+        fact_mapping = {0: 0, 1: None, 2: 0, 3: 1, 4: 1, 5: 1, 6: 2, 7: 3, 8: 3, 9: 4, 10: 4, 11: 5}
+        lines = []
+        for i, l in enumerate(fert_data['lines']):
+            item = dict(l)
+            if fact_mapping.get(i) is None:
+                item['reacao'] = True
+            elif i == 2:
+                item['text'] = 'Exatamente, o Brasil precisa de fertilizantes para 20 anos.'
+                item['fato'] = 0
+            else:
+                item['fato'] = fact_mapping[i]
+            lines.append(item)
+
+        story_fert = {
+            'title': fert_data['title'],
+            'body': (
+                'O Brasil precisa de R$ 460 bilhões para fertilizantes nos próximos 20 anos. '
+                'O investimento deve ficar entre R$ 220 bilhões e R$ 460 bilhões. '
+                'Em média serão R$ 20 bilhões por ano para atingir R$ 400 bilhões. '
+                'A meta é atingir de 40% a 50% de produção nacional até 2050.'
+            )
+        }
+        facts_fert = [
+            'O Brasil precisa de R$ 460 bilhões para fertilizantes nos próximos 20 anos.',
+            'O investimento previsto fica entre R$ 220 bilhões e R$ 460 bilhões.',
+            'A média é de R$ 20 bilhões por ano para alcançar R$ 400 bilhões.',
+            'Juros altos e crédito difícil barram as empresas.',
+            'A meta é atingir 40% a 50% de produção nacional até 2050.',
+            'O país discute bilhões para segurança alimentar.',
+        ]
+        # Gancho: "Quanto dinheiro o Brasil gasta importando comida hoje?"
+        # Falas 1 (reação) e 2 (fato 0 sobre R$ 460 bi para fertilizantes) não respondem com fatos sobre comida importada
+        with self.assertRaisesRegex(ValueError, 'o gancho não foi respondido'):
+            news_auto.validate_lines({'lines': lines}, story_fert, budget=150, facts=facts_fert)
+
+        # 2. Quando o fato da fala 1 ou 2 responde à pergunta (compartilha número ou >= 2 palavras de conteúdo), é aceito
+        valid_qa = {'lines': [
+            {'speaker': 0, 'text': 'Quanto dinheiro o Brasil precisa para fertilizantes?', 'fato': 0},
+            {'speaker': 1, 'text': 'São R$ 460 bilhões para fertilizantes!', 'fato': 0},
+            {'speaker': 0, 'text': 'Isso vai levar cerca de 20 anos.', 'fato': 0},
+            {'speaker': 1, 'text': 'O objetivo é elevar a produção nacional.', 'fato': 4},
+        ]}
+        res, prob = news_auto.validate_lines(valid_qa, story_fert, budget=80, facts=facts_fert)
+        self.assertEqual(prob, '')
+        self.assertEqual(len(res), 4)
+
+        # 3. Gancho respondido pelo fato na fala 2 quando fala 1 é reação
+        valid_reaction_then_ans = {'lines': [
+            {'speaker': 0, 'text': 'Quanto dinheiro o Brasil precisa para fertilizantes?', 'fato': 0},
+            {'speaker': 1, 'text': 'Número inacreditável!', 'reacao': True},
+            {'speaker': 0, 'text': 'São R$ 460 bilhões para fertilizantes!', 'fato': 0},
+            {'speaker': 1, 'text': 'A meta é atingir 50% até 2050.', 'fato': 4},
+        ]}
+        res, prob = news_auto.validate_lines(valid_reaction_then_ans, story_fert, budget=80, facts=facts_fert)
+        self.assertEqual(prob, '')
+        self.assertEqual(len(res), 4)
 
 
 if __name__ == '__main__':

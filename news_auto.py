@@ -413,6 +413,42 @@ def _word_matches_keyword(word, keyword):
     return False
 
 
+STOPWORDS_CONTENT = {
+    'a', 'as', 'o', 'os', 'um', 'uma', 'uns', 'umas',
+    'de', 'da', 'do', 'das', 'dos', 'em', 'na', 'no', 'nas', 'nos',
+    'para', 'pra', 'pro', 'pras', 'pros', 'por', 'pelo', 'pela', 'pelos', 'pelas',
+    'com', 'sem', 'sob', 'sobre', 'entre', 'ate',
+    'e', 'ou', 'mas', 'porem', 'contudo', 'todavia', 'que', 'se', 'como', 'porque', 'pois',
+    'qual', 'quais', 'quanto', 'quanta', 'quantos', 'quantas', 'quem', 'cujo', 'cuja', 'cujos', 'cujas',
+    'onde', 'quando', 'este', 'esta', 'estes', 'estas', 'esse', 'essa', 'esses', 'essas',
+    'aquele', 'aquela', 'aqueles', 'aquelas', 'isto', 'isso', 'aquilo',
+    'seu', 'sua', 'seus', 'suas', 'meu', 'minha', 'meus', 'minhas', 'teu', 'tua', 'teus', 'tuas',
+    'nosso', 'nossa', 'nossos', 'nossas', 'dele', 'dela', 'deles', 'delas',
+    'ja', 'nao', 'sim', 'tambem', 'so', 'apenas', 'bem', 'mal',
+    'muito', 'muita', 'muitos', 'muitas', 'pouco', 'pouca', 'poucos', 'poucas',
+    'ser', 'e', 'eh', 'sao', 'era', 'eram', 'foi', 'foram', 'sera', 'serao',
+    'ter', 'tem', 'temos', 'tinha', 'tinham', 'teve', 'tiveram', 'tera', 'terao',
+    'haver', 'ha', 'havia', 'houve', 'havera',
+    'ir', 'vai', 'vao', 'ia', 'iam', 'ira', 'irao',
+}
+
+
+def _content_words(text):
+    words = re.findall(r'[a-zA-ZÀ-ú0-9]+', str(text))
+    content = []
+    seen = set()
+    for raw in words:
+        norm = _clean_plain_word(raw)
+        if not norm or norm.isdigit() or len(norm) < 3:
+            continue
+        if norm in STOPWORDS_CONTENT:
+            continue
+        if norm not in seen:
+            seen.add(norm)
+            content.append(norm)
+    return content
+
+
 def read_feed(url):
     import requests
     now = time.time()
@@ -1219,6 +1255,39 @@ def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12, fa
                 missing = [k for k in title_keywords if k not in all_covered]
                 raise ValueError('Roteiro não cobre as palavras-chave do título: ausente(s) ' +
                                  ', '.join(missing))
+
+    # Validação do gancho respondido: se a primeira fala é pergunta, linha 1 ou 2 deve trazer fato que a responda
+    if '?' in texts[0]:
+        q_content = _content_words(texts[0])
+        q_nums = _numbers(texts[0])
+        hook_answered = False
+        for follow_idx in (1, 2):
+            if follow_idx >= len(lines):
+                break
+            f_line = lines[follow_idx]
+            if f_line.get('reacao'):
+                continue
+            f_idx = f_line.get('fato')
+            if f_idx is None:
+                continue
+            try:
+                f_idx = int(f_idx)
+            except (ValueError, TypeError):
+                continue
+            if not (0 <= f_idx < len(facts)):
+                continue
+            target_fact = facts[f_idx]
+            fact_nums = _numbers(target_fact)
+            if q_nums and (q_nums & fact_nums):
+                hook_answered = True
+                break
+            fact_content = _content_words(target_fact)
+            shared_words = sum(1 for qw in q_content if any(_word_matches_keyword(qw, fw) for fw in fact_content))
+            if shared_words >= 2:
+                hook_answered = True
+                break
+        if not hook_answered:
+            raise ValueError('o gancho não foi respondido')
 
     first = lines[0].get('speaker') if lines[0].get('speaker') in (0, 1) else 0
     result = []
