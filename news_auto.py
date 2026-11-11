@@ -107,6 +107,7 @@ HOOK_BAD_START_RE = re.compile(r'^\s*(mas|e|porque|pois|ent[aã]o|por\s+isso)\b'
 HOOK_PROVOCATION_RE = re.compile(
     r'(\?|!|\b(por\s+que|como\s+assim|sabia|imagina|j[aá]\s+pensou|voc[eê]|ser[aá]|quem|qual|quanto|'
     r'acredita|faz\s+sentido|tem\s+no[cç][aã]o|olha|pera[ií]|cara|mano|mentira|poss[ií]vel|absurdo|bizarro)\b)', re.I)
+FICTIONAL_EXAMPLE_TERMS = ('zorbax', 'valoria', 'neoquimera', 'luminopolis', '742', '819', '2089')
 MIN_BODY = 80
 MIN_SOURCE_WORDS = 25
 MAX_BODY = 750
@@ -571,6 +572,12 @@ def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12):
     if total > budget:
         raise ValueError(f'O roteiro tem {total} palavras; o máximo é {budget}.')
     source = source_text(story)
+    script_vocab = set(_tokens(' '.join(texts))) | _numbers(' '.join(texts))
+    source_vocab = set(_tokens(source)) | _numbers(source)
+    leaked_examples = (set(FICTIONAL_EXAMPLE_TERMS) & script_vocab) - source_vocab
+    if leaked_examples:
+        raise ValueError('O roteiro copiou termos ou números dos exemplos fictícios do prompt: ' +
+                         ', '.join(sorted(leaked_examples)))
     invented = _numbers(' '.join(texts)) - _numbers(source)
     if invented:
         raise ValueError('Números ausentes na matéria: ' + ', '.join(sorted(invented)) +
@@ -745,17 +752,17 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
     min_lines, max_lines = turn_range(story, max_words, previous)
     target = max(12, min(int(max_words * 0.9), max_lines * 12))
     few_shot = (
-        'Exemplos de boas falas (português brasileiro informal, reação direta, sem soar como jornal):\n'
+        'EXEMPLOS FICTÍCIOS: copie apenas o estilo e o ritmo, nunca os fatos.\n'
         'Exemplo 1:\n'
-        '[{"speaker":0,"text":"Pagar 32 mil reais num aparelho de música faz sentido?"},'
-        '{"speaker":1,"text":"Cara, 32 mil?! Quem teve essa ideia maluca?"},'
-        '{"speaker":0,"text":"A Sony relançou o Walkman focado só em áudio de estúdio."},'
-        '{"speaker":1,"text":"Mas com essa grana dava pra comprar um carro usado, mano!"}]\n'
+        '[{"speaker":0,"text":"Pagar 742 moedas num guarda-chuva voador faz sentido?"},'
+        '{"speaker":1,"text":"Cara, 742?! Quem teve essa ideia maluca em Valoria?"},'
+        '{"speaker":0,"text":"A Zorbax lançou esse modelo só pra testes no deserto."},'
+        '{"speaker":1,"text":"Mas com essa grana dava pra comprar um barco inteiro, mano!"}]\n'
         'Exemplo 2:\n'
-        '[{"speaker":0,"text":"Por que gastariam 3,4 bilhões de dólares só em gerador?"},'
-        '{"speaker":1,"text":"Peraí, os data centers não usavam energia limpa?"},'
-        '{"speaker":0,"text":"Na teoria sim, mas a rede do Texas não aguenta a Anthropic."},'
-        '{"speaker":1,"text":"E aí apelaram pra Caterpillar pra não travar tudo até 2045?"}]\n'
+        '[{"speaker":0,"text":"Por que gastariam 819 milhões só em baterias de gelo?"},'
+        '{"speaker":1,"text":"Peraí, as torres de Luminopolis não usavam vento?"},'
+        '{"speaker":0,"text":"Na teoria sim, mas a rede não aguenta a NeoQuimera."},'
+        '{"speaker":1,"text":"E aí apelaram pra esse estoque gigante até 2089?"}]\n'
     )
     instruction = (
         'Passo 2 — Roteiro de diálogo: escreva um diálogo para Reel vertical de ' + kind.lower() + ' em português brasileiro. '

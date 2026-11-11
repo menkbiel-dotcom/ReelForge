@@ -461,6 +461,36 @@ class NewsAutoTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'sem corpo'):
             news_auto.require_minimum_source(parsed)
 
+    def test_fictional_few_shot_terms_are_rejected_when_absent_from_article(self):
+        story = {
+            'title': 'Sony relança Walkman por R$ 32 mil no Brasil',
+            'body': 'A Sony lançou no Brasil o novo Walkman por R$ 32 mil focado em áudio de estúdio. ' * 4,
+        }
+        leaked = {'lines': [{'speaker': 0, 'text': t} for t in (
+            'Pagaria R$ 32 mil num Walkman novo?',
+            'A Sony lançou esse modelo no Brasil.',
+            'Lá em Valoria a Zorbax tentou algo parecido.',
+            'Vale tudo isso só para ouvir música?'
+        )]}
+        with self.assertRaisesRegex(ValueError, 'exemplos fictícios'):
+            news_auto.validate_lines(leaked, story, 80)
+
+        prompts = []
+        good = {'lines': [{'speaker': 0, 'text': t} for t in (
+            'Pagaria R$ 32 mil num Walkman novo?',
+            'A Sony trouxe o aparelho de volta ao Brasil.',
+            'O foco é som de estúdio profissional.',
+            'Vale tudo isso só para ouvir música?'
+        )]}
+        seq = iter([good, {'nota': 9, 'problemas': []}])
+
+        def capture_ask(inst, payload):
+            prompts.append(inst)
+            return next(seq)
+
+        news_auto.write_script(story, max_words=80, ask=capture_ask, loop=False, facts=['A Sony lançou o Walkman por R$ 32 mil no Brasil.'])
+        self.assertIn('EXEMPLOS FICTÍCIOS: copie apenas o estilo e o ritmo, nunca os fatos', prompts[0])
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
