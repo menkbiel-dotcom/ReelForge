@@ -1,0 +1,18 @@
+{
+  "title": "Kit de emergência: só lámen?",
+  "gameplay": "../gameplay/gameplay_principal.mp4",
+  "lines": [
+    {
+      "speaker": 1,
+      "text": "Sasuke, meu kit de emergência pode ter só lámen?",
+      "audio": "fala_0.wav",
+      "voice_provisional": false
+    },
+    {
+      "speaker": 0,
+      "text": "Pode. Se o desastre for uma reunião do fã-clube do macarrão.",
+      "audio": "fala_1.wav",
+      "voice_provisional": false
+    }
+  ]
+}

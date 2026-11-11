@@ -1,0 +1,22 @@
+# Ambiente virtual e caches Python
+.venv/
+__pycache__/
+*.py[cod]
+
+# Credenciais locais e histórico
+.env
+history.sqlite3
+
+# Saídas de renderização, logs e binários avulsos
+output/
+logs/
+*.dll
+*.zip
+
+# Arquivos de mídia pesados (mantém apenas código, configurações e demos leves)
+assets/gameplay/*.mp4
+assets/gameplay/*.mov
+assets/gameplay/*.mkv
+assets/gameplay/*.webm
+assets/music/*.wav
+assets/music/*.mp3

@@ -1,0 +1,12 @@
+{
+  "mode": "built-in image_gen",
+  "transparent_background": true,
+  "prompts": [
+    "Use case: illustration-story. Asset type: transparent full-body animation sprite for vertical Portuguese conversation video. Subject: Sasuke Uchiha in his recognizable Naruto Shippuden appearance: teenage young adult male, spiky black hair, cool serious expression, pale gray open-collar short-sleeved top, dark navy trousers, thick purple rope belt, ninja sandals. Full body head to feet, both hands visible, relaxed conversational stance, one hand making a small explanatory gesture, facing slightly toward viewer right. Polished 2D anime cel shading and crisp black linework, clean silhouette legible at phone size. No sword drawn, no combat, no scenery, no ground shadow, no text, no watermark, no extra characters. Subject centered with generous 10% transparent margin around all edges. Actual alpha transparent background.",
+    "Use case: illustration-story. Asset type: transparent full-body animation sprite for vertical Portuguese conversation video. Subject: Naruto Uzumaki in his recognizable Naruto Shippuden appearance: teenage young adult male, spiky blond hair, blue eyes, whisker marks on cheeks, black forehead protector with leaf symbol, orange-and-black zip-up ninja outfit, ninja sandals. Friendly enthusiastic conversational expression, full body head to feet, both hands visible, relaxed stance with one palm up in a curious explaining gesture, facing slightly toward viewer left. Polished 2D anime cel shading and crisp black linework, clean silhouette legible at phone size. No weapons, no combat, no scenery, no ground shadow, no text, no watermark, no extra characters. Subject centered with generous 10% transparent margin around all edges. Actual alpha transparent background."
+  ],
+  "files": [
+    "sasuke.png",
+    "naruto.png"
+  ]
+}

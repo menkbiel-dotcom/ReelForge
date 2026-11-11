@@ -1,0 +1,42 @@
+{
+  "title": "Kit de emergência: só lámen?",
+  "gameplay": "../gameplay/parkour_teste.mp4",
+  "lines": [
+    {
+      "speaker": 1,
+      "text": "Sasuke, meu kit de emergência pode ter só lámen?",
+      "audio": "../demo_ninja/voice_0.wav",
+      "voice_provisional": true
+    },
+    {
+      "speaker": 0,
+      "text": "Pode. Se o desastre for uma reunião do fã-clube do macarrão.",
+      "audio": "../demo_ninja/voice_1.wav",
+      "voice_provisional": true
+    },
+    {
+      "speaker": 1,
+      "text": "Tá bom... água, comida e lanterna. Agora virei um ninja preparado!",
+      "audio": "../demo_ninja/voice_2.wav",
+      "voice_provisional": true
+    },
+    {
+      "speaker": 0,
+      "text": "E os teus itens essenciais. Preparação começa antes do susto.",
+      "audio": "../demo_ninja/voice_3.wav",
+      "voice_provisional": true
+    },
+    {
+      "speaker": 1,
+      "text": "Então vou treinar o jutsu de não comer o estoque!",
+      "audio": "../demo_ninja/voice_4.wav",
+      "voice_provisional": true
+    },
+    {
+      "speaker": 0,
+      "text": "Finalmente uma missão difícil pra você.",
+      "audio": "../demo_ninja/voice_5.wav",
+      "voice_provisional": true
+    }
+  ]
+}

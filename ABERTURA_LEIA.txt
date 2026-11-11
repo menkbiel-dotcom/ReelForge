@@ -1,0 +1,1 @@
+Execute iniciar_windows.bat. Para detalhes, leia README.md.

@@ -1,0 +1,31 @@
+{
+  "topic": "Brasil",
+  "provider": "ollama",
+  "ollama_model": "qwen3.5:4b",
+  "gameplay": "",
+  "fps": 30,
+  "gameplay_brightness": -0.06,
+  "gameplay_gamma": 0.85,
+  "loop": true,
+  "script_loop": false,
+  "music_enabled": true,
+  "music_volume": 8.0,
+  "max_seconds": 60.0,
+  "impact_opening": false,
+  "director_enabled": false,
+  "content_kind": "Notícia",
+  "tts_provider": "voicestudio",
+  "voice_profiles": {
+    "voicestudio": {
+      "a": "Sasuke",
+      "b": "Naruto",
+      "model": "",
+      "rate_a": "18",
+      "rate_b": "18",
+      "pitch_a": "0",
+      "pitch_b": "0"
+    }
+  },
+  "caption_timing": "whisper",
+  "whisper_model": "small"
+}

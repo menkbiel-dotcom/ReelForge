@@ -1,0 +1,10 @@
+{
+  "repository": "https://github.com/harry0703/MoneyPrinterTurbo",
+  "commit": "ab6004e5858998b2ce99ac46c0f16675eea9ab6f",
+  "reference_files": [
+    "app/services/subtitle.py",
+    "app/services/video.py",
+    "app/services/voice.py"
+  ],
+  "integration": "adapted word timing, spring animation and voice provider architecture"
+}
