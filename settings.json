@@ -9,6 +9,8 @@
   "gameplay_gamma": 0.85,
   "loop": true,
   "script_loop": false,
+  "aceitar_nota_baixa": false,
+  "permitir_sem_checagem_de_fatos": false,
   "music_enabled": true,
   "music_volume": 8.0,
   "max_seconds": 60.0,

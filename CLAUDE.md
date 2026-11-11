@@ -28,7 +28,7 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
      - Validação de quantidades e magnitudes com qualificadores (`_quantity_pairs`): compara pares numéricos e magnitudes (`mil`, `milhões`, `bilhões`, `trilhões`, `%`, `sacas...`), aceitando `"mais de X"` se `floor(fonte) == X`, `"quase X"` se `ceil(fonte) == X`, `"cerca de X"` se `round(fonte) == X`, ou valor exato sem qualificador.
      - Exige que a última fala termine com uma frase completa (pergunta aberta ou fecho), sem ponte truncada (`script_loop: false` por padrão).
    - **Checagem Factual e Filtro de Qualidade Fechado (`verificar_fatos()` + `evaluate_script()` + `deterministic_check()`):**
-     - `verificar_fatos()`: o modelo juiz avalia se cada fala é suportada pelos fatos da matéria (`{"falas":[{"i":0,"suportada":true,"motivo":""}]}`). Falas não suportadas forçam regeneração do roteiro com correção contendo `{i, text, motivo}`, contando dentro do limite de 2 regenerações.
+     - `verificar_fatos()` (Checagem de fatos fechada): o modelo juiz avalia se cada fala é suportada pelos fatos da matéria (`{"falas":[{"i":0,"suportada":true,"motivo":""}]}`). Se a chamada falhar após 2 tentativas, retorna `{"indisponivel": true}`; o sistema loga `'verificação de fatos indisponível'` e trata o roteiro como REPROVADO (salva em `output/rejected_*.json` com `'checagem de fatos indisponível'` e levanta `RuntimeError` após 2 regenerações), a menos que `"permitir_sem_checagem_de_fatos": true` em `settings.json` ou `REELFORGE_ALLOW_NO_FACT_CHECK=1` esteja ativo. Falas não suportadas forçam regeneração com correção contendo `{i, text, motivo}`.
      - Permite configurar o modelo juiz via `"judge_model": "qwen3:8b"` em `settings.json`. Se o modelo retornar HTTP 404 no Ollama, loga `"juiz padrão indisponível, usando o modelo do redator"`, faz fallback para o redator (`qwen3.5:4b`) e grava `{"juiz_fraco": true}` nos metadados do roteiro e do Reel.
      - `evaluate_script()` (Juiz com evidência): remove critérios objetivos do prompt (gancho <= 10 palavras, pontuação final, veículo citado); foca exclusivamente em informalidade, ritmo e repetição. O juiz deve retornar `{"nota": N, "problemas": [{"i": idx, "trecho": "...", "tipo": "informalidade|ritmo|repeticao", "motivo": "..."}]}`. Problemas sem trecho exato na fala `i` ou com tipo inválido são descartados; se nota < 7 mas não restar problema verificável, descarta a reprovação, sobe nota para 7 e loga `'reprovação sem problema verificável; ignorada'`.
      - Se o Ollama falhar ou não retornar `"nota"` numérica válida, tenta mais 1 vez; se continuar falhando, retorna `{"nota": None, "problemas": ["avaliação indisponível"]}` e trata o roteiro como **NÃO aprovado** (nunca assume nota 8).
@@ -52,9 +52,9 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
 - O script `publicar_github.py` cria/atualiza o repositório como **privado por padrão** (use `--publico` para público), lê o token exclusivamente de `GITHUB_TOKEN` ou `getpass` (sem argumento `--token` e sem eco no terminal) e faz push sem `force`.
 - Testes que utilizam áudios de demonstração sintetizam automaticamente um WAV silencioso via módulo padrão `wave` quando o arquivo local não existir.
 
-## Suíte de Testes (61 Testes)
+## Suíte de Testes (62 Testes)
 
-- `tests/test_news_auto.py` (36 testes) e `tests/test_integration.py` (25 testes) — totalizando **61 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
+- `tests/test_news_auto.py` (37 testes) e `tests/test_integration.py` (25 testes) — totalizando **62 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'

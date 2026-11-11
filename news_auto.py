@@ -1385,6 +1385,19 @@ def accept_low_score_enabled():
         return False
 
 
+def allow_no_fact_check_enabled():
+    """Controla se roteiros podem seguir sem checagem de fatos (REELFORGE_ALLOW_NO_FACT_CHECK ou permitir_sem_checagem_de_fatos em settings.json)."""
+    env = os.getenv('REELFORGE_ALLOW_NO_FACT_CHECK')
+    if env is not None:
+        return env.strip().lower() in ('1', 'true', 'yes', 'sim')
+    try:
+        import engine
+        cfg = engine.load_settings()
+        return bool(cfg.get('permitir_sem_checagem_de_fatos', False))
+    except Exception:
+        return False
+
+
 def judge_model_name():
     """Modelo usado como juiz no filtro de qualidade (padrão = qwen3:8b)."""
     env = os.getenv('OLLAMA_JUDGE_MODEL')
@@ -1494,7 +1507,7 @@ def verificar_fatos(lines, facts, ask=None, story=None, log=print):
                 return res
         except Exception:
             continue
-    return {'falas': [{'i': i, 'suportada': True, 'motivo': ''} for i in range(len(lines))]}
+    return {'indisponivel': True}
 
 
 class QualityProblem(dict):
@@ -1704,6 +1717,21 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
             vf = None
 
         if vf is not None:
+            if vf.get('indisponivel'):
+                log('verificação de fatos indisponível')
+                if not allow_no_fact_check_enabled():
+                    review = {'nota': None, 'problemas': ['checagem de fatos indisponível']}
+                    rejected_path = _save_rejected_script(story, lines, review)
+                    if quality_retries >= 2:
+                        raise RuntimeError(
+                            f'Roteiro reprovado após 2 regenerações '
+                            f'(problemas: checagem de fatos indisponível). Salvo em {rejected_path}.'
+                        )
+                    quality_retries += 1
+                    error = 'Checagem de fatos indisponível no Ollama.'
+                    continue
+                else:
+                    log('Aviso: seguindo sem checagem de fatos (permitir_sem_checagem_de_fatos ativo).')
             unsupported = [item for item in vf.get('falas', []) if not item.get('suportada', True)]
             if unsupported:
                 if quality_retries >= 2:
@@ -1712,7 +1740,7 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
                         return lines
                     review = {'nota': 4, 'problemas': [f"Fala {u.get('i', 0) + 1} não suportada: {u.get('motivo', '')}" for u in unsupported]}
                     rejected_path = _save_rejected_script(story, lines, review)
-                    issues = '; '.join(review['problemas'])
+                    issues = '; '.join(str(p) for p in review['problemas'])
                     raise RuntimeError(
                         f'Roteiro reprovado por falhas factuais após 2 regenerações (problemas: {issues}). Salvo em {rejected_path}.'
                     )

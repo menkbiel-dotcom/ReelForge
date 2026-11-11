@@ -984,7 +984,7 @@ class NewsAutoTests(unittest.TestCase):
                 {'speaker': 1, 'text': 'Será que o Brasil exporta mais sacas?', 'fato': 0},
             ]}
 
-        mock_judge = lambda i, p, model=None: {'nota': 9, 'responde_perguntas': True, 'contradiz_materia': False, 'problemas': []}
+        mock_judge = lambda i, p, model=None: {'falas': [{'i': idx, 'suportada': True, 'motivo': ''} for idx in range(6)]} if 'checador de fatos' in i.lower() else {'nota': 9, 'responde_perguntas': True, 'contradiz_materia': False, 'problemas': []}
         lines = news_auto.write_script(story, max_words=100, ask=mock_writer, judge_ask=mock_judge, facts=facts_res)
         self.assertEqual(lines[0]['text'], valid_hook)
         self.assertIn('primeira_fala_obrigatoria_gancho', received_payloads[0])
@@ -1427,6 +1427,69 @@ class NewsAutoTests(unittest.TestCase):
         res_det = news_auto.evaluate_script(bad_deterministic, story, ask=lambda i, p, m=None: {'nota': 8, 'problemas': []}, log=lambda *a: None)
         self.assertEqual(res_det['nota'], 6)
         self.assertTrue(len(res_det['problemas']) > 0)
+
+    def test_item6_round2_fact_check_fails_closed(self):
+        lines = [
+            {'speaker': 0, 'text': 'Por que gastar 3,4 bilhões só em gerador?', 'fato': 0},
+            {'speaker': 1, 'text': 'Cara, a Anthropic comprou tudo da Caterpillar!', 'fato': 1},
+            {'speaker': 0, 'text': 'É que a rede elétrica do Texas não aguenta mais.', 'fato': 2},
+            {'speaker': 1, 'text': 'Eles garantiram energia até 2045 pros data centers.', 'fato': 3},
+            {'speaker': 0, 'text': 'Mano, é muita energia!', 'reacao': True},
+            {'speaker': 1, 'text': 'Será que a rede elétrica vai aguentar?', 'fato': 2},
+        ]
+        facts = [
+            'A Anthropic fechou contrato de US$ 3,4 bilhões.',
+            'A Anthropic comprou geradores da Caterpillar por US$ 3,4 bilhões.',
+            'A rede elétrica do Texas enfrenta limitações com novos data centers.',
+            'A energia atenderá data centers até 2045.',
+        ]
+        story = {
+            'title': 'Anthropic fecha acordo de US$ 3,4 bilhões em geradores no Texas',
+            'body': 'A Anthropic comprou geradores da Caterpillar no Texas por US$ 3,4 bilhões para abastecer data centers até 2045. ' * 3,
+            'extracted_facts': facts,
+        }
+
+        # 1. verificar_fatos direto tenta 2 vezes e retorna {"indisponivel": true} ao falhar
+        call_count = {'n': 0}
+        def failing_ask(inst, payload, model=None):
+            call_count['n'] += 1
+            raise RuntimeError('Erro de conexão com o Ollama')
+
+        vf_res = news_auto.verificar_fatos(lines, facts, ask=failing_ask)
+        self.assertEqual(call_count['n'], 2)
+        self.assertTrue(vf_res.get('indisponivel'))
+
+        # 2. Em write_script, indisponibilidade trata o roteiro como REPROVADO e salva rejected_*.json
+        out_dir = Path(self.temp.name) / 'out_rej_facts'
+        logs = []
+        writer_mock = lambda i, p: {'lines': lines}
+
+        with patch.object(engine, 'OUTPUT', out_dir), \
+             patch.dict('os.environ', {'REELFORGE_ALLOW_NO_FACT_CHECK': '0'}):
+            with self.assertRaisesRegex(RuntimeError, 'checagem de fatos indisponível'):
+                news_auto.write_script(story, max_words=100, ask=writer_mock, judge_ask=failing_ask,
+                                       facts=facts, log=logs.append)
+
+        self.assertIn('verificação de fatos indisponível', logs)
+        rejected_files = list(out_dir.glob('rejected_*.json'))
+        self.assertTrue(len(rejected_files) >= 1)
+        saved = json.loads(rejected_files[0].read_text(encoding='utf-8'))
+        self.assertIn('checagem de fatos indisponível', saved.get('problemas', []))
+
+        # 3. Com permitir_sem_checagem_de_fatos ativo (REELFORGE_ALLOW_NO_FACT_CHECK=1), prossegue
+        logs_allowed = []
+        def judge_with_failing_facts(inst, payload, model=None):
+            if 'checador de fatos' in inst.lower():
+                raise RuntimeError('Ollama offline para checagem')
+            return {'nota': 8, 'problemas': []}
+
+        with patch.object(engine, 'OUTPUT', out_dir), \
+             patch.dict('os.environ', {'REELFORGE_ALLOW_NO_FACT_CHECK': '1'}):
+            res_lines = news_auto.write_script(story, max_words=100, ask=writer_mock,
+                                               judge_ask=judge_with_failing_facts, facts=facts,
+                                               log=logs_allowed.append)
+        self.assertEqual(len(res_lines), 6)
+        self.assertTrue(any('seguindo sem checagem de fatos' in m for m in logs_allowed))
 
 
 if __name__ == '__main__':

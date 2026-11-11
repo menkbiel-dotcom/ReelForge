@@ -122,10 +122,13 @@
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 60 testes passando (incluindo `test_item4_round2_variety_and_crutches`)
 - [x] **ITEM 5 — Juiz com evidência (`news_auto.py`, `evaluate_script`)**: feito
-  - **Commit:** pendente de push — *"Exige problemas verificaveis com trecho da fala na avaliacao do juiz"*
+  - **Commit:** `85b215887a6d0e8e564a218b39a1c44f21a074cd` — *"Exige problemas verificaveis com trecho da fala na avaliacao do juiz"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 61 testes passando (incluindo `test_item5_round2_judge_with_evidence`)
-- [ ] **ITEM 6 — Juiz de fatos não falha aberto (`news_auto.py`, `verificar_fatos`)**: pendente
+- [x] **ITEM 6 — Juiz de fatos não falha aberto (`news_auto.py`, `verificar_fatos`)**: feito
+  - **Commit:** pendente de push — *"Faz checagem de fatos falhar fechada quando o juiz estiver indisponivel"*
+  - **Arquivos tocados:** `news_auto.py`, `settings.json`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 62 testes passando (incluindo `test_item6_round2_fact_check_fails_closed`)
 - [ ] **ITEM 7 — Prompt do redator e transparência (`news_auto.py`, `engine.py`)**: pendente
 - [ ] **ITEM 8 — A tela não pode apagar configurações (`gui.py`, `_save`)**: pendente
 - [ ] **ITEM 9 — Campos de modelo na tela (`gui.py`)**: pendente
