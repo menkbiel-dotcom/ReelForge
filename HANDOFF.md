@@ -11,7 +11,7 @@
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 50 testes passando (incluindo `test_item2_quantity_pairs_and_qualifier_rules` e `test_item2_temporal_units_restriction`)
 - [x] **ITEM 3 — Juiz que checa fatos (`news_auto.py` + `settings.json`)**: feito
-  - **Commit:** a registrar após push — *"Adiciona juiz de verificacao de fatos, fallback para juiz fraco e novos criterios de nota"*
+  - **Commit:** `38a5e39cc632f5aad2c3342679f09473333cd35f` — *"Adiciona juiz de verificacao de fatos, fallback para juiz fraco e novos criterios de nota"*
   - **Arquivos tocados:** `news_auto.py`, `settings.json`, `README.md`, `CLAUDE.md`, `HANDOFF.md`, `tests/test_news_auto.py`
   - **Testes:** 51 testes passando (incluindo `test_item3_fact_checking_judge_and_criteria`)
 - [ ] **ITEM 4 — Passo 1 devolve o ângulo (`news_auto.py`)**: em andamento / próximo
