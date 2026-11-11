@@ -1289,6 +1289,30 @@ def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12, fa
         if not hook_answered:
             raise ValueError('o gancho não foi respondido')
 
+    # Item 3: Marcação "fato" não pode ser decorativa (exige pelo menos 2 palavras de conteúdo ou 1 número com o fato N)
+    for i, line in enumerate(lines):
+        if line.get('reacao'):
+            continue
+        f_idx = line.get('fato')
+        if f_idx is None:
+            continue
+        try:
+            idx = int(f_idx)
+        except (ValueError, TypeError):
+            continue
+        if 0 <= idx < len(facts):
+            target_fact = facts[idx]
+            fact_num_set = _numbers(target_fact)
+            line_num_set = _numbers(texts[i])
+            if fact_num_set & line_num_set:
+                continue
+            fact_words = _content_words(target_fact)
+            line_words = _content_words(texts[i])
+            shared_content = sum(1 for lw in line_words if any(_word_matches_keyword(lw, fw) for fw in fact_words))
+            if shared_content < 2:
+                raise ValueError(f'A fala {i + 1} não apresenta sobreposição com o fato {idx} '
+                                 '(exige pelo menos 2 palavras de conteúdo ou 1 número).')
+
     first = lines[0].get('speaker') if lines[0].get('speaker') in (0, 1) else 0
     result = []
     for i, t in enumerate(texts):

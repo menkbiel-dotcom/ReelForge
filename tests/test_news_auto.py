@@ -58,14 +58,14 @@ class NewsAutoTests(unittest.TestCase):
         story = {'title': 'Sony relança Walkman com preço de R$ 32 mil no Brasil',
                  'body': 'A Sony confirmou o novo Walkman por R$ 32 mil no mercado brasileiro com foco em áudio de estúdio. ' * 3}
         facts_resp = {'fatos': ['A Sony relançou o Walkman no Brasil.', 'O aparelho custa R$ 32 mil.',
-                                'O foco é áudio de alta definição.', 'O modelo chega este mês.', 'É voltado a profissionais.']}
-        bad = {'lines': [{'speaker': 0, 'text': 'Pagaria 50 mil reais num Walkman?', 'fato': 1}] + [{'speaker': 0, 'text': 'Fala.', 'fato': 0}] * 5}
+                                'O foco desse modelo é áudio de estúdio.', 'O modelo chega este mês.', 'É voltado a profissionais.']}
+        bad = {'lines': [{'speaker': 0, 'text': 'Pagaria 50 mil reais num Walkman?', 'fato': 1}] + [{'speaker': 0, 'text': 'O aparelho custa 32 mil.', 'fato': 1}] * 5}
         good = {'lines': [{'speaker': 1, 'text': 'Naruto: Pagaria 32 mil reais num Walkman hoje?', 'fato': 1},
                           {'speaker': 1, 'text': 'Cara, R$ 32 mil é preço de carro!', 'fato': 1},
                           {'speaker': 0, 'text': 'A Sony lançou esse modelo focado em estúdio.', 'fato': 2},
-                          {'speaker': 0, 'text': 'Mesmo assim, quem no Brasil vai encarar esse valor?', 'fato': 0},
+                          {'speaker': 0, 'text': 'Mesmo assim, quem no Brasil vai comprar esse Walkman?', 'fato': 0},
                           {'speaker': 1, 'text': 'Caramba, só colecionador!', 'reacao': True},
-                          {'speaker': 0, 'text': 'Você compraria se tivesse essa grana sobrando?', 'fato': 0}]}
+                          {'speaker': 0, 'text': 'Você compraria o Walkman da Sony no Brasil?', 'fato': 0}]}
         answers = iter([facts_resp, bad, good, {'nota': 9, 'problemas': []}])
         lines = news_auto.write_script(story, max_words=80, ask=lambda i, p: next(answers), loop=False)
         self.assertEqual([l['speaker'] for l in lines], [1, 0, 1, 0, 1, 0])
@@ -82,8 +82,8 @@ class NewsAutoTests(unittest.TestCase):
         self.assertNotIn('Foto', text)
 
     def test_generic_script_is_rejected_when_article_exists(self):
-        story = {'title': 'Anthropic compra geradores', 'related': [],
-                 'body': 'A Anthropic fechou um acordo de US$ 3,4 bilhões com a Caterpillar no Texas. ' * 10}
+        story = {'title': 'Anthropic compra geradores no Texas', 'related': [],
+                 'body': 'A Anthropic fechou um acordo de US$ 3,4 bilhões com a Caterpillar no Texas para alimentar data centers com sua rede. ' * 10}
         vague = {'lines': [{'speaker': 0, 'text': t, 'fato': 0} for t in
                            ('Sabia que uma empresa fez um acordo?', 'Isso é importante.',
                             'A tecnologia avança.', 'O que você acha disso?')]}
@@ -101,13 +101,13 @@ class NewsAutoTests(unittest.TestCase):
         self.assertFalse(hasattr(news_auto, 'DEFAULT_BRIDGE'))
         self.assertFalse(news_auto.loop_enabled())
         story = {'title': 'Sony relança Walkman por R$ 32 mil no Brasil',
-                 'body': 'A Sony lançou no Brasil o novo Walkman por R$ 32 mil para audiófilos. ' * 3}
+                 'body': 'A Sony lançou no Brasil o novo Walkman por R$ 32 mil para audiófilos ouvirem música com alta definição. ' * 3}
         odd_complete = {'lines': [{'speaker': 0, 'text': t, 'fato': 0} for t in (
             'Pagaria R$ 32 mil num Walkman novo?',
             'A Sony trouxe o aparelho de volta ao Brasil.',
-            'Ele é feito para audiófilos exigentes.',
-            'Mesmo assim o preço assustou todo mundo.',
-            'Vale tudo isso só para ouvir música?'
+            'Ele é feito pela Sony para audiófilos ouvirem música.',
+            'Mesmo assim o preço do novo Walkman assustou.',
+            'Vale R$ 32 mil só para ouvir música?'
         )]}
         lines, problem = news_auto.validate_lines(odd_complete, story, 80, loop=False, min_lines=4, max_lines=8)
         self.assertEqual(problem, '')
@@ -115,8 +115,8 @@ class NewsAutoTests(unittest.TestCase):
         dangling = {'lines': [{'speaker': 0, 'text': t, 'fato': 0} for t in (
             'Pagaria R$ 32 mil num Walkman novo?',
             'A Sony trouxe o aparelho de volta ao Brasil.',
-            'Ele é feito para audiófilos exigentes.',
-            'E todo mundo está comentando isso porque'
+            'Ele é feito pela Sony para audiófilos ouvirem música.',
+            'E todo mundo no Brasil quer o novo Walkman porque'
         )]}
         with self.assertRaisesRegex(ValueError, 'ponte incompleta'):
             news_auto.validate_lines(dangling, story, 80, loop=False, min_lines=4, max_lines=8)
@@ -177,19 +177,19 @@ class NewsAutoTests(unittest.TestCase):
                      'para garantir energia até 2045 em seus data centers de inteligência artificial. ' * 5),
         }
         step1_facts = {'fatos': [
-            'A Anthropic fechou contrato de US$ 3,4 bilhões.',
-            'A Caterpillar fornecerá geradores de US$ 3,4 bilhões.',
-            'A instalação fica no Texas.',
+            'A Anthropic fechou contrato de US$ 3,4 bilhões para abastecer data centers.',
+            'A Anthropic comprou geradores da Caterpillar por US$ 3,4 bilhões.',
+            'A rede elétrica do Texas tem risco de faltar luz no resto do estado.',
             'O acordo garante energia até 2045.',
             'O objetivo é abastecer data centers de IA.',
         ]}
         script_v1 = {'lines': [
             {'speaker': 0, 'text': 'Por que gastar 3,4 bilhões em geradores?', 'fato': 0},
-            {'speaker': 0, 'text': 'A Anthropic fechou isso com a Caterpillar.', 'fato': 1},
-            {'speaker': 0, 'text': 'Fica tudo lá no Texas.', 'fato': 2},
+            {'speaker': 0, 'text': 'A Anthropic comprou tudo da Caterpillar.', 'fato': 1},
+            {'speaker': 0, 'text': 'A rede elétrica fica no Texas.', 'fato': 2},
             {'speaker': 0, 'text': 'A energia vai até 2045 nos data centers.', 'fato': 3},
-            {'speaker': 0, 'text': 'Isso muda o jogo da IA.', 'fato': 4},
-            {'speaker': 0, 'text': 'O que você acha desse gasto?', 'fato': 0}
+            {'speaker': 0, 'text': 'O objetivo é abastecer data centers de IA.', 'fato': 4},
+            {'speaker': 0, 'text': 'Será que a Anthropic gastou 3,4 bilhões mesmo?', 'fato': 0}
         ]}
         eval_low = {'nota': 5, 'problemas': ['Falas finais pouco espontâneas']}
         script_v2 = {'lines': [
@@ -391,8 +391,8 @@ class NewsAutoTests(unittest.TestCase):
         }
         facts_resp = {'fatos': [
             'A Anthropic fechou contrato de US$ 3,4 bilhões.',
-            'A Caterpillar fornecerá geradores de US$ 3,4 bilhões.',
-            'A instalação fica no Texas.',
+            'A Anthropic comprou geradores da Caterpillar por US$ 3,4 bilhões.',
+            'A rede elétrica do Texas tem risco de faltar luz no resto do estado.',
             'O acordo garante energia até 2045.',
             'O objetivo é abastecer data centers de IA.',
         ]}
@@ -487,8 +487,8 @@ class NewsAutoTests(unittest.TestCase):
         good = {'lines': [
             {'speaker': 0, 'text': 'Pagaria R$ 32 mil num Walkman novo?', 'fato': 1},
             {'speaker': 1, 'text': 'O preço oficial é de R$ 32 mil no Brasil.', 'fato': 1},
-            {'speaker': 0, 'text': 'O foco é som de estúdio profissional.', 'fato': 2},
-            {'speaker': 1, 'text': 'Vale tudo isso só para ouvir música?', 'fato': 1}
+            {'speaker': 0, 'text': 'O modelo é focado em áudio de estúdio.', 'fato': 2},
+            {'speaker': 1, 'text': 'Vale pagar 32 mil pelo preço oficial?', 'fato': 1}
         ]}
         seq = iter([facts_resp, good, {'nota': 9, 'problemas': []}])
 
@@ -510,7 +510,7 @@ class NewsAutoTests(unittest.TestCase):
             'Sabia que a Petrobras terá 3 novas plataformas?',
             'A construção será lá na Bacia de Santos.',
             'É um projeto grande da estatal no Brasil.',
-            'Será que isso aumenta a produção de energia?'
+            'Será que a Petrobras vai construir mais plataformas?'
         )]}
         lines, problem = news_auto.validate_lines(valid_with_digit, story, 80)
         self.assertEqual(problem, '')
@@ -520,7 +520,7 @@ class NewsAutoTests(unittest.TestCase):
             'Sabia que a Petrobras terá 7 novas plataformas?',
             'A construção será lá na Bacia de Santos.',
             'É um projeto grande da estatal no Brasil.',
-            'Será que isso aumenta a produção de energia?'
+            'Será que a Petrobras vai construir mais plataformas?'
         )]}
         with self.assertRaisesRegex(ValueError, 'Números ausentes'):
             news_auto.validate_lines(absent_digit, story, 80)
@@ -542,9 +542,9 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 0, 'text': 'Pagaria R$ 32 mil num Walkman novo?', 'fato': 1},
             {'speaker': 0, 'text': 'O preço oficial é de R$ 32 mil no Brasil.', 'fato': 1},
             {'speaker': 0, 'text': 'O foco é áudio de estúdio profissional.', 'fato': 2},
-            {'speaker': 0, 'text': 'Mesmo assim o preço assustou todo mundo.', 'fato': 1},
+            {'speaker': 0, 'text': 'Mesmo assim o aparelho custa R$ 32 mil.', 'fato': 1},
             {'speaker': 0, 'text': 'Caramba, só colecionador!', 'reacao': True},
-            {'speaker': 0, 'text': 'Vale tudo isso só para ouvir música?', 'fato': 1}
+            {'speaker': 0, 'text': 'Vale pagar 32 mil nesse aparelho?', 'fato': 1}
         ]}
         seq = iter([
             {'index': 0, 'reason': 'primeira sem corpo'},
@@ -685,7 +685,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
             {'speaker': 1, 'text': 'E a Europa comprou 17,8 milhões de sacas!', 'fato': 2},
             {'speaker': 0, 'text': 'Mesmo assim o preço caiu 9,5% no ano.', 'fato': 3},
-            {'speaker': 1, 'text': 'Será que esse ritmo se mantém?', 'fato': 0},
+            {'speaker': 1, 'text': 'Será que o Brasil exporta mais café?', 'fato': 0},
         ]}
         lines, prob = news_auto.validate_lines(valid, story, 80)
         self.assertEqual(prob, '')
@@ -742,12 +742,12 @@ class NewsAutoTests(unittest.TestCase):
 
         # Caso 2 obrigatório: "mais de dezesseis milhões" com fonte 16,591 milhões -> ACEITA (floor(16.591) == 16)
         valid_mais_de = {'lines': [
-            {'speaker': 0, 'text': 'Olha o novo recorde no Brasil!', 'fato': 3},
+            {'speaker': 0, 'text': 'Os embarques bateram recorde no Brasil!', 'fato': 3},
             {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
             {'speaker': 0, 'text': 'Foram mais de dezesseis milhões de sacas.', 'fato': 0},
             {'speaker': 1, 'text': 'A receita foi de US$ 1,786 bilhão!', 'fato': 1},
             {'speaker': 0, 'text': 'Bateu a marca antiga de 1,657 bilhão.', 'fato': 2},
-            {'speaker': 1, 'text': 'Será que o preço do café continua caindo?', 'fato': 3},
+            {'speaker': 1, 'text': 'Será que os embarques continuam batendo recorde?', 'fato': 3},
         ]}
         lines, prob = news_auto.validate_lines(valid_mais_de, story, 100)
         self.assertEqual(prob, '')
@@ -755,12 +755,12 @@ class NewsAutoTests(unittest.TestCase):
 
         # Caso 3 obrigatório: "US$ 1,786 bilhão" com fonte 1,786 bilhão -> ACEITA
         valid_exact = {'lines': [
-            {'speaker': 0, 'text': 'Olha o novo recorde no Brasil!', 'fato': 3},
+            {'speaker': 0, 'text': 'Os embarques bateram recorde no Brasil!', 'fato': 3},
             {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
             {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
             {'speaker': 1, 'text': 'Foram 16,591 milhões de sacas embarcadas.', 'fato': 0},
             {'speaker': 0, 'text': 'Bateu a marca antiga de 1,657 bilhão.', 'fato': 2},
-            {'speaker': 1, 'text': 'Será que o preço do café continua caindo?', 'fato': 3},
+            {'speaker': 1, 'text': 'Será que os embarques continuam batendo recorde?', 'fato': 3},
         ]}
         lines, prob = news_auto.validate_lines(valid_exact, story, 100)
         self.assertEqual(prob, '')
@@ -836,7 +836,7 @@ class NewsAutoTests(unittest.TestCase):
             ]
         }
         lines = [
-            {'speaker': 0, 'text': 'Olha o novo recorde no Brasil!', 'fato': 4},
+            {'speaker': 0, 'text': 'Os embarques bateram recorde no Brasil!', 'fato': 4},
             {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
             {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
             {'speaker': 1, 'text': 'Mas o preço médio caiu 9,5% no ano.', 'fato': 3},
@@ -981,7 +981,7 @@ class NewsAutoTests(unittest.TestCase):
                 {'speaker': 0, 'text': 'A receita caiu 6,3% para US$ 11,917 bilhões.', 'fato': 2},
                 {'speaker': 1, 'text': 'O preço médio da saca caiu 9,5%.', 'fato': 3},
                 {'speaker': 0, 'text': 'O Brasil exportou 34,478 milhões de sacas.', 'fato': 0},
-                {'speaker': 1, 'text': 'Será que as cotações sobem de novo?', 'fato': 0},
+                {'speaker': 1, 'text': 'Será que o Brasil exporta mais sacas?', 'fato': 0},
             ]}
 
         mock_judge = lambda i, p, model=None: {'nota': 9, 'responde_perguntas': True, 'contradiz_materia': False, 'problemas': []}
@@ -1142,11 +1142,14 @@ class NewsAutoTests(unittest.TestCase):
         }
         facts_anth = [
             'A Anthropic fechou acordo de US$ 3,4 bilhões.',
-            'A Caterpillar vende geradores no acordo de US$ 3,4 bilhões.',
+            'A Anthropic comprou geradores da Caterpillar por US$ 3,4 bilhões.',
             'A rede elétrica do Texas enfrenta limitações.',
             'A energia atenderá data centers até 2045.',
         ]
-        res_anth, prob_anth = news_auto.validate_lines(anth_data, story_anth, budget=120, facts=facts_anth)
+        import copy
+        anth_valid = copy.deepcopy(anth_data)
+        anth_valid['lines'][5] = {'speaker': 1, 'text': 'Será que a rede elétrica do Texas vai aguentar?', 'fato': 2}
+        res_anth, prob_anth = news_auto.validate_lines(anth_valid, story_anth, budget=120, facts=facts_anth)
         self.assertEqual(prob_anth, '')
         self.assertEqual(len(res_anth), 6)
 
@@ -1213,6 +1216,54 @@ class NewsAutoTests(unittest.TestCase):
         res, prob = news_auto.validate_lines(valid_reaction_then_ans, story_fert, budget=80, facts=facts_fert)
         self.assertEqual(prob, '')
         self.assertEqual(len(res), 4)
+
+    def test_item3_round2_non_decorative_fact(self):
+        # 1. Roteiro fixture Anthropic/Texas: a última fala é pura especulação ("Será que vai faltar luz pro resto do estado?")
+        # marcada fato: 2, mas não compartilha 2 palavras de conteúdo nem número com fato 2
+        fixture_path = Path(__file__).parent / 'fixtures' / 'rejected_20261111_181036_244323.json'
+        with open(fixture_path, encoding='utf-8') as f:
+            anth_data = json.load(f)
+
+        story = {
+            'title': anth_data['title'],
+            'body': (
+                'A Anthropic fechou acordo de US$ 3,4 bilhões para geradores no Texas com a Caterpillar. '
+                'O plano atende data centers até 2045 diante dos gargalos na rede elétrica estadual.'
+            )
+        }
+        facts = [
+            'A Anthropic fechou acordo de US$ 3,4 bilhões.',
+            'A Anthropic comprou geradores da Caterpillar por US$ 3,4 bilhões.',
+            'A rede elétrica do Texas enfrenta limitações com novos data centers.',
+            'A energia atenderá data centers até 2045.',
+        ]
+
+        # Rejeita a última fala com mensagem clara
+        with self.assertRaisesRegex(ValueError, r'A fala 6 não apresenta sobreposição com o fato 2'):
+            news_auto.validate_lines(anth_data, story, budget=120, facts=facts)
+
+        # 2. Quando a pergunta compartilha pelo menos 2 palavras de conteúdo com o fato citado, é aceita
+        import copy
+        fixed_data = copy.deepcopy(anth_data)
+        fixed_data['lines'][5] = {
+            'speaker': 1,
+            'text': 'Será que a rede elétrica do Texas vai aguentar?',
+            'fato': 2
+        }
+        res, prob = news_auto.validate_lines(fixed_data, story, budget=120, facts=facts)
+        self.assertEqual(prob, '')
+        self.assertEqual(len(res), 6)
+
+        # 3. Fala com número compartilhado passa mesmo com poucas palavras de conteúdo
+        number_line_data = copy.deepcopy(anth_data)
+        number_line_data['lines'][5] = {
+            'speaker': 1,
+            'text': 'Isso vai mesmo até 2045?',
+            'fato': 3
+        }
+        res_num, prob_num = news_auto.validate_lines(number_line_data, story, budget=120, facts=facts)
+        self.assertEqual(prob_num, '')
+        self.assertEqual(len(res_num), 6)
 
 
 if __name__ == '__main__':

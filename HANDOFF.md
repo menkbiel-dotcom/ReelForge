@@ -110,10 +110,13 @@
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `settings.json`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 57 testes passando (incluindo `test_item1_round2_theme_coverage`)
 - [x] **ITEM 2 — Gancho respondido (`news_auto.py`, `validate_lines`)**: feito
-  - **Commit:** pendente de push
+  - **Commit:** `a1bc1d94f8e5f0766a536c476272cee4d811e738` — *"Exige que a pergunta do gancho seja respondida com fatos nos turnos seguintes"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 58 testes passando (incluindo `test_item2_round2_answered_hook_requirement`)
-- [ ] **ITEM 3 — Marcação "fato" não pode ser decorativa (`news_auto.py`, `validate_lines`)**: pendente
+- [x] **ITEM 3 — Marcação "fato" não pode ser decorativa (`news_auto.py`, `validate_lines`)**: feito
+  - **Commit:** pendente de push — *"Exige sobreposicao real de conteudo entre a fala e o fato citado"*
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 59 testes passando (incluindo `test_item3_round2_non_decorative_fact`)
 - [ ] **ITEM 4 — Variedade e muletas (`news_auto.py`, `validate_lines`)**: pendente
 - [ ] **ITEM 5 — Juiz com evidência (`news_auto.py`, `evaluate_script`)**: pendente
 - [ ] **ITEM 6 — Juiz de fatos não falha aberto (`news_auto.py`, `verificar_fatos`)**: pendente
