@@ -163,7 +163,7 @@ def word_budget(seconds):
 
 def shorten_script(lines, budget):
     """Keep speaker turns and a closing line within a total word budget."""
-    lines = [{'speaker': line['speaker'], 'text': clean(line['text'])}
+    lines = [dict(line, text=clean(line['text']))
              for line in lines if clean(line['text'])]
     if not lines:
         raise ValueError('Roteiro vazio.')

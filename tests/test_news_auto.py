@@ -58,13 +58,13 @@ class NewsAutoTests(unittest.TestCase):
                  'body': 'A Sony confirmou o novo Walkman por R$ 32 mil no mercado brasileiro com foco em áudio de estúdio. ' * 3}
         facts_resp = {'fatos': ['A Sony relançou o Walkman no Brasil.', 'O aparelho custa R$ 32 mil.',
                                 'O foco é áudio de alta definição.', 'O modelo chega este mês.', 'É voltado a profissionais.']}
-        bad = {'lines': [{'speaker': 0, 'text': 'Pagaria 50 mil reais num Walkman?'}] + [{'speaker': 0, 'text': 'Fala.'}] * 5}
-        good = {'lines': [{'speaker': 1, 'text': 'Naruto: Pagaria 32 mil reais num Walkman hoje?'},
-                          {'speaker': 1, 'text': 'Cara, R$ 32 mil é preço de carro!'},
-                          {'speaker': 0, 'text': 'A Sony lançou esse modelo focado em estúdio.'},
-                          {'speaker': 0, 'text': 'Mesmo assim, quem no Brasil vai encarar esse valor?'},
-                          {'speaker': 1, 'text': 'Só colecionador muito fanático mesmo!'},
-                          {'speaker': 0, 'text': 'Você compraria se tivesse essa grana sobrando?'}]}
+        bad = {'lines': [{'speaker': 0, 'text': 'Pagaria 50 mil reais num Walkman?', 'fato': 1}] + [{'speaker': 0, 'text': 'Fala.', 'fato': 0}] * 5}
+        good = {'lines': [{'speaker': 1, 'text': 'Naruto: Pagaria 32 mil reais num Walkman hoje?', 'fato': 1},
+                          {'speaker': 1, 'text': 'Cara, R$ 32 mil é preço de carro!', 'fato': 1},
+                          {'speaker': 0, 'text': 'A Sony lançou esse modelo focado em estúdio.', 'fato': 2},
+                          {'speaker': 0, 'text': 'Mesmo assim, quem no Brasil vai encarar esse valor?', 'fato': 0},
+                          {'speaker': 1, 'text': 'Caramba, só colecionador!', 'reacao': True},
+                          {'speaker': 0, 'text': 'Você compraria se tivesse essa grana sobrando?', 'fato': 0}]}
         answers = iter([facts_resp, bad, good, {'nota': 9, 'problemas': []}])
         lines = news_auto.write_script(story, max_words=80, ask=lambda i, p: next(answers), loop=False)
         self.assertEqual([l['speaker'] for l in lines], [1, 0, 1, 0, 1, 0])
@@ -83,12 +83,12 @@ class NewsAutoTests(unittest.TestCase):
     def test_generic_script_is_rejected_when_article_exists(self):
         story = {'title': 'Anthropic compra geradores', 'related': [],
                  'body': 'A Anthropic fechou um acordo de US$ 3,4 bilhões com a Caterpillar no Texas. ' * 10}
-        vague = {'lines': [{'speaker': 0, 'text': t} for t in
+        vague = {'lines': [{'speaker': 0, 'text': t, 'fato': 0} for t in
                            ('Sabia que uma empresa fez um acordo?', 'Isso é importante.',
                             'A tecnologia avança.', 'O que você acha disso?')]}
         with self.assertRaisesRegex(ValueError, 'genérico'):
             news_auto.validate_lines(vague, story, 60)
-        rich = {'lines': [{'speaker': 0, 'text': t} for t in
+        rich = {'lines': [{'speaker': 0, 'text': t, 'fato': 0} for t in
                           ('Por que a Anthropic gastou 3,4 bilhões?', 'O acordo foi direto com a Caterpillar.',
                            'Os geradores vão para o Texas.', 'Será que a rede aguenta os data centers?')]}
         lines, problem = news_auto.validate_lines(rich, story, 60)
@@ -101,7 +101,7 @@ class NewsAutoTests(unittest.TestCase):
         self.assertFalse(news_auto.loop_enabled())
         story = {'title': 'Sony relança Walkman por R$ 32 mil no Brasil',
                  'body': 'A Sony lançou no Brasil o novo Walkman por R$ 32 mil para audiófilos. ' * 3}
-        odd_complete = {'lines': [{'speaker': 0, 'text': t} for t in (
+        odd_complete = {'lines': [{'speaker': 0, 'text': t, 'fato': 0} for t in (
             'Pagaria R$ 32 mil num Walkman novo?',
             'A Sony trouxe o aparelho de volta ao Brasil.',
             'Ele é feito para audiófilos exigentes.',
@@ -111,7 +111,7 @@ class NewsAutoTests(unittest.TestCase):
         lines, problem = news_auto.validate_lines(odd_complete, story, 80, loop=False, min_lines=4, max_lines=8)
         self.assertEqual(problem, '')
         self.assertEqual(len(lines), 5)
-        dangling = {'lines': [{'speaker': 0, 'text': t} for t in (
+        dangling = {'lines': [{'speaker': 0, 'text': t, 'fato': 0} for t in (
             'Pagaria R$ 32 mil num Walkman novo?',
             'A Sony trouxe o aparelho de volta ao Brasil.',
             'Ele é feito para audiófilos exigentes.',
@@ -124,7 +124,7 @@ class NewsAutoTests(unittest.TestCase):
         story = {'title': 'Petrobras anuncia novo poço na Bacia de Campos',
                  'source': 'CPG Click Petróleo e Gás',
                  'body': 'A Petrobras confirmou a descoberta de 200 milhões de barris na Bacia de Campos. ' * 4}
-        bad_cpg = {'lines': [{'speaker': 0, 'text': t} for t in (
+        bad_cpg = {'lines': [{'speaker': 0, 'text': t, 'fato': 0} for t in (
             'Viu a descoberta de 200 milhões de barris?',
             'A Petrobras achou petróleo na Bacia de Campos.',
             'Dados confirmados pela CPG Click Petróleo e Gás.',
@@ -132,7 +132,7 @@ class NewsAutoTests(unittest.TestCase):
         )]}
         with self.assertRaisesRegex(ValueError, 'veículo|confirmado por'):
             news_auto.validate_lines(bad_cpg, story, 80)
-        bad_uol = {'lines': [{'speaker': 0, 'text': t} for t in (
+        bad_uol = {'lines': [{'speaker': 0, 'text': t, 'fato': 0} for t in (
             'Viu a descoberta de 200 milhões de barris?',
             'A Petrobras achou petróleo na Bacia de Campos.',
             'Tudo isso está confirmado pelo Uol nesta segunda-feira.',
@@ -150,7 +150,7 @@ class NewsAutoTests(unittest.TestCase):
         }
         self.assertNotIn('Toffoli', news_auto.source_text(story))
         self.assertNotIn('999', news_auto.source_text(story))
-        leaked_entity = {'lines': [{'speaker': 0, 'text': t} for t in (
+        leaked_entity = {'lines': [{'speaker': 0, 'text': t, 'fato': 0} for t in (
             'Já conferiu as 180 questões do Enem?',
             'O MEC e o Inep liberaram o gabarito no Brasil.',
             'Daniela Toffoli até comentou o tema.',
@@ -158,7 +158,7 @@ class NewsAutoTests(unittest.TestCase):
         )]}
         with self.assertRaisesRegex(ValueError, 'Contaminação|manchete relacionada'):
             news_auto.validate_lines(leaked_entity, story, 80)
-        leaked_number = {'lines': [{'speaker': 0, 'text': t} for t in (
+        leaked_number = {'lines': [{'speaker': 0, 'text': t, 'fato': 0} for t in (
             'Já conferiu as 180 questões do Enem?',
             'O MEC e o Inep liberaram o gabarito no Brasil.',
             'Foram 999 milhões envolvidos no caso.',
@@ -182,23 +182,23 @@ class NewsAutoTests(unittest.TestCase):
             'O acordo garante energia até 2045.',
             'O objetivo é abastecer data centers de IA.',
         ]}
-        script_v1 = {'lines': [{'speaker': 0, 'text': t} for t in (
-            'Por que gastar 3,4 bilhões em geradores?',
-            'A Anthropic fechou isso com a Caterpillar.',
-            'Fica tudo lá no Texas.',
-            'A energia vai até 2045 nos data centers.',
-            'Isso muda o jogo da IA.',
-            'O que você acha desse gasto?'
-        )]}
+        script_v1 = {'lines': [
+            {'speaker': 0, 'text': 'Por que gastar 3,4 bilhões em geradores?', 'fato': 0},
+            {'speaker': 0, 'text': 'A Anthropic fechou isso com a Caterpillar.', 'fato': 1},
+            {'speaker': 0, 'text': 'Fica tudo lá no Texas.', 'fato': 2},
+            {'speaker': 0, 'text': 'A energia vai até 2045 nos data centers.', 'fato': 3},
+            {'speaker': 0, 'text': 'Isso muda o jogo da IA.', 'fato': 4},
+            {'speaker': 0, 'text': 'O que você acha desse gasto?', 'fato': 0}
+        ]}
         eval_low = {'nota': 5, 'problemas': ['Falas finais pouco espontâneas']}
-        script_v2 = {'lines': [{'speaker': 0, 'text': t} for t in (
-            'Por que gastar 3,4 bilhões só em gerador?',
-            'Cara, a Anthropic comprou tudo da Caterpillar!',
-            'É que a rede elétrica do Texas não aguenta mais.',
-            'Eles garantiram energia até 2045 pros data centers.',
-            'Mano, é muita energia só pra rodar IA!',
-            'Será que vai faltar luz pro resto do estado?'
-        )]}
+        script_v2 = {'lines': [
+            {'speaker': 0, 'text': 'Por que gastar 3,4 bilhões só em gerador?', 'fato': 0},
+            {'speaker': 0, 'text': 'Cara, a Anthropic comprou tudo da Caterpillar!', 'fato': 1},
+            {'speaker': 0, 'text': 'É que a rede elétrica do Texas não aguenta mais.', 'fato': 2},
+            {'speaker': 0, 'text': 'Eles garantiram energia até 2045 pros data centers.', 'fato': 3},
+            {'speaker': 0, 'text': 'Mano, é muita energia!', 'reacao': True},
+            {'speaker': 0, 'text': 'Será que vai faltar luz pro resto do estado?', 'fato': 2}
+        ]}
         eval_high = {'nota': 9, 'problemas': []}
         responses = iter([step1_facts, script_v1, eval_low, script_v2, eval_high])
         calls = []
@@ -395,14 +395,14 @@ class NewsAutoTests(unittest.TestCase):
             'O acordo garante energia até 2045.',
             'O objetivo é abastecer data centers de IA.',
         ]}
-        script = {'lines': [{'speaker': 0, 'text': t} for t in (
-            'Por que gastar 3,4 bilhões só em gerador?',
-            'Cara, a Anthropic comprou tudo da Caterpillar!',
-            'É que a rede elétrica do Texas não aguenta mais.',
-            'Eles garantiram energia até 2045 pros data centers.',
-            'Mano, é muita energia só pra rodar IA!',
-            'Será que vai faltar luz pro resto do estado?'
-        )]}
+        script = {'lines': [
+            {'speaker': 0, 'text': 'Por que gastar 3,4 bilhões só em gerador?', 'fato': 0},
+            {'speaker': 0, 'text': 'Cara, a Anthropic comprou tudo da Caterpillar!', 'fato': 1},
+            {'speaker': 0, 'text': 'É que a rede elétrica do Texas não aguenta mais.', 'fato': 2},
+            {'speaker': 0, 'text': 'Eles garantiram energia até 2045 pros data centers.', 'fato': 3},
+            {'speaker': 0, 'text': 'Mano, é muita energia!', 'reacao': True},
+            {'speaker': 0, 'text': 'Será que vai faltar luz pro resto do estado?', 'fato': 2}
+        ]}
         low_eval = {'nota': 5, 'problemas': ['Diálogo pouco natural']}
         out_dir = Path(self.temp.name) / 'out_rej'
         # Inicial + 2 regenerações = 3 roteiros avaliados com nota 5 -> levanta RuntimeError e salva rejected_*.json
@@ -466,7 +466,7 @@ class NewsAutoTests(unittest.TestCase):
             'title': 'Sony relança Walkman por R$ 32 mil no Brasil',
             'body': 'A Sony lançou no Brasil o novo Walkman por R$ 32 mil focado em áudio de estúdio. ' * 4,
         }
-        leaked = {'lines': [{'speaker': 0, 'text': t} for t in (
+        leaked = {'lines': [{'speaker': 0, 'text': t, 'fato': 0} for t in (
             'Pagaria R$ 32 mil num Walkman novo?',
             'A Sony lançou esse modelo no Brasil.',
             'Lá em Valoria a Zorbax tentou algo parecido.',
@@ -483,7 +483,7 @@ class NewsAutoTests(unittest.TestCase):
             'O público-alvo são profissionais de som.',
             'O aparelho chegou ao mercado nacional.',
         ]}
-        good = {'lines': [{'speaker': 0, 'text': t} for t in (
+        good = {'lines': [{'speaker': 0, 'text': t, 'fato': 0} for t in (
             'Pagaria R$ 32 mil num Walkman novo?',
             'A Sony trouxe o aparelho de volta ao Brasil.',
             'O foco é som de estúdio profissional.',
@@ -505,7 +505,7 @@ class NewsAutoTests(unittest.TestCase):
                      'com investimento da estatal no Brasil durante o século XXI. ' * 4),
             'related': ['Outra notícia cita sete navios no porto (UOL)'],
         }
-        valid_with_digit = {'lines': [{'speaker': 0, 'text': t} for t in (
+        valid_with_digit = {'lines': [{'speaker': 0, 'text': t, 'fato': 0} for t in (
             'Sabia que a Petrobras terá 3 novas plataformas?',
             'A construção será lá na Bacia de Santos.',
             'É um projeto grande da estatal no Brasil.',
@@ -515,7 +515,7 @@ class NewsAutoTests(unittest.TestCase):
         self.assertEqual(problem, '')
         self.assertEqual(len(lines), 4)
 
-        absent_digit = {'lines': [{'speaker': 0, 'text': t} for t in (
+        absent_digit = {'lines': [{'speaker': 0, 'text': t, 'fato': 0} for t in (
             'Sabia que a Petrobras terá 7 novas plataformas?',
             'A construção será lá na Bacia de Santos.',
             'É um projeto grande da estatal no Brasil.',
@@ -537,14 +537,14 @@ class NewsAutoTests(unittest.TestCase):
             'A venda ocorre no mercado nacional.',
             'O produto mira audiófilos.',
         ]}
-        script_resp = {'lines': [{'speaker': 0, 'text': t} for t in (
-            'Pagaria R$ 32 mil num Walkman novo?',
-            'A Sony trouxe o aparelho de volta ao Brasil.',
-            'O foco é áudio de estúdio profissional.',
-            'Mesmo assim o preço assustou todo mundo.',
-            'Só colecionador muito fanático vai encarar!',
-            'Vale tudo isso só para ouvir música?'
-        )]}
+        script_resp = {'lines': [
+            {'speaker': 0, 'text': 'Pagaria R$ 32 mil num Walkman novo?', 'fato': 1},
+            {'speaker': 0, 'text': 'A Sony trouxe o aparelho de volta ao Brasil.', 'fato': 0},
+            {'speaker': 0, 'text': 'O foco é áudio de estúdio profissional.', 'fato': 2},
+            {'speaker': 0, 'text': 'Mesmo assim o preço assustou todo mundo.', 'fato': 1},
+            {'speaker': 0, 'text': 'Caramba, só colecionador!', 'reacao': True},
+            {'speaker': 0, 'text': 'Vale tudo isso só para ouvir música?', 'fato': 1}
+        ]}
         seq = iter([
             {'index': 0, 'reason': 'primeira sem corpo'},
             {'index': 0, 'reason': 'segunda com corpo'},
@@ -557,6 +557,140 @@ class NewsAutoTests(unittest.TestCase):
             story, lines = news_auto.automatic('tecnologia', max_seconds=45, log=lambda *a: None, ask=lambda i, p: next(seq))
         self.assertEqual(story['id'], '2')
         self.assertEqual(len(lines), 6)
+
+    def test_item1_tied_to_fact_and_reaction_rules(self):
+        story = {
+            'title': 'Brasil bate recorde e exporta 5,3 milhões de sacas de café em outubro',
+            'body': ('O Brasil exportou 5,3 milhões de sacas de café em outubro. '
+                     'A receita atingiu US$ 1,786 bilhão no período. '
+                     'Os embarques para a Europa somaram 17,8 milhões de sacas. '
+                     'O preço médio caiu 9,5% no acumulado do ano. '
+                     'A colheita de conilon e robusta cresceu 72,5%. ' * 3),
+            'extracted_facts': [
+                'O Brasil exportou 5,3 milhões de sacas de café em outubro.',
+                'A receita atingiu US$ 1,786 bilhão no período.',
+                'Os embarques para a Europa somaram 17,8 milhões de sacas.',
+                'O preço médio caiu 9,5% no acumulado do ano.',
+                'A colheita de conilon e robusta cresceu 72,5%.',
+            ]
+        }
+        # 1. Fala sem "fato" e sem "reacao"
+        bad_no_tag = {'lines': [
+            {'speaker': 0, 'text': 'Sabia do novo recorde de café?', 'fato': 0},
+            {'speaker': 1, 'text': 'Fala sem amarra nenhuma aqui no meio.'},
+            {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
+            {'speaker': 1, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
+        ]}
+        with self.assertRaisesRegex(ValueError, 'deve indicar "fato": N ou "reacao": true'):
+            news_auto.validate_lines(bad_no_tag, story, 80)
+
+        # 2. Reação com mais de 6 palavras
+        bad_long_reaction = {'lines': [
+            {'speaker': 0, 'text': 'Sabia do novo recorde de café?', 'fato': 0},
+            {'speaker': 1, 'text': 'Esta reação tem palavras demais para ser aceita pelo sistema', 'reacao': True},
+            {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
+            {'speaker': 1, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
+        ]}
+        with self.assertRaisesRegex(ValueError, 'máximo permitido é 6'):
+            news_auto.validate_lines(bad_long_reaction, story, 80)
+
+        # 3. Reação com dígitos
+        bad_digits_reaction = {'lines': [
+            {'speaker': 0, 'text': 'Sabia do novo recorde de café?', 'fato': 0},
+            {'speaker': 1, 'text': 'Caramba, 5 sacas!', 'reacao': True},
+            {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
+            {'speaker': 1, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
+        ]}
+        with self.assertRaisesRegex(ValueError, 'não podem conter números'):
+            news_auto.validate_lines(bad_digits_reaction, story, 80)
+
+        # 4. Reações consecutivas
+        bad_consecutive_reactions = {'lines': [
+            {'speaker': 0, 'text': 'Sabia do novo recorde de café?', 'fato': 0},
+            {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
+            {'speaker': 0, 'text': 'Mano do céu!', 'reacao': True},
+            {'speaker': 1, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
+        ]}
+        with self.assertRaisesRegex(ValueError, 'não podem ser consecutivas'):
+            news_auto.validate_lines(bad_consecutive_reactions, story, 80)
+
+        # 5. Mais de 2 reações
+        bad_3_reactions = {'lines': [
+            {'speaker': 0, 'text': 'Sabia do novo recorde de café?', 'fato': 0},
+            {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
+            {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
+            {'speaker': 1, 'text': 'Pois é!', 'reacao': True},
+            {'speaker': 0, 'text': 'Europa comprou 17,8 milhões.', 'fato': 2},
+            {'speaker': 1, 'text': 'Inacreditável!', 'reacao': True},
+            {'speaker': 0, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
+        ]}
+        with self.assertRaisesRegex(ValueError, 'máximo 2 por roteiro'):
+            news_auto.validate_lines(bad_3_reactions, story, 80)
+
+        # 6. Última fala sendo reação
+        bad_last_reaction = {'lines': [
+            {'speaker': 0, 'text': 'Sabia do novo recorde de café?', 'fato': 0},
+            {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
+            {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
+            {'speaker': 1, 'text': 'Pois é!', 'reacao': True},
+        ]}
+        with self.assertRaisesRegex(ValueError, 'última fala NÃO pode ser reação'):
+            news_auto.validate_lines(bad_last_reaction, story, 80)
+
+        # 7. Fecho de enchimento (FILLER_CLOSE)
+        bad_filler = {'lines': [
+            {'speaker': 0, 'text': 'Sabia do novo recorde de café?', 'fato': 0},
+            {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
+            {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
+            {'speaker': 1, 'text': 'Que legal ver o Brasil fazendo números assim!', 'fato': 0},
+        ]}
+        with self.assertRaisesRegex(ValueError, 'fecho de enchimento'):
+            news_auto.validate_lines(bad_filler, story, 80)
+
+        # 8. Outro fecho com FILLER_CLOSE
+        bad_filler2 = {'lines': [
+            {'speaker': 0, 'text': 'Sabia do novo recorde de café?', 'fato': 0},
+            {'speaker': 1, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
+            {'speaker': 0, 'text': 'Os embarques foram gigantes.', 'fato': 0},
+            {'speaker': 1, 'text': 'Isso é show demais!', 'fato': 0},
+        ]}
+        with self.assertRaisesRegex(ValueError, 'fecho de enchimento'):
+            news_auto.validate_lines(bad_filler2, story, 80)
+
+        # 9. Número ausente no fato citado (fato 0 não tem 1,786)
+        bad_num_mismatch = {'lines': [
+            {'speaker': 0, 'text': 'A receita atingiu US$ 1,786 bilhão.', 'fato': 0},  # Fato 0 é 5,3 milhões
+            {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
+            {'speaker': 0, 'text': 'Foram 5,3 milhões de sacas.', 'fato': 0},
+            {'speaker': 1, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
+        ]}
+        with self.assertRaisesRegex(ValueError, 'números ausentes no fato 0'):
+            news_auto.validate_lines(bad_num_mismatch, story, 80)
+
+        # 10. Entidade ausente no fato citado (Europa só está no fato 2)
+        bad_ent_mismatch = {'lines': [
+            {'speaker': 0, 'text': 'Sabia do novo recorde de café?', 'fato': 0},
+            {'speaker': 1, 'text': 'A Europa comprou muito!', 'fato': 1},  # Fato 1 não cita Europa
+            {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
+            {'speaker': 1, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
+        ]}
+        with self.assertRaisesRegex(ValueError, 'ausente no fato 1'):
+            news_auto.validate_lines(bad_ent_mismatch, story, 80)
+
+        # 11. Roteiro válido
+        valid = {'lines': [
+            {'speaker': 0, 'text': 'Viu o recorde de 5,3 milhões de sacas?', 'fato': 0},
+            {'speaker': 1, 'text': 'Caramba, isso tudo?!', 'reacao': True},
+            {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
+            {'speaker': 1, 'text': 'E a Europa comprou 17,8 milhões de sacas!', 'fato': 2},
+            {'speaker': 0, 'text': 'Mesmo assim o preço caiu 9,5% no ano.', 'fato': 3},
+            {'speaker': 1, 'text': 'Será que esse ritmo se mantém?', 'fato': 0},
+        ]}
+        lines, prob = news_auto.validate_lines(valid, story, 80)
+        self.assertEqual(prob, '')
+        self.assertEqual(len(lines), 6)
+        self.assertTrue(lines[1].get('reacao'))
+        self.assertEqual(lines[2].get('fato'), 1)
 
 
 if __name__ == '__main__':

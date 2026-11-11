@@ -116,6 +116,10 @@ HOOK_PROVOCATION_RE = re.compile(
     r'(\?|!|\b(por\s+que|como\s+assim|sabia|imagina|j[aá]\s+pensou|voc[eê]|ser[aá]|quem|qual|quanto|'
     r'acredita|faz\s+sentido|tem\s+no[cç][aã]o|olha|pera[ií]|cara|mano|mentira|poss[ií]vel|absurdo|bizarro)\b)', re.I)
 FICTIONAL_EXAMPLE_TERMS = ('zorbax', 'valoria', 'neoquimera', 'luminopolis', '742', '819', '2089')
+FILLER_CLOSE = re.compile(
+    r'\b(que\s+(legal|bom|show|demais|maravilha|bacana)|incr[ií]vel|uau|show|demais)\b',
+    re.I
+)
 MIN_BODY = 80
 MIN_SOURCE_WORDS = 25
 MAX_BODY = 750
@@ -553,7 +557,7 @@ def turn_range(story, max_words, previous=None):
     return 4, min(8, cap)
 
 
-def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12):
+def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12, facts=None):
     """Valida o roteiro contra o corpo e título da matéria (nunca contra manchetes relacionadas)."""
     if not story.get('body') and len(source_text(story).split()) < MIN_SOURCE_WORDS:
         # Se não tem corpo nem atinge a fonte mínima, só permite se for teste explícito de manchete com >= 6 palavras,
@@ -564,6 +568,13 @@ def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12):
     if not isinstance(lines, list) or not min_lines <= len(lines) <= max_lines:
         raise ValueError(f'Entregue entre {min_lines} e {max_lines} falas em "lines" '
                          f'(vieram {len(lines) if isinstance(lines, list) else 0}).')
+    if facts is None:
+        facts = story.get('extracted_facts') or story.get('fatos')
+    if not facts:
+        source_t = source_text(story)
+        sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', source_t) if len(s.split()) >= 4]
+        facts = sentences[:6] or [source_t or story.get('title', '')]
+
     import engine
     texts = []
     for line in lines:
@@ -577,6 +588,8 @@ def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12):
         if _ForbiddenVehicleMatch(text, story):
             raise ValueError('Proibido citar o nome do veículo ou expressões como "confirmado por" / "segundo o" nas falas.')
         texts.append(text)
+
+    # 1. Validação global do texto (vocabulário, termos proibidos, veículos e tamanho)
     hook_words = len(texts[0].split())
     if hook_words > 10:
         raise ValueError(f'A primeira fala tem {hook_words} palavras; o máximo é 10 palavras.')
@@ -609,12 +622,66 @@ def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12):
         if leaked:
             raise ValueError('Contaminação de manchete relacionada detectada: ' + ', '.join(sorted(leaked)) +
                              '. Use apenas fatos do corpo da matéria principal.')
+
+    # 2. Validação individual de cada fala: amarração ao fato ou reação
+    reacoes_count = 0
+    for i, line in enumerate(lines):
+        text = texts[i]
+        is_reacao = bool(line.get('reacao'))
+        fato_idx = line.get('fato')
+
+        if is_reacao:
+            reacoes_count += 1
+            if len(text.split()) > 6:
+                raise ValueError(f'Fala de reação tem {len(text.split())} palavras; o máximo permitido é 6.')
+            if re.search(r'\d', text):
+                raise ValueError('Falas de reação não podem conter números ou dígitos.')
+            if i > 0 and bool(lines[i - 1].get('reacao')):
+                raise ValueError('Falas de reação não podem ser consecutivas.')
+            if i == len(lines) - 1:
+                raise ValueError('A última fala NÃO pode ser reação.')
+        elif fato_idx is not None:
+            try:
+                f_idx = int(fato_idx)
+            except (ValueError, TypeError):
+                raise ValueError(f'Índice de fato inválido na fala {i + 1}: {fato_idx}')
+            if not (0 <= f_idx < len(facts)):
+                raise ValueError(f'Índice de fato fora da faixa (0..{len(facts) - 1}): {f_idx}')
+            cited_fact = facts[f_idx] + ' ' + story.get('title', '')
+            fact_allowed_nums = _allowed_numbers(cited_fact)
+            line_nums = _numbers(text)
+            missing_nums = line_nums - fact_allowed_nums
+            if missing_nums:
+                raise ValueError(f'A fala citou números ausentes no fato {f_idx} (ou título): ' +
+                                 ', '.join(sorted(missing_nums)))
+            fact_tokens = set(_tokens(cited_fact))
+            fact_entities = {e.casefold() for e in _entities(cited_fact)}
+            line_entities = _entities(text)
+            for ent in line_entities:
+                ent_low = ent.casefold()
+                if ent_low not in fact_entities and (_tokens(ent) and _tokens(ent)[0] not in fact_tokens):
+                    raise ValueError(f'A fala citou nome/entidade "{ent}" ausente no fato {f_idx} (ou título).')
+        else:
+            raise ValueError(f'A fala {i + 1} deve indicar "fato": N ou "reacao": true.')
+
+    if reacoes_count > 2:
+        raise ValueError(f'O roteiro tem {reacoes_count} falas de reação; o limite é no máximo 2 por roteiro.')
+
+    if FILLER_CLOSE.search(texts[-1]):
+        raise ValueError(f'A última fala não pode ter fecho de enchimento ({FILLER_CLOSE.search(texts[-1]).group(0)}).')
     needed = 4 if story.get('body') else 1
     if len(_facts(texts, source)) < needed:
         raise ValueError(f'Roteiro genérico. Inclua pelo menos {needed} detalhes concretos da matéria '
                          '(números, nomes de pessoas, empresas, lugares, valores).')
     first = lines[0].get('speaker') if lines[0].get('speaker') in (0, 1) else 0
-    result = [{'speaker': (first + i) % 2, 'text': t} for i, t in enumerate(texts)]
+    result = []
+    for i, t in enumerate(texts):
+        entry = {'speaker': (first + i) % 2, 'text': t}
+        if lines[i].get('reacao'):
+            entry['reacao'] = True
+        else:
+            entry['fato'] = int(lines[i]['fato'])
+        result.append(entry)
     problem = ''
     tail = unicodedata.normalize('NFKD', texts[-1].split()[-1].casefold())
     tail = re.sub(r'[^a-z]', '', ''.join(c for c in tail if not unicodedata.combining(c)))
@@ -766,32 +833,38 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
     allow_low = accept_low_score_enabled() if accept_low_score is None else bool(accept_low_score)
     if facts is None and previous is None and story.get('body'):
         facts = extract_facts(story, ask=ask)
+    if facts is not None:
+        story['extracted_facts'] = facts
     min_lines, max_lines = turn_range(story, max_words, previous)
     target = max(12, min(int(max_words * 0.9), max_lines * 12))
     few_shot = (
         'EXEMPLOS FICTÍCIOS: copie apenas o estilo e o ritmo, nunca os fatos.\n'
+        'Cada fala DEVE indicar "fato": N (índice 0..5 do fato correspondente) OU "reacao": true (para reações de até 6 palavras, sem números).\n'
         'Exemplo 1:\n'
-        '[{"speaker":0,"text":"Pagar 742 moedas num guarda-chuva voador faz sentido?"},'
-        '{"speaker":1,"text":"Cara, 742?! Quem teve essa ideia maluca em Valoria?"},'
-        '{"speaker":0,"text":"A Zorbax lançou esse modelo só pra testes no deserto."},'
-        '{"speaker":1,"text":"Mas com essa grana dava pra comprar um barco inteiro, mano!"}]\n'
+        '[{"speaker":0,"text":"Pagar 742 moedas num guarda-chuva voador faz sentido?","fato":0},'
+        '{"speaker":1,"text":"Cara, 742?! Não acredito!","reacao":true},'
+        '{"speaker":0,"text":"A Zorbax lançou esse modelo só pra testes no deserto.","fato":1},'
+        '{"speaker":1,"text":"Mas dava pra comprar um barco inteiro em Valoria!","fato":2}]\n'
         'Exemplo 2:\n'
-        '[{"speaker":0,"text":"Por que gastariam 819 milhões só em baterias de gelo?"},'
-        '{"speaker":1,"text":"Peraí, as torres de Luminopolis não usavam vento?"},'
-        '{"speaker":0,"text":"Na teoria sim, mas a rede não aguenta a NeoQuimera."},'
-        '{"speaker":1,"text":"E aí apelaram pra esse estoque gigante até 2089?"}]\n'
+        '[{"speaker":0,"text":"Por que gastariam 819 milhões só em baterias de gelo?","fato":0},'
+        '{"speaker":1,"text":"Peraí, isso é sério?","reacao":true},'
+        '{"speaker":0,"text":"A rede de Luminopolis não aguenta a demanda da NeoQuimera.","fato":1},'
+        '{"speaker":1,"text":"E aí apelaram pro estoque gigante de 2089 pra segurar a barra?","fato":2}]\n'
     )
     instruction = (
         'Passo 2 — Roteiro de diálogo: escreva um diálogo para Reel vertical de ' + kind.lower() + ' em português brasileiro. '
         'Sasuke (speaker 0, direto e irônico) e Naruto (speaker 1, curioso e espontâneo) conversam ALTERNANDO as falas.\n'
         + few_shot +
         'Regras obrigatórias:\n'
-        '- Use SOMENTE os fatos extraídos da matéria recebidos no JSON. Não invente números, datas, nomes ou causas.\n'
+        '- Cada fala DEVE ter "fato": N (índice 0 a 5 do fato da matéria correspondente) OU "reacao": true.\n'
+        '- Falas com "reacao": true devem ter no máximo 6 palavras, NUNCA conter números e no máximo 2 no roteiro todo (nunca consecutivas e nunca na última fala).\n'
+        '- Falas com "fato": N só podem citar números e nomes próprios presentes no fato N (ou no título da matéria).\n'
         '- A primeira fala DEVE ser uma provocação ou pergunta instigante de até 10 palavras (NUNCA uma manchete e nunca comece com "Mas...").\n'
         '- PROIBIDO citar o nome do veículo (ex.: g1, UOL, CNN, CPG) ou frases de telejornal ("confirmado por", "segundo o", "nesta segunda-feira").\n'
+        '- PROIBIDO fechos de enchimento ("que legal", "que bom", "incrível", "show", "demais"). Termine com pergunta reflexiva ou fecho forte.\n'
         f'- Use entre {min_lines} e {max_lines} falas curtas e naturais, com total máximo de {target} palavras.\n'
-        '- A última fala deve terminar com uma frase completa (uma pergunta aberta pro público pensar ou um fecho forte), nunca cortada no meio.\n'
-        'Responda APENAS JSON: {"lines":[{"speaker":0,"text":"..."},{"speaker":1,"text":"..."}]}'
+        '- A última fala deve terminar com uma frase completa (uma pergunta aberta pro público pensar ou um fecho forte), nunca cortada no meio e nunca ser reação.\n'
+        'Responda APENAS JSON: {"lines":[{"speaker":0,"text":"...","fato":0},{"speaker":1,"text":"...","reacao":true}]}'
     )
     payload = {
         'manchete_referencia': story.get('title', ''),
@@ -812,7 +885,7 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
             payload['correcao'] = error
         raw = ask(instruction, json.dumps(payload, ensure_ascii=False))
         try:
-            lines, problem = validate_lines(raw, story, max_words, loop, min_lines, max_lines)
+            lines, problem = validate_lines(raw, story, max_words, loop, min_lines, max_lines, facts=facts)
         except ValueError as exc:
             error = str(exc)
             continue
