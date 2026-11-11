@@ -340,6 +340,79 @@ def _similar(a, b):
     return len(x & y) / max(1, len(x | y))
 
 
+TITLE_STOPWORDS = {
+    'a', 'ao', 'aos', 'as', 'de', 'da', 'do', 'das', 'dos', 'em', 'no', 'na', 'nos', 'nas',
+    'para', 'pra', 'pro', 'pros', 'pras', 'por', 'pelo', 'pela', 'pelos', 'pelas',
+    'com', 'sem', 'sob', 'sobre', 'entre', 'ate', 'tras',
+    'e', 'ou', 'mas', 'porem', 'contudo', 'todavia', 'que', 'se', 'como', 'porque', 'pois',
+    'um', 'uma', 'uns', 'umas',
+    'este', 'esta', 'estes', 'estas', 'esse', 'essa', 'esses', 'essas', 'aquele', 'aquela',
+    'aqueles', 'aquelas', 'isto', 'isso', 'aquilo',
+    'seu', 'sua', 'seus', 'suas', 'meu', 'minha', 'meus', 'minhas', 'teu', 'tua', 'teus', 'tuas',
+    'nosso', 'nossa', 'nossos', 'nossas', 'dele', 'dela', 'deles', 'delas',
+    'quem', 'cujo', 'cuja', 'cujos', 'cujas', 'qual', 'quais', 'onde', 'quando', 'quanto', 'quanta',
+    'quantos', 'quantas',
+    'mais', 'menos', 'muito', 'muita', 'muitos', 'muitas', 'pouco', 'pouca', 'poucos', 'poucas',
+    'ja', 'nao', 'sim', 'tambem', 'so', 'apenas', 'bem', 'mal',
+    'ser', 'e', 'eh', 'sao', 'era', 'eram', 'foi', 'foram', 'sera', 'serao', 'sendo', 'sido',
+    'ter', 'tem', 'temos', 'tinha', 'tinham', 'teve', 'tiveram', 'tera', 'terao', 'tendo', 'tido',
+    'haver', 'ha', 'havia', 'houve', 'havera',
+    'fazer', 'faz', 'fazem', 'fez', 'fizeram', 'fara', 'farao',
+    'ir', 'vai', 'vao', 'ia', 'iam', 'ira', 'irao', 'indo', 'ido',
+    'vir', 'vem', 'veio', 'vieram', 'vira', 'virao',
+    'dizer', 'diz', 'dizem', 'disse', 'disseram', 'dira', 'dirao',
+    'poder', 'pode', 'podem', 'podia', 'podiam', 'pude', 'puderam', 'podera', 'poderao',
+    'precisar', 'precisa', 'precisam', 'precisou', 'precisarao', 'precisara',
+    'anunciar', 'anuncia', 'anunciam', 'anunciou', 'anunciara',
+    'fechar', 'fecha', 'fecham', 'fechou', 'fechara',
+    'bater', 'bate', 'batem', 'bateu', 'batera',
+    'novo', 'nova', 'novos', 'novas', 'grande', 'grandes', 'bom', 'boa', 'bons', 'boas',
+    'ano', 'anos', 'mes', 'meses', 'dia', 'dias', 'hora', 'horas',
+    'r', 'us', 'usd', 'brl', 'reais', 'dolar', 'dolares',
+    'mil', 'milhao', 'milhoes', 'bilhao', 'bilhoes', 'trilhao', 'trilhoes', 'cento', 'porcento',
+} | QUERY_STOPWORDS
+
+
+def _clean_plain_word(w):
+    w = unicodedata.normalize('NFKD', str(w)).casefold()
+    w = ''.join(c for c in w if not unicodedata.combining(c))
+    return re.sub(r'[^a-z0-9]', '', w)
+
+
+def extract_title_keywords(title):
+    """Extrai palavras-chave distintivas do título da matéria (sem stopwords, números ou unidades)."""
+    words = re.findall(r'[a-zA-ZÀ-ú0-9]+', str(title))
+    candidates = []
+    seen = set()
+    for raw in words:
+        norm = _clean_plain_word(raw)
+        if not norm or norm.isdigit() or len(norm) < 3:
+            continue
+        if norm in TITLE_STOPWORDS:
+            continue
+        if norm not in seen:
+            seen.add(norm)
+            candidates.append(norm)
+    return candidates
+
+
+def _word_matches_keyword(word, keyword):
+    w = _clean_plain_word(word)
+    k = _clean_plain_word(keyword)
+    if not w or not k:
+        return False
+    if w == k:
+        return True
+    if len(k) >= 4 and len(w) >= 4:
+        w_stem = re.sub(r'(?:es|s)$', '', w)
+        k_stem = re.sub(r'(?:es|s)$', '', k)
+        if w_stem == k_stem:
+            return True
+        if w.startswith(k) or k.startswith(w):
+            return True
+    return False
+
+
 def read_feed(url):
     import requests
     now = time.time()
@@ -1124,6 +1197,29 @@ def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12, fa
     if len(_facts(texts, source)) < needed:
         raise ValueError(f'Roteiro genérico. Inclua pelo menos {needed} detalhes concretos da matéria '
                          '(números, nomes de pessoas, empresas, lugares, valores).')
+
+    # Validação de cobertura do tema (palavras-chave do título)
+    if story.get('title'):
+        title_keywords = extract_title_keywords(story.get('title', ''))
+        if title_keywords:
+            first_3_texts = texts[:3]
+            first_3_words = re.findall(r'[a-zA-ZÀ-ú0-9]+', ' '.join(first_3_texts))
+            first_3_covered = {k for k in title_keywords if any(_word_matches_keyword(w, k) for w in first_3_words)}
+
+            all_words = re.findall(r'[a-zA-ZÀ-ú0-9]+', ' '.join(texts))
+            all_covered = {k for k in title_keywords if any(_word_matches_keyword(w, k) for w in all_words)}
+
+            target_count = min(2, len(title_keywords))
+            if not first_3_covered and target_count >= 1:
+                missing = [k for k in title_keywords if k not in all_covered]
+                raise ValueError('Nenhuma palavra-chave do título apareceu nos 3 primeiros turnos: ausente(s) ' +
+                                 ', '.join(missing or title_keywords))
+
+            if len(all_covered) < target_count:
+                missing = [k for k in title_keywords if k not in all_covered]
+                raise ValueError('Roteiro não cobre as palavras-chave do título: ausente(s) ' +
+                                 ', '.join(missing))
+
     first = lines[0].get('speaker') if lines[0].get('speaker') in (0, 1) else 0
     result = []
     for i, t in enumerate(texts):

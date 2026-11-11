@@ -98,3 +98,22 @@
   - `engine.character`: thumbnail dos sprites restaurada para `(510, 640)`.
   - `tests/test_integration.py`: testes que dependem do áudio demo agora geram automaticamente um arquivo WAV silencioso usando o módulo padrão `wave` quando ausente no disco, permitindo a execução de `test_imported_audio_never_synthesized`.
 - **Status final:** TODOS OS ITENS DE 1 A 6 CONCLUÍDOS COM SUCESSO.
+
+---
+
+# Rodada 2 — Correção Factual Avançada, Validações Semânticas, Juiz com Evidências e Ajustes de GUI
+
+## Status Geral dos Itens (Rodada 2)
+
+- [x] **ITEM 1 — Cobertura do tema (`news_auto.py`, `validate_lines`)**: feito
+  - **Commit:** pendente de push
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `settings.json`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 57 testes passando (incluindo `test_item1_round2_theme_coverage`)
+- [ ] **ITEM 2 — Gancho respondido (`news_auto.py`, `validate_lines`)**: pendente
+- [ ] **ITEM 3 — Marcação "fato" não pode ser decorativa (`news_auto.py`, `validate_lines`)**: pendente
+- [ ] **ITEM 4 — Variedade e muletas (`news_auto.py`, `validate_lines`)**: pendente
+- [ ] **ITEM 5 — Juiz com evidência (`news_auto.py`, `evaluate_script`)**: pendente
+- [ ] **ITEM 6 — Juiz de fatos não falha aberto (`news_auto.py`, `verificar_fatos`)**: pendente
+- [ ] **ITEM 7 — Prompt do redator e transparência (`news_auto.py`, `engine.py`)**: pendente
+- [ ] **ITEM 8 — A tela não pode apagar configurações (`gui.py`, `_save`)**: pendente
+- [ ] **ITEM 9 — Campos de modelo na tela (`gui.py`)**: pendente

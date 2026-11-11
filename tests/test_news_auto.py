@@ -1,5 +1,6 @@
 """Testes offline do fluxo automático RSS -> Ollama (rede e modelo simulados)."""
 import importlib.util
+import json
 import sys
 import tempfile
 import unittest
@@ -1054,6 +1055,100 @@ class NewsAutoTests(unittest.TestCase):
         self.assertNotIn('20% em julho', cleaned_flat)
         self.assertIn('2,9%', cleaned_flat)
         self.assertIn('Segundo o presidente do Cecafé, Márcio Ferreira', cleaned_flat)
+
+    def test_item1_round2_theme_coverage(self):
+        # 1. Extração de palavras-chave normalizadas sem stopwords ou números
+        title_fert = "Brasil precisa de R$ 460 bilhões para fertilizantes em 20 anos"
+        kws_fert = news_auto.extract_title_keywords(title_fert)
+        self.assertEqual(kws_fert, ['brasil', 'fertilizantes'])
+
+        title_anth = "Anthropic fecha acordo de US$ 3,4 bilhões em geradores no Texas"
+        kws_anth = news_auto.extract_title_keywords(title_anth)
+        self.assertIn('anthropic', kws_anth)
+        self.assertIn('geradores', kws_anth)
+        self.assertIn('texas', kws_anth)
+
+        # 2. Roteiro fixture de Fertilizantes é rejeitado por não citar 'fertilizantes'
+        fixture_path = Path(__file__).parent / 'fixtures' / 'rejected_20261111_192441_627729.json'
+        with open(fixture_path, encoding='utf-8') as f:
+            fert_data = json.load(f)
+
+        # Prepara fatos compatíveis com os números do roteiro da fixture
+        story_fert = {
+            'title': fert_data['title'],
+            'body': (
+                'O Brasil precisa de R$ 460 bilhões para fertilizantes nos próximos 20 anos. '
+                'O investimento deve ficar entre R$ 220 bilhões e R$ 460 bilhões. '
+                'Em média serão R$ 20 bilhões por ano para atingir R$ 400 bilhões. '
+                'A meta é atingir de 40% a 50% de produção nacional até 2050.'
+            )
+        }
+        facts_fert = [
+            'O Brasil precisa de R$ 460 bilhões para fertilizantes nos próximos 20 anos.',
+            'O investimento previsto fica entre R$ 220 bilhões e R$ 460 bilhões.',
+            'A média é de R$ 20 bilhões por ano para alcançar R$ 400 bilhões.',
+            'Juros altos e crédito difícil barram as empresas.',
+            'A meta é atingir 40% a 50% de produção nacional até 2050.',
+            'O país discute bilhões para segurança alimentar.',
+        ]
+        # Atribui fato a falas que não são reações curtas
+        fact_mapping = {0: 0, 1: None, 2: 0, 3: 1, 4: 1, 5: 1, 6: 2, 7: 3, 8: 3, 9: 4, 10: 4, 11: 5}
+        lines_with_facts = []
+        for i, l in enumerate(fert_data['lines']):
+            item = dict(l)
+            if fact_mapping.get(i) is None:
+                item['reacao'] = True
+            else:
+                item['fato'] = fact_mapping[i]
+            lines_with_facts.append(item)
+
+        raw_fert = {'lines': lines_with_facts}
+        with self.assertRaisesRegex(ValueError, r'Roteiro não cobre as palavras-chave do título: ausente\(s\) fertilizantes'):
+            news_auto.validate_lines(raw_fert, story_fert, budget=150, facts=facts_fert)
+
+        # 3. Se nenhuma palavra-chave aparecer nos 3 primeiros turnos, rejeita
+        delayed_lines = {'lines': [
+            {'speaker': 0, 'text': 'Você viu a projeção de 460 bilhões?', 'fato': 0},
+            {'speaker': 1, 'text': 'Caramba, isso é muito alto!', 'reacao': True},
+            {'speaker': 0, 'text': 'São 20 anos de prazo previstos.', 'fato': 0},
+            {'speaker': 1, 'text': 'E o mínimo de 220 bilhões?', 'fato': 1},
+            {'speaker': 0, 'text': 'O Brasil precisa de fertilizantes.', 'fato': 0},
+            {'speaker': 1, 'text': 'Será que melhora a segurança alimentar?', 'fato': 5},
+        ]}
+        with self.assertRaisesRegex(ValueError, r'Nenhuma palavra-chave do título apareceu nos 3 primeiros turnos'):
+            news_auto.validate_lines(delayed_lines, story_fert, budget=120, facts=facts_fert)
+
+        # 4. Quando cobre as palavras-chave nos primeiros turnos e no total, é aceito
+        valid_lines = {'lines': [
+            {'speaker': 0, 'text': 'O Brasil vai investir pesado agora?', 'fato': 0},
+            {'speaker': 1, 'text': 'Sim, R$ 460 bilhões para fertilizantes!', 'fato': 0},
+            {'speaker': 0, 'text': 'Isso vai levar cerca de 20 anos.', 'fato': 0},
+            {'speaker': 1, 'text': 'Será que melhora a segurança alimentar?', 'fato': 5},
+        ]}
+        res, prob = news_auto.validate_lines(valid_lines, story_fert, budget=80, facts=facts_fert)
+        self.assertEqual(prob, '')
+        self.assertEqual(len(res), 4)
+
+        # 5. Roteiro fixture Anthropic cobre as palavras-chave do título
+        anth_path = Path(__file__).parent / 'fixtures' / 'rejected_20261111_181036_244323.json'
+        with open(anth_path, encoding='utf-8') as f:
+            anth_data = json.load(f)
+        story_anth = {
+            'title': anth_data['title'],
+            'body': (
+                'A Anthropic fechou acordo de US$ 3,4 bilhões para geradores no Texas com a Caterpillar. '
+                'O plano atende data centers até 2045 diante dos gargalos na rede elétrica estadual.'
+            )
+        }
+        facts_anth = [
+            'A Anthropic fechou acordo de US$ 3,4 bilhões.',
+            'A Caterpillar vende geradores para a empresa.',
+            'A rede elétrica do Texas enfrenta limitações.',
+            'A energia atenderá data centers até 2045.',
+        ]
+        res_anth, prob_anth = news_auto.validate_lines(anth_data, story_anth, budget=120, facts=facts_anth)
+        self.assertEqual(prob_anth, '')
+        self.assertEqual(len(res_anth), 6)
 
 
 if __name__ == '__main__':

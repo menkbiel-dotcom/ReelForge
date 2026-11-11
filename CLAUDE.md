@@ -16,6 +16,7 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
    - **Passo 2 (`write_script()`):** O Ollama escreve o diálogo entre Sasuke (direto e irônico) e Naruto (curioso e espontâneo) usando exemplos *few-shot* **totalmente fictícios** (`EXEMPLOS FICTÍCIOS: copie apenas o estilo e o ritmo, nunca os fatos`). Se o gancho do Passo 1 for validado, ele é injetado como primeira fala obrigatória. O prompt exige que perguntas feitas por um personagem sejam respondidas pelo outro usando um dos fatos.
    - **Validação (`validate_lines()`):**
      - Primeira fala deve ser uma provocação ou pergunta de até 10 palavras (nunca a manchete copiada nem iniciada por `"Mas..."`).
+     - Cobertura do tema (`extract_title_keywords()`): extrai palavras-chave distintivas do título (normalizadas sem acento, sem stopwords e sem números); exige que pelo menos 1 apareça nos primeiros 3 turnos e que o roteiro cubra pelo menos 2 no total quando o título tiver 2 ou mais termos.
      - Cada fala é amarrada a um fato (`{"fato": N}`) ou é uma reação curta (`{"reacao": true}`, máx. 6 palavras, sem dígitos, máx. 2 por roteiro, nunca consecutivas e nunca na última fala).
      - Proíbe citar o nome do veículo, expressões de telejornal (`"confirmado por"`, `"segundo o"`, `"nesta segunda-feira"`) e fechos de enchimento na última fala (`FILLER_CLOSE`: `"que legal"`, `"show"`, `"incrível"`).
      - Rejeita termos/números vazados dos exemplos fictícios do prompt (`FICTIONAL_EXAMPLE_TERMS`) quando não estiverem na matéria.
@@ -48,9 +49,9 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
 - O script `publicar_github.py` cria/atualiza o repositório como **privado por padrão** (use `--publico` para público), lê o token exclusivamente de `GITHUB_TOKEN` ou `getpass` (sem argumento `--token` e sem eco no terminal) e faz push sem `force`.
 - Testes que utilizam áudios de demonstração sintetizam automaticamente um WAV silencioso via módulo padrão `wave` quando o arquivo local não existir.
 
-## Suíte de Testes (56 Testes)
+## Suíte de Testes (57 Testes)
 
-- `tests/test_news_auto.py` (31 testes) e `tests/test_integration.py` (25 testes) — totalizando **56 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
+- `tests/test_news_auto.py` (32 testes) e `tests/test_integration.py` (25 testes) — totalizando **57 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'
