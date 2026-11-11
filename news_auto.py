@@ -1497,20 +1497,25 @@ def verificar_fatos(lines, facts, ask=None, story=None, log=print):
     return {'falas': [{'i': i, 'suportada': True, 'motivo': ''} for i in range(len(lines))]}
 
 
+class QualityProblem(dict):
+    """Representa um problema apontado pelo juiz com evidência comprovável na fala."""
+    def __str__(self):
+        mot = f" - {self.get('motivo')}" if self.get('motivo') else ""
+        return f"Fala {self.get('i', 0) + 1} [{self.get('tipo', '')}]: \"{self.get('trecho', '')}\"{mot}"
+
+
 def evaluate_script(lines, story, ask=None, log=print):
-    """Passo 3 (Filtro de qualidade): avalia naturalidade, gancho, final e precisão factual de 1 a 10 + checagem determinística."""
+    """Passo 3 (Filtro de qualidade): avalia informalidade, ritmo e repetição de 1 a 10 + checagem determinística."""
     instruction = (
         'Avalie a qualidade deste roteiro de Reel entre Sasuke (0) e Naruto (1) de 1 a 10. '
-        'Critérios: '
-        '1. Naturalidade: soa como diálogo informal brasileiro entre dois amigos/rivais (sem tom de telejornal)? '
-        '2. Gancho: a primeira fala é uma provocação ou pergunta curta (até 10 palavras) e não uma manchete? '
-        '3. Final: a última fala fecha bem com uma frase completa (pergunta aberta ou conclusão forte), sem frase quebrada? '
-        '4. Responde às perguntas feitas no diálogo com fatos reais da matéria? '
-        '5. Contradição: alguma fala contradiz o texto da matéria? '
-        'IMPORTANTE: Se o roteiro deixar perguntas feitas pelos personagens sem resposta ou se contradisser a matéria, '
-        'a nota máxima permitida é 5. '
-        'Se a nota for menor que 7, liste os problemas objetivos para correção. '
-        'Responda APENAS JSON: {"nota":8,"responde_perguntas":true,"contradiz_materia":false,"problemas":[]}')
+        'Foque EXCLUSIVAMENTE na linguagem falada e ritmo: '
+        '1. Informalidade: tom natural entre dois amigos/rivais brasileiros (gírias moderadas, sem tom acadêmico ou robótico). '
+        '2. Ritmo e engajamento: falas dinâmicas, que mantêm a atenção sem enrolação. '
+        '3. Repetição: evita repetir as mesmas palavras, estruturas ou muletas em turnos próximos. '
+        'ATENÇÃO: Não avalie tamanho do gancho, pontuação final nem citação de veículos (o código já valida isso). '
+        'Se a nota for menor que 7, liste OBRIGATORIAMENTE os problemas com evidência direta da fala. '
+        'Cada problema deve conter: índice i (0 a N), trecho exato da fala e tipo ("informalidade", "ritmo" ou "repeticao"). '
+        'Responda APENAS JSON: {"nota":8,"problemas":[{"i":0,"trecho":"palavras exatas","tipo":"informalidade","motivo":"explicação curta"}]}')
     payload = json.dumps({
         'manchete': story.get('title', ''),
         'materia': story.get('body', ''),
@@ -1530,22 +1535,50 @@ def evaluate_script(lines, story, ask=None, log=print):
         except (TypeError, ValueError):
             continue
         nota = max(1.0, min(10.0, parsed))
-        problemas = [str(p).strip() for p in (res.get('problemas') or []) if str(p).strip()]
+
+        raw_problems = res.get('problemas') or []
+        valid_problems = []
+        for p in raw_problems:
+            if not isinstance(p, dict):
+                continue
+            idx = p.get('i')
+            trecho = p.get('trecho')
+            tipo = p.get('tipo')
+            motivo = p.get('motivo', '')
+            if not isinstance(idx, int) or not (0 <= idx < len(lines)):
+                continue
+            if not isinstance(trecho, str) or not trecho:
+                continue
+            line_text = lines[idx].get('text', '')
+            if trecho not in line_text:
+                continue
+            tipo_norm = _clean_plain_word(tipo)
+            if tipo_norm not in {'informalidade', 'ritmo', 'repeticao'}:
+                continue
+            valid_problems.append(QualityProblem({
+                'i': idx,
+                'trecho': trecho,
+                'tipo': tipo_norm,
+                'motivo': str(motivo).strip(),
+            }))
 
         fails_questions = res.get('responde_perguntas') is False
-        contradicts = res.get('contradiz_materia') is True
-        if not fails_questions and any(re.search(r'n[aã]o\s+responde|sem\s+resposta|pergunta.*(aberta|sem)', p, re.I) for p in problemas):
-            fails_questions = True
-        if not contradicts and any(re.search(r'contradiz|contradi[cç][aã]o', p, re.I) for p in problemas):
-            contradicts = True
-
+        contradicts = res.get('contradiz_materia') is True or any(
+            isinstance(p, str) and re.search(r'contradiz|contradi[cç][aã]o', p, re.I) for p in raw_problems
+        )
         if fails_questions or contradicts:
             if nota > 5:
                 nota = 5.0
-            if fails_questions and not any('pergunta' in p.lower() for p in problemas):
-                problemas.append('O roteiro deixou pergunta sem resposta com base na matéria.')
-            if contradicts and not any('contradiz' in p.lower() for p in problemas):
-                problemas.append('O roteiro contradiz a matéria.')
+            if fails_questions:
+                valid_problems.append(QualityProblem({'i': 0, 'trecho': lines[0].get('text', ''), 'tipo': 'ritmo', 'motivo': 'O roteiro deixou pergunta sem resposta com base na matéria.'}))
+            if contradicts:
+                valid_problems.append(QualityProblem({'i': 0, 'trecho': lines[0].get('text', ''), 'tipo': 'ritmo', 'motivo': 'O roteiro contradiz a matéria.'}))
+
+        if nota < 7 and not valid_problems:
+            nota = 7.0
+            log('reprovação sem problema verificável; ignorada')
+
+        problemas = valid_problems
         break
     if nota is None:
         log('Filtro de qualidade: avaliação indisponível no Ollama.')
@@ -1705,19 +1738,19 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
                 log(f'Aviso: seguindo com nota {review["nota"]} (--aceitar-nota-baixa / aceitar_nota_baixa ativo).')
                 return lines
             rejected_path = _save_rejected_script(story, lines, review)
-            issues = '; '.join(review['problemas']) or 'nota abaixo do mínimo'
+            issues = '; '.join(str(p) for p in review['problemas']) or 'nota abaixo do mínimo'
             raise RuntimeError(
                 f'Roteiro reprovado no filtro de qualidade após 2 regenerações '
                 f'(nota {review["nota"]}/10; problemas: {issues}). Salvo em {rejected_path}.'
             )
         quality_retries += 1
-        issues = '; '.join(review['problemas']) or 'Melhore a naturalidade, o gancho provocativo e o fecho.'
+        issues = '; '.join(str(p) for p in review['problemas']) or 'Melhore a naturalidade, o gancho provocativo e o fecho.'
         error = f'Nota de qualidade {review["nota"]}/10 (mínimo 7). Corrija: {issues}'
     if best_lines is not None and last_review is not None:
         if allow_low:
             return best_lines
         rejected_path = _save_rejected_script(story, best_lines, last_review)
-        issues = '; '.join(last_review['problemas']) or 'nota abaixo do mínimo'
+        issues = '; '.join(str(p) for p in last_review['problemas']) or 'nota abaixo do mínimo'
         raise RuntimeError(
             f'Roteiro reprovado no filtro de qualidade (nota {last_review["nota"]}/10; '
             f'problemas: {issues}). Salvo em {rejected_path}.'

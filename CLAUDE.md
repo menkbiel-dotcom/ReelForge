@@ -30,7 +30,7 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
    - **Checagem Factual e Filtro de Qualidade Fechado (`verificar_fatos()` + `evaluate_script()` + `deterministic_check()`):**
      - `verificar_fatos()`: o modelo juiz avalia se cada fala é suportada pelos fatos da matéria (`{"falas":[{"i":0,"suportada":true,"motivo":""}]}`). Falas não suportadas forçam regeneração do roteiro com correção contendo `{i, text, motivo}`, contando dentro do limite de 2 regenerações.
      - Permite configurar o modelo juiz via `"judge_model": "qwen3:8b"` em `settings.json`. Se o modelo retornar HTTP 404 no Ollama, loga `"juiz padrão indisponível, usando o modelo do redator"`, faz fallback para o redator (`qwen3.5:4b`) e grava `{"juiz_fraco": true}` nos metadados do roteiro e do Reel.
-     - `evaluate_script()` avalia naturalidade, gancho, final e os novos critérios: "responde as perguntas feitas?" e "contradiz a matéria?". Se o roteiro deixar perguntas sem resposta ou contradisser a matéria, a nota máxima permitida é limitada a **5**.
+     - `evaluate_script()` (Juiz com evidência): remove critérios objetivos do prompt (gancho <= 10 palavras, pontuação final, veículo citado); foca exclusivamente em informalidade, ritmo e repetição. O juiz deve retornar `{"nota": N, "problemas": [{"i": idx, "trecho": "...", "tipo": "informalidade|ritmo|repeticao", "motivo": "..."}]}`. Problemas sem trecho exato na fala `i` ou com tipo inválido são descartados; se nota < 7 mas não restar problema verificável, descarta a reprovação, sobe nota para 7 e loga `'reprovação sem problema verificável; ignorada'`.
      - Se o Ollama falhar ou não retornar `"nota"` numérica válida, tenta mais 1 vez; se continuar falhando, retorna `{"nota": None, "problemas": ["avaliação indisponível"]}` e trata o roteiro como **NÃO aprovado** (nunca assume nota 8).
      - Executa `deterministic_check()` junto da nota do modelo (média de 6 a 16 palavras por fala, pelo menos uma pergunta com `?`, nenhuma fala repetida e nenhuma fala começando igual a duas anteriores); se falhar, desconta 2 pontos e adiciona os motivos em `"problemas"`.
      - Após 2 regenerações com `nota < 7` (ou `nota is None`), salva o roteiro reprovado em `output/rejected_<data>.json` com a nota e os problemas e levanta `RuntimeError` (a menos que `--aceitar-nota-baixa` na CLI ou `"aceitar_nota_baixa": true` em `settings.json` esteja ativo).
@@ -52,9 +52,9 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
 - O script `publicar_github.py` cria/atualiza o repositório como **privado por padrão** (use `--publico` para público), lê o token exclusivamente de `GITHUB_TOKEN` ou `getpass` (sem argumento `--token` e sem eco no terminal) e faz push sem `force`.
 - Testes que utilizam áudios de demonstração sintetizam automaticamente um WAV silencioso via módulo padrão `wave` quando o arquivo local não existir.
 
-## Suíte de Testes (60 Testes)
+## Suíte de Testes (61 Testes)
 
-- `tests/test_news_auto.py` (35 testes) e `tests/test_integration.py` (25 testes) — totalizando **60 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
+- `tests/test_news_auto.py` (36 testes) e `tests/test_integration.py` (25 testes) — totalizando **61 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'

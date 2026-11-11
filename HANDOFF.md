@@ -118,10 +118,13 @@
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 59 testes passando (incluindo `test_item3_round2_non_decorative_fact`)
 - [x] **ITEM 4 — Variedade e muletas (`news_auto.py`, `validate_lines`)**: feito
-  - **Commit:** pendente de push — *"Limita muletas de concordancia, vocativos e proporcao de perguntas no dialogo"*
+  - **Commit:** `d31fd82fcaba34337f71fbe936a32058435df0da` — *"Limita muletas de concordancia, vocativos e proporcao de perguntas no dialogo"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 60 testes passando (incluindo `test_item4_round2_variety_and_crutches`)
-- [ ] **ITEM 5 — Juiz com evidência (`news_auto.py`, `evaluate_script`)**: pendente
+- [x] **ITEM 5 — Juiz com evidência (`news_auto.py`, `evaluate_script`)**: feito
+  - **Commit:** pendente de push — *"Exige problemas verificaveis com trecho da fala na avaliacao do juiz"*
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 61 testes passando (incluindo `test_item5_round2_judge_with_evidence`)
 - [ ] **ITEM 6 — Juiz de fatos não falha aberto (`news_auto.py`, `verificar_fatos`)**: pendente
 - [ ] **ITEM 7 — Prompt do redator e transparência (`news_auto.py`, `engine.py`)**: pendente
 - [ ] **ITEM 8 — A tela não pode apagar configurações (`gui.py`, `_save`)**: pendente

@@ -404,7 +404,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 0, 'text': 'Mano, é muita energia!', 'reacao': True},
             {'speaker': 0, 'text': 'Será que vai faltar luz pro resto do estado?', 'fato': 2}
         ]}
-        low_eval = {'nota': 5, 'problemas': ['Diálogo pouco natural']}
+        low_eval = {'nota': 5, 'problemas': [{'i': 1, 'trecho': 'comprou tudo da Caterpillar', 'tipo': 'informalidade', 'motivo': 'Diálogo pouco natural'}]}
         out_dir = Path(self.temp.name) / 'out_rej'
         # Inicial + 2 regenerações = 3 roteiros avaliados com nota 5 -> levanta RuntimeError e salva rejected_*.json
         responses = iter([facts_resp, script, low_eval, script, low_eval, script, low_eval])
@@ -416,7 +416,7 @@ class NewsAutoTests(unittest.TestCase):
         self.assertEqual(len(rejected_files), 1)
         saved = news_auto.json.loads(rejected_files[0].read_text(encoding='utf-8'))
         self.assertEqual(saved['nota'], 5)
-        self.assertIn('Diálogo pouco natural', saved['problemas'])
+        self.assertTrue(any('Diálogo pouco natural' in str(p) for p in saved['problemas']))
 
         # Com a flag ativa (--aceitar-nota-baixa / REELFORGE_ACCEPT_LOW_SCORE=1), permite seguir:
         responses_flag = iter([facts_resp, script, low_eval, script, low_eval, script, low_eval])
@@ -1361,6 +1361,72 @@ class NewsAutoTests(unittest.TestCase):
         res, prob = news_auto.validate_lines(valid_script, story, budget=100, facts=facts)
         self.assertEqual(prob, '')
         self.assertEqual(len(res), 6)
+
+    def test_item5_round2_judge_with_evidence(self):
+        lines = [
+            {'speaker': 0, 'text': 'Por que gastar 3,4 bilhões só em gerador?'},
+            {'speaker': 1, 'text': 'Cara, a Anthropic comprou tudo da Caterpillar!'},
+            {'speaker': 0, 'text': 'É que a rede elétrica do Texas não aguenta mais.'},
+            {'speaker': 1, 'text': 'Eles garantiram energia até 2045 pros data centers.'},
+            {'speaker': 0, 'text': 'Mano, é muita energia!'},
+            {'speaker': 1, 'text': 'Será que a rede elétrica vai aguentar?'},
+        ]
+        story = {'title': 'Anthropic compra geradores no Texas', 'body': 'Texto da matéria.'}
+
+        # 1. Juiz que reprova por "gancho longo" (critério objetivo sem trecho válido ou tipo inválido)
+        # Deve ser ignorado, logar a mensagem e subir a nota para 7
+        logs = []
+        mock_unverifiable = lambda i, p, m=None: {
+            'nota': 5,
+            'problemas': [
+                {'i': 0, 'trecho': 'gancho longo demais com mais de dez palavras', 'tipo': 'objetivo', 'motivo': 'gancho longo'},
+                'gancho com mais de 10 palavras',
+            ]
+        }
+        res_ignored = news_auto.evaluate_script(lines, story, ask=mock_unverifiable, log=logs.append)
+        self.assertEqual(res_ignored['nota'], 7)
+        self.assertEqual(len(res_ignored['problemas']), 0)
+        self.assertIn('reprovação sem problema verificável; ignorada', logs)
+
+        # 2. Juiz que aponta trecho real da fala com tipo permitido ("informalidade", "ritmo", "repeticao")
+        # Deve ser mantido e nota permanece < 7
+        logs_real = []
+        mock_real_snippet = lambda i, p, m=None: {
+            'nota': 5,
+            'problemas': [
+                {'i': 1, 'trecho': 'comprou tudo da Caterpillar', 'tipo': 'informalidade', 'motivo': 'expressão muito informal'}
+            ]
+        }
+        res_kept = news_auto.evaluate_script(lines, story, ask=mock_real_snippet, log=logs_real.append)
+        self.assertEqual(res_kept['nota'], 5)
+        self.assertEqual(len(res_kept['problemas']), 1)
+        self.assertEqual(res_kept['problemas'][0]['trecho'], 'comprou tudo da Caterpillar')
+        self.assertEqual(res_kept['problemas'][0]['tipo'], 'informalidade')
+        self.assertNotIn('reprovação sem problema verificável; ignorada', logs_real)
+
+        # 3. Trecho que não existe na fala i é descartado
+        mock_absent_snippet = lambda i, p, m=None: {
+            'nota': 4,
+            'problemas': [
+                {'i': 2, 'trecho': 'trecho inexistente no texto', 'tipo': 'ritmo', 'motivo': 'ruim'}
+            ]
+        }
+        logs_absent = []
+        res_absent = news_auto.evaluate_script(lines, story, ask=mock_absent_snippet, log=logs_absent.append)
+        self.assertEqual(res_absent['nota'], 7)
+        self.assertEqual(len(res_absent['problemas']), 0)
+        self.assertIn('reprovação sem problema verificável; ignorada', logs_absent)
+
+        # 4. Checagem determinística continua descontando 2 pontos se falhar
+        bad_deterministic = [
+            {'speaker': 0, 'text': 'Cara isso aqui mudou tudo no mercado agora.'},
+            {'speaker': 1, 'text': 'Cara isso aqui mudou tudo no mercado agora.'},
+            {'speaker': 0, 'text': 'Cara ninguém esperava esse resultado tão cedo.'},
+            {'speaker': 1, 'text': 'Fato curto.'},
+        ]
+        res_det = news_auto.evaluate_script(bad_deterministic, story, ask=lambda i, p, m=None: {'nota': 8, 'problemas': []}, log=lambda *a: None)
+        self.assertEqual(res_det['nota'], 6)
+        self.assertTrue(len(res_det['problemas']) > 0)
 
 
 if __name__ == '__main__':
