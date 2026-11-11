@@ -443,6 +443,24 @@ class NewsAutoTests(unittest.TestCase):
         self.assertIn('repetida', joined)
         self.assertIn('duas anteriores', joined)
 
+    def test_google_news_entry_with_li_summary_has_empty_body_and_fails_minimum_source(self):
+        li_items = ''.join(
+            f'<li>Manchete agregada número {i} com várias palavras extras sobre economia e política no país - Portal {i}</li>'
+            for i in range(12)
+        )
+        gnews_entry = {
+            'title': 'Banco Central anuncia nova medida cambial - Valor',
+            'source': {'title': 'Valor'},
+            'link': 'https://news.google.com/rss/articles/123',
+            'published': 'Sun, 08 Nov 2026 02:00:00 GMT',
+            'summary': f'<ol>{li_items}</ol>',
+        }
+        parsed = news_auto.parse_entry(gnews_entry, feed_name=None)
+        self.assertEqual(parsed['body'], '')
+        self.assertGreaterEqual(len(parsed['related']), 1)
+        with self.assertRaisesRegex(ValueError, 'sem corpo'):
+            news_auto.require_minimum_source(parsed)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

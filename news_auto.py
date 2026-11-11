@@ -195,7 +195,7 @@ def parse_entry(entry, feed_name=None):
         title = title[:-(len(source) + 3)].strip()
     elif not source and ' - ' in title:
         title, source = (part.strip() for part in title.rsplit(' - ', 1))
-    body = article_text(entry) if feed_name else article_text(entry)
+    body = article_text(entry) if feed_name else ''
     if body and _similar(body[:len(title) + 40], title) > 0.8:
         body = body[len(title):].strip() if body.startswith(title) else body
     related = []
