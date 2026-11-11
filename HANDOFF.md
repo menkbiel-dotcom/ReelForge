@@ -114,10 +114,13 @@
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 58 testes passando (incluindo `test_item2_round2_answered_hook_requirement`)
 - [x] **ITEM 3 — Marcação "fato" não pode ser decorativa (`news_auto.py`, `validate_lines`)**: feito
-  - **Commit:** pendente de push — *"Exige sobreposicao real de conteudo entre a fala e o fato citado"*
+  - **Commit:** `ab1c1534f258291a7bdffbe776c9bec5e4c9981b` — *"Exige sobreposicao real de conteudo entre a fala e o fato citado"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 59 testes passando (incluindo `test_item3_round2_non_decorative_fact`)
-- [ ] **ITEM 4 — Variedade e muletas (`news_auto.py`, `validate_lines`)**: pendente
+- [x] **ITEM 4 — Variedade e muletas (`news_auto.py`, `validate_lines`)**: feito
+  - **Commit:** pendente de push — *"Limita muletas de concordancia, vocativos e proporcao de perguntas no dialogo"*
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 60 testes passando (incluindo `test_item4_round2_variety_and_crutches`)
 - [ ] **ITEM 5 — Juiz com evidência (`news_auto.py`, `evaluate_script`)**: pendente
 - [ ] **ITEM 6 — Juiz de fatos não falha aberto (`news_auto.py`, `verificar_fatos`)**: pendente
 - [ ] **ITEM 7 — Prompt do redator e transparência (`news_auto.py`, `engine.py`)**: pendente

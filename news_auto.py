@@ -303,6 +303,11 @@ FILLER_CLOSE = re.compile(
     r'\b(que\s+(legal|bom|show|demais|maravilha|bacana)|incr[ií]vel|uau|show|demais)\b',
     re.I
 )
+CRUTCH_STARTERS_RE = re.compile(
+    r'^\s*(?:exatamente|isso\s+mesmo|verdade|concordo|pois\s+[eé]|realmente)\b',
+    re.I
+)
+VOCATIVES_RE = re.compile(r'\b(mano|cara|sasuke|naruto)s?\b', re.I)
 MIN_BODY = 80
 MIN_SOURCE_WORDS = 25
 MAX_BODY = 750
@@ -1312,6 +1317,37 @@ def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12, fa
             if shared_content < 2:
                 raise ValueError(f'A fala {i + 1} não apresenta sobreposição com o fato {idx} '
                                  '(exige pelo menos 2 palavras de conteúdo ou 1 número).')
+
+    # Item 4: Variedade e muletas
+    crutch_starts = sum(1 for t in texts if CRUTCH_STARTERS_RE.match(t))
+    if crutch_starts > 1:
+        raise ValueError('No máximo 1 fala pode começar com muletas de concordância '
+                         '("Exatamente", "Isso mesmo", "Verdade", "Concordo", "Pois é", "Realmente").')
+
+    total_vocatives = 0
+    for i, t in enumerate(texts):
+        vocs = VOCATIVES_RE.findall(t)
+        if vocs:
+            total_vocatives += len(vocs)
+            has_nums = bool(_numbers(t) or _quantity_pairs(t) or re.search(r'\d', t))
+            if has_nums:
+                raise ValueError(f'A fala {i + 1} contém vocativo ("{vocs[0]}") em fala que carrega número; '
+                                 'separe a explicação numérica do vocativo.')
+    if total_vocatives > 3:
+        raise ValueError(f'O roteiro tem {total_vocatives} vocativos (mano, cara, Sasuke, Naruto); '
+                         'o limite máximo permitido é 3.')
+
+    questions_count = sum(1 for t in texts if '?' in t)
+    if len(texts) > 0 and (questions_count / len(texts)) > 0.50:
+        raise ValueError(f'No máximo 50% das falas podem ser perguntas '
+                         f'({questions_count} de {len(texts)} falas são perguntas).')
+
+    first_speaker = lines[0].get('speaker') if lines[0].get('speaker') in (0, 1) else 0
+    sasuke_has_provocation = any(('?' in texts[i] or '!' in texts[i])
+                                 for i in range(len(texts))
+                                 if (first_speaker + i) % 2 == 0)
+    if not sasuke_has_provocation:
+        raise ValueError('O Sasuke deve fazer pelo menos 1 pergunta ou provocação no roteiro.')
 
     first = lines[0].get('speaker') if lines[0].get('speaker') in (0, 1) else 0
     result = []

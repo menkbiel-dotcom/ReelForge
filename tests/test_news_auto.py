@@ -61,7 +61,7 @@ class NewsAutoTests(unittest.TestCase):
                                 'O foco desse modelo é áudio de estúdio.', 'O modelo chega este mês.', 'É voltado a profissionais.']}
         bad = {'lines': [{'speaker': 0, 'text': 'Pagaria 50 mil reais num Walkman?', 'fato': 1}] + [{'speaker': 0, 'text': 'O aparelho custa 32 mil.', 'fato': 1}] * 5}
         good = {'lines': [{'speaker': 1, 'text': 'Naruto: Pagaria 32 mil reais num Walkman hoje?', 'fato': 1},
-                          {'speaker': 1, 'text': 'Cara, R$ 32 mil é preço de carro!', 'fato': 1},
+                          {'speaker': 1, 'text': 'R$ 32 mil é preço de carro!', 'fato': 1},
                           {'speaker': 0, 'text': 'A Sony lançou esse modelo focado em estúdio.', 'fato': 2},
                           {'speaker': 0, 'text': 'Mesmo assim, quem no Brasil vai comprar esse Walkman?', 'fato': 0},
                           {'speaker': 1, 'text': 'Caramba, só colecionador!', 'reacao': True},
@@ -1264,6 +1264,103 @@ class NewsAutoTests(unittest.TestCase):
         res_num, prob_num = news_auto.validate_lines(number_line_data, story, budget=120, facts=facts)
         self.assertEqual(prob_num, '')
         self.assertEqual(len(res_num), 6)
+
+    def test_item4_round2_variety_and_crutches(self):
+        story = {
+            'title': 'Exportações de café no Brasil batem recorde histórico',
+            'body': (
+                'O Brasil exportou 16,591 milhões de sacas nos quatro primeiros meses. '
+                'A receita cambial somou US$ 1,786 bilhão, superando o recorde anterior '
+                'de 1,657 bilhão registrado no ciclo passado. A queda de 9,5% no preço médio '
+                'aconteceu pelo aumento do conilon. Os embarques cresceram no período.'
+            ),
+            'extracted_facts': [
+                'O Brasil exportou 16,591 milhões de sacas nos quatro primeiros meses.',
+                'A receita cambial somou US$ 1,786 bilhão.',
+                'O recorde anterior era de 1,657 bilhão de dólares.',
+                'O preço médio caiu 9,5% pelo aumento do café conilon.',
+                'Os embarques bateram recorde histórico.',
+            ]
+        }
+        facts = story['extracted_facts']
+
+        # 1. Roteiro fixture Fertilizantes: fala 5 tem vocativo ("mano") em fala com número
+        fert_path = Path(__file__).parent / 'fixtures' / 'rejected_20261111_192441_627729.json'
+        with open(fert_path, encoding='utf-8') as f:
+            fert_data = json.load(f)
+        fert_story = {
+            'title': fert_data['title'],
+            'body': 'O Brasil precisa de R$ 220 bilhões a R$ 460 bilhões para fertilizantes em 20 anos. ' * 3
+        }
+        fert_facts = [
+            'O Brasil precisa de R$ 220 bilhões a R$ 460 bilhões para fertilizantes em 20 anos.',
+            'O investimento anual seria de cerca de R$ 20 bilhões.',
+            'O plano abrange 20 anos de desenvolvimento.',
+            'A meta é elevar a produção nacional.',
+        ]
+        fert_test_lines = [
+            {'speaker': 0, 'text': 'Quanto dinheiro o Brasil precisa para fertilizantes?', 'fato': 0},
+            {'speaker': 1, 'text': 'São R$ 460 bilhões para fertilizantes!', 'fato': 0},
+            {'speaker': 0, 'text': 'Isso vai levar cerca de 20 anos.', 'fato': 0},
+            {'speaker': 1, 'text': 'Entre R$ 220 bilhões e R$ 460 bilhões, mano.', 'fato': 0},
+        ]
+        with self.assertRaisesRegex(ValueError, r'contém vocativo \("mano"\) em fala que carrega número'):
+            news_auto.validate_lines({'lines': fert_test_lines}, fert_story, budget=100, facts=fert_facts)
+
+        # 2. No máximo 1 fala começando com muletas de concordância
+        bad_crutches = {'lines': [
+            {'speaker': 0, 'text': 'O Brasil exportou café este ano?', 'fato': 0},
+            {'speaker': 1, 'text': 'Exatamente, foram 16,591 milhões de sacas.', 'fato': 0},
+            {'speaker': 0, 'text': 'Pois é, a receita cambial foi de US$ 1,786 bilhão.', 'fato': 1},
+            {'speaker': 1, 'text': 'Será que os embarques batem outro recorde?', 'fato': 4},
+        ]}
+        with self.assertRaisesRegex(ValueError, r'No máximo 1 fala pode começar com muletas de concordância'):
+            news_auto.validate_lines(bad_crutches, story, budget=100, facts=facts)
+
+        # 3. No máximo 3 vocativos no roteiro
+        too_many_vocatives = {'lines': [
+            {'speaker': 0, 'text': 'Viu esse recorde histórico no Brasil, Sasuke?', 'fato': 4},
+            {'speaker': 1, 'text': 'Cara, os embarques bateram recorde histórico.', 'fato': 4},
+            {'speaker': 0, 'text': 'Mano, a receita cambial subiu muito!', 'fato': 1},
+            {'speaker': 1, 'text': 'Naruto, será que os embarques batem outro recorde?', 'fato': 4},
+            {'speaker': 0, 'text': 'Foram 16,591 milhões de sacas.', 'fato': 0},
+            {'speaker': 1, 'text': 'A receita somou US$ 1,786 bilhão.', 'fato': 1},
+        ]}
+        with self.assertRaisesRegex(ValueError, r'O roteiro tem 4 vocativos .* o limite máximo permitido é 3'):
+            news_auto.validate_lines(too_many_vocatives, story, budget=100, facts=facts)
+
+        # 4. No máximo 50% das falas podem ser perguntas
+        too_many_questions = {'lines': [
+            {'speaker': 0, 'text': 'O Brasil exportou quanto café?', 'fato': 0},
+            {'speaker': 1, 'text': 'Foram 16,591 milhões de sacas embarcadas?', 'fato': 0},
+            {'speaker': 0, 'text': 'A receita cambial atingiu US$ 1,786 bilhão?', 'fato': 1},
+            {'speaker': 1, 'text': 'Os embarques bateram recorde histórico.', 'fato': 4},
+        ]}
+        with self.assertRaisesRegex(ValueError, r'No máximo 50% das falas podem ser perguntas'):
+            news_auto.validate_lines(too_many_questions, story, budget=100, facts=facts)
+
+        # 5. Sasuke deve fazer pelo menos 1 pergunta ou provocação
+        sasuke_no_provocation = {'lines': [
+            {'speaker': 0, 'text': 'O Brasil exportou 16,591 milhões de sacas.', 'fato': 0},
+            {'speaker': 1, 'text': 'Os embarques bateram recorde histórico?', 'fato': 4},
+            {'speaker': 0, 'text': 'A receita cambial somou US$ 1,786 bilhão.', 'fato': 1},
+            {'speaker': 1, 'text': 'O preço médio caiu 9,5% no período.', 'fato': 3},
+        ]}
+        with self.assertRaisesRegex(ValueError, r'O Sasuke deve fazer pelo menos 1 pergunta ou provocação'):
+            news_auto.validate_lines(sasuke_no_provocation, story, budget=100, facts=facts)
+
+        # 6. Roteiro válido com variedade equilibrada passa
+        valid_script = {'lines': [
+            {'speaker': 0, 'text': 'Viu esse novo recorde histórico de café?', 'fato': 4},
+            {'speaker': 1, 'text': 'Cara, os embarques bateram recorde histórico!', 'fato': 4},
+            {'speaker': 0, 'text': 'Exatamente, foram 16,591 milhões de sacas.', 'fato': 0},
+            {'speaker': 1, 'text': 'A receita cambial somou US$ 1,786 bilhão.', 'fato': 1},
+            {'speaker': 0, 'text': 'Mas o preço médio caiu 9,5% pelo conilon.', 'fato': 3},
+            {'speaker': 1, 'text': 'Será que os embarques continuam batendo recorde?', 'fato': 4},
+        ]}
+        res, prob = news_auto.validate_lines(valid_script, story, budget=100, facts=facts)
+        self.assertEqual(prob, '')
+        self.assertEqual(len(res), 6)
 
 
 if __name__ == '__main__':
