@@ -1,5 +1,6 @@
 import asyncio
 import copy
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -15,7 +16,10 @@ import script_io
 import engine
 
 ROOT = Path(__file__).resolve().parents[1]
-AUDIO = (ROOT/'assets/demo_ninja/voice_0.wav').read_bytes()
+HAS_TKINTER = importlib.util.find_spec('tkinter') is not None
+HAS_DEMO_GAMEPLAY = (ROOT / 'assets/gameplay/parkour_teste.mp4').is_file()
+HAS_DEMO_AUDIO = (ROOT / 'assets/demo_ninja/voice_0.wav').is_file()
+AUDIO = (ROOT / 'assets/demo_ninja/voice_0.wav').read_bytes() if (ROOT / 'assets/demo_ninja/voice_0.wav').is_file() else b'RIFF$\x00\x00\x00WAVEfmt '
 
 
 def profile(provider='elevenlabs'):
@@ -73,6 +77,7 @@ class SpeechTests(unittest.TestCase):
         with patch('requests.post',return_value=r):
             with self.assertRaises(ValueError):asyncio.run(speech.synthesize_one('Olá!',profile(),self.root))
         self.assertFalse(list(self.root.iterdir()))
+    @unittest.skipUnless(HAS_DEMO_AUDIO, 'Requer áudio de demonstração local')
     def test_imported_audio_never_synthesized(self):
         lines=[{'text':'A gravação original','speaker':0,'audio':ROOT/'assets/demo_ninja/voice_0.wav','audio_source':'imported'}]
         with patch('speech.synthesize_one') as synth:
@@ -117,6 +122,7 @@ class CaptionTests(unittest.TestCase):
 
 
 class AppTests(unittest.TestCase):
+    @unittest.skipUnless(HAS_DEMO_GAMEPLAY and HAS_DEMO_AUDIO, 'Requer gameplay e áudios de demonstração locais')
     def test_import_resolves_recordings_relative_to_manifest(self):
         _,lines,bg=script_io.load(ROOT/'assets/demo/dialogue.json')
         self.assertEqual(len(lines),6);self.assertTrue(Path(lines[0]['audio']).is_absolute());self.assertTrue(bg.is_file())
@@ -124,11 +130,13 @@ class AppTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)/'script.json';p.write_text(json.dumps({'lines':[{'speaker':True,'text':'Oi'}]}))
             with self.assertRaises(ValueError):script_io.load(p)
+    @unittest.skipUnless(HAS_DEMO_GAMEPLAY and HAS_DEMO_AUDIO, 'Requer gameplay e áudios de demonstração locais')
     def test_imported_audio_is_not_truncated_to_duration_limit(self):
         _,lines,_=script_io.load(ROOT/'assets/demo/dialogue.json')
         with tempfile.TemporaryDirectory() as d:
             with self.assertRaisesRegex(RuntimeError,'gravações importadas'):
                 asyncio.run(engine.fit_narration(lines,Path(d),10))
+    @unittest.skipUnless(HAS_TKINTER, 'Requer tkinter instalado')
     def test_gui_configuration_does_not_save_credentials(self):
         import gui
         with tempfile.TemporaryDirectory() as d,patch.object(gui,'CONFIG',Path(d)/'settings.json'):
@@ -140,6 +148,7 @@ class AppTests(unittest.TestCase):
                 self.assertNotIn('private-voice-key',saved);self.assertNotIn('private-llm-key',saved)
                 self.assertEqual(app.voice_a.get(),'')
             finally:app.destroy()
+    @unittest.skipUnless(HAS_TKINTER and HAS_DEMO_GAMEPLAY and HAS_DEMO_AUDIO, 'Requer tkinter e assets de demonstração')
     def test_imported_script_survives_changed_render_settings(self):
         import gui
         app=gui.App();app.withdraw()

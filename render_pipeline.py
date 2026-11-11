@@ -69,7 +69,7 @@ def render(engine, news, lines, gameplay, fps=30, max_seconds=45,
         args += ['-i', line['audio']]
         delay = round(line['start'] * 1000)
         filters.append(f'[{i}:a]adelay={delay}|{delay}[a{i}]')
-    filters.append(''.join(f'[a{i}]' for i in range(len(prepared))) + f'amix=inputs={len(prepared)}:normalize=0,alimiter=limit=0.95:level=false[aout]')
+    filters.append(''.join(f'[a{i}]' for i in range(len(prepared))) + f'amix=inputs={len(prepared)}:normalize=0,highpass=f=80,acompressor=threshold=-18dB:ratio=2.2:attack=10:release=120,alimiter=limit=0.95:level=false[aout]')
     dialogue = work / 'dialogue.m4a'
     engine.run(['ffmpeg', '-y', '-v', 'error', *args, '-filter_complex', ';'.join(filters),
                 '-map', '[aout]', '-c:a', 'aac', '-b:a', '192k', dialogue])
@@ -89,7 +89,7 @@ def render(engine, news, lines, gameplay, fps=30, max_seconds=45,
                                          os.getenv('REELFORGE_BG_GAMMA', '0.85'))
     fade = min(.6, total / 4) if loop else 0
     chain = ['[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1'
-             f',eq=brightness={brightness}:gamma={gamma},fps={fps},settb=AVTB'
+             f',eq=brightness={brightness}:gamma={gamma},vignette=PI/6,fps={fps},settb=AVTB'
              + ('[bgsrc]' if loop else '[bg]')]
     if loop:
         # Loop do fundo: os primeiros quadros misturam o trecho logo após o fim com o começo,
@@ -152,7 +152,7 @@ def render(engine, news, lines, gameplay, fps=30, max_seconds=45,
     chain = [c.replace('[SPRITE0:v]', f'[{first_sprite}:v]').replace('[SPRITE1:v]', f'[{first_sprite + 1}:v]')
              for c in chain]
     print('Renderizando MP4...')
-    engine.run(['ffmpeg', '-y', '-v', 'error', '-stream_loop', '-1', *start,
+    engine.run(['ffmpeg', '-y', '-v', 'error', '-threads', '0', '-stream_loop', '-1', *start,
                 '-t', f'{total + fade + 0.5:.4f}', '-i', gameplay,
                 *audio_inputs, *sprite_args, '-filter_complex', ';'.join(chain),
                 '-map', '[vout]', '-map', '[aout]', '-t', f'{total:.4f}', '-r', fps,

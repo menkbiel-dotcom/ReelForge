@@ -1,14 +1,18 @@
 """Testes offline do fluxo automático RSS -> Ollama (rede e modelo simulados)."""
+import importlib.util
 import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import engine
 import news_auto
 import render_pipeline
+import voice_studio
+
+HAS_NUMPY = importlib.util.find_spec('numpy') is not None
 
 
 def entry(title, source, link):
@@ -208,6 +212,7 @@ class NewsAutoTests(unittest.TestCase):
         self.assertEqual(len(calls), 5)  # 1 extração + 1 roteiro v1 + 1 nota 5 + 1 roteiro v2 + 1 nota 9
         self.assertIn('Será que vai faltar luz', lines[-1]['text'])
 
+    @unittest.skipUnless(HAS_NUMPY, 'Requer numpy instalado')
     def test_generated_music_loops_seamlessly(self):
         import music, wave, numpy as np
         dest = Path(self.temp.name) / 'm.wav'
@@ -262,6 +267,89 @@ class NewsAutoTests(unittest.TestCase):
         self.assertEqual(news_auto.turn_range({'title': 'Curta', 'body': ''}, 120), (4, 8))
         self.assertEqual(news_auto.turn_range({'title': 'Média', 'body': 'palavra ' * 120}, 120), (6, 10))
         self.assertEqual(news_auto.turn_range({'title': 'Rica', 'body': 'palavra ' * 350}, 140), (8, 12))
+
+    def test_voicestudio_reference_reuses_memory_cache_within_ttl(self):
+        voice_studio._ref_cache.clear()
+        voices_resp = Mock(status_code=200)
+        voices_resp.json.return_value = {'voices': [{'type': 'profile', 'name': 'Sasuke', 'voice_id': 'v-sasuke'}]}
+        voices_resp.raise_for_status = Mock()
+        audio_resp = Mock(status_code=200, content=b'RIFF-ref-audio-bytes')
+        audio_resp.raise_for_status = Mock()
+        session = Mock()
+        session.__enter__ = Mock(return_value=session)
+        session.__exit__ = Mock(return_value=False)
+        session.get.side_effect = [voices_resp, audio_resp]
+        with patch('voice_studio._ensure_voicestudio_running'), patch('voice_studio.requests.Session', return_value=session):
+            first = voice_studio.reference('sasuke')
+            second = voice_studio.reference('  SASUKE  ')
+        self.assertEqual(first, b'RIFF-ref-audio-bytes')
+        self.assertEqual(second, b'RIFF-ref-audio-bytes')
+        self.assertEqual(session.get.call_count, 2)  # 1 /v1/audio/voices + 1 /profiles/.../audio na 1ª chamada; 0 na 2ª
+
+    def test_prepared_reference_caches_on_disk_and_memory_without_retranscribing(self):
+        voice_studio._prepared_cache.clear()
+        cache_dir = Path(self.temp.name) / 'vs_cache'
+        ref_bytes = b'RIFF-test-voice-reference-sample'
+
+        def fake_run(cmd):
+            Path(cmd[-1]).write_bytes(b'RIFF-short-24k-mono')
+            return ''
+
+        fake_words = [{'text': 'Olá'}, {'text': 'mundo'}, {'text': 'teste'}, {'text': 'voz'}]
+        with patch('voice_studio.run', side_effect=fake_run) as run_mock, \
+             patch('voice_studio.whisper_words', return_value=fake_words) as whisper_mock:
+            p1, t1 = voice_studio._prepared_reference(ref_bytes, cache_dir)
+            p2, t2 = voice_studio._prepared_reference(ref_bytes, cache_dir)
+            voice_studio._prepared_cache.clear()
+            p3, t3 = voice_studio._prepared_reference(ref_bytes, cache_dir)
+
+        self.assertEqual((p1, t1), (p2, t2))
+        self.assertEqual((p1, t1), (p3, t3))
+        self.assertEqual(t1, 'Olá mundo teste voz')
+        self.assertEqual(run_mock.call_count, 1)
+        self.assertEqual(whisper_mock.call_count, 1)
+        self.assertTrue(p1.is_file())
+        self.assertTrue(p1.with_suffix('.txt').is_file())
+
+    def test_render_filtergraph_contains_vignette_acompressor_and_loudnorm(self):
+        gameplay = Path(self.temp.name) / 'bg.mp4'
+        gameplay.write_bytes(b'fake-mp4')
+        audio0 = Path(self.temp.name) / 'a0.mp3'
+        audio1 = Path(self.temp.name) / 'a1.mp3'
+        audio0.write_bytes(b'fake-mp3-0')
+        audio1.write_bytes(b'fake-mp3-1')
+        lines = [
+            {'speaker': 0, 'text': 'Primeira fala aqui?', 'duration': 1.2, 'audio': audio0},
+            {'speaker': 1, 'text': 'Segunda fala aqui!', 'duration': 1.3, 'audio': audio1},
+        ]
+
+        async def fake_fit(lns, *args, **kwargs):
+            return lns
+
+        cmds = []
+
+        def fake_run(cmd):
+            cmds.append([str(c) for c in cmd])
+            Path(cmd[-1]).write_bytes(b'out')
+            return ''
+
+        with patch.object(engine, 'OUTPUT', Path(self.temp.name) / 'out'), \
+             patch.object(engine, 'fit_narration', side_effect=fake_fit), \
+             patch.object(engine, 'run', side_effect=fake_run), \
+             patch.object(engine, 'ffprobe_duration', return_value=30.0), \
+             patch.object(engine, 'character', side_effect=lambda p, i, m: Path(p).write_bytes(b'png')), \
+             patch.object(engine, 'mark_used'), \
+             patch('captions.align_lines'), \
+             patch('captions.write_ass', side_effect=lambda l, p, *a, **k: Path(p).write_text('ass', encoding='utf-8')), \
+             patch.dict('os.environ', {'REELFORGE_MUSIC': '0'}):
+            render_pipeline.render(engine, {'title': 'T'}, lines, gameplay, fps=30, max_seconds=30)
+
+        self.assertEqual(len(cmds), 2)
+        mix_cmd, final_cmd = ' '.join(cmds[0]), ' '.join(cmds[1])
+        self.assertIn('highpass=f=80,acompressor=threshold=-18dB:ratio=2.2:attack=10:release=120,alimiter=limit=0.95:level=false', mix_cmd)
+        self.assertIn('vignette=PI/6', final_cmd)
+        self.assertIn('loudnorm=I=-14:TP=-1.5:LRA=11', final_cmd)
+        self.assertIn('-threads 0', final_cmd)
 
 
 if __name__ == '__main__':

@@ -7,6 +7,7 @@ import json
 import os
 import random
 import re
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -282,14 +283,28 @@ def font(size):
 def character(path, index, mouth_open):
     # Current production sprites, one actor visible per speech turn.
     from characters import ASSETS
+    from PIL import ImageFilter
     source = ROOT / 'assets' / 'characters' / ASSETS[index]
     if not source.is_file():
         raise FileNotFoundError('Asset do personagem ausente: ' + str(source))
+    cache_dir = OUTPUT / 'cache'
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cached = cache_dir / f'sprite_v2_{index}_{source.stat().st_mtime_ns}.png'
+    if cached.is_file():
+        shutil.copyfile(cached, path)
+        return
     image = Image.open(source).convert('RGBA')
-    image.thumbnail((510, 640), Image.Resampling.LANCZOS)
+    image.thumbnail((500, 630), Image.Resampling.LANCZOS)
     canvas = Image.new('RGBA', (540, 670))
-    canvas.alpha_composite(image, ((540 - image.width) // 2, 670 - image.height))
-    canvas.save(path)
+    ox, oy = (540 - image.width) // 2, 662 - image.height
+    # Sombra suave projetada atrás do personagem para destacar sobre qualquer gameplay.
+    alpha = image.getchannel('A').filter(ImageFilter.GaussianBlur(9))
+    shadow = Image.new('RGBA', image.size, (0, 0, 0, 0))
+    shadow.putalpha(alpha.point(lambda p: int(p * 0.62)))
+    canvas.alpha_composite(shadow, (ox, min(670 - image.height, oy + 6)))
+    canvas.alpha_composite(image, (ox, oy))
+    canvas.save(cached)
+    shutil.copyfile(cached, path)
 
 
 def ass_time(t):
