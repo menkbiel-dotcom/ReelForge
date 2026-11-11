@@ -15,11 +15,14 @@
   - **Arquivos tocados:** `news_auto.py`, `settings.json`, `README.md`, `CLAUDE.md`, `HANDOFF.md`, `tests/test_news_auto.py`
   - **Testes:** 51 testes passando (incluindo `test_item3_fact_checking_judge_and_criteria`)
 - [x] **ITEM 4 — Passo 1 devolve o ângulo (`news_auto.py`)**: feito
-  - **Commit:** a registrar após push — *"Extrai angulo e contradicao no passo 1 e exige resposta para perguntas no roteiro"*
+  - **Commit:** `4643e641b4a2f70d325438b7ee70e7f0f8d60152` — *"Extrai angulo e contradicao no passo 1 e exige resposta para perguntas no roteiro"*
   - **Arquivos tocados:** `news_auto.py`, `CLAUDE.md`, `HANDOFF.md`, `tests/test_news_auto.py`
   - **Testes:** 52 testes passando (incluindo `test_item4_step1_hook_and_contradiction`)
-- [ ] **ITEM 5 — Limpar o corpo da matéria (`news_auto.py`, `article_text`)**: em andamento / próximo
-- [ ] **ITEM 6 — Legendas e acabamento (`captions.py`, `instalar_legendas.bat`, `README.md`, `engine.py`, testes)**: pendente
+- [x] **ITEM 5 — Limpar o corpo da matéria (`news_auto.py`, `article_text`)**: feito
+  - **Commit:** a registrar após push — *"Limpa chamadas e manchetes de leia tambem do corpo da materia no RSS"*
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 53 testes passando (incluindo `test_item5_clean_article_body_html_and_flat_text`)
+- [ ] **ITEM 6 — Legendas e acabamento (`captions.py`, `instalar_legendas.bat`, `README.md`, `engine.py`, testes)**: pendente / próximo
 
 ---
 
@@ -71,12 +74,15 @@
   - Campos `"contradicao"` e `"gancho"` são salvos em `story`, no JSON de saída do reel e nos scripts rejeitados.
 
 ### ITEM 5 — Limpar o corpo da matéria (`news_auto.py`, `article_text`)
-- **Status:** pendente
-- **Escopo:**
-  - Parsear HTML de `content:encoded` e remover `<a>` isolados, `<ul>/<ol>/<li>`, `<figure>`, `<aside>` e classes com `"related"`, `"leia"`, `"veja"`, `"saiba"`.
-  - Fallback texto plano: remover sequências de 2 ou mais trechos curtos sem pontuação final iniciados em maiúscula.
-  - Teste com string de café: resultado não pode conter `"31%"` nem `"melhor agosto da história"`.
-- **Arquivos a tocar:** `news_auto.py`, `tests/test_news_auto.py`.
+- **Status:** feito
+- **O que foi feito:**
+  - `_NewsHTMLCleaner` parseia HTML de `content:encoded` e `summary` com `html.parser.HTMLParser`.
+  - Remove tags `<ul>/<ol>/<li>`, `<figure>`, `<figcaption>`, `<aside>`, `<script>`, `<style>` e elementos cuja classe ou id contenha `"related"`, `"relacionad"`, `"leia"`, `"veja"`, `"saiba"`.
+  - Remove links `<a>` isolados (links que ocupam sozinhos o parágrafo ou bloco sem texto antes/depois).
+  - Preserva links inline dentro de frases normais (`Segundo a <a href="...">entidade</a>...`).
+  - Fallback para texto plano (`strip_glued_headlines`): remove sequências de 2 ou mais trechos curtos (6 a 20 palavras) sem pontuação final iniciados em maiúscula entre frases normais.
+  - Testes passando (`test_item5_clean_article_body_html_and_flat_text`): verifica remoção completa de elementos HTML e valida a string de "leia também" colada do caso real do café (sem `"31%"`, sem `"melhor agosto da história"`, sem `"20 meses"` e sem `"20% em julho"`).
+- **Próxima ação concreta:** Implementar ITEM 6 (`captions.py`, `instalar_legendas.bat`, `README.md`, `engine.py`, `tests/test_integration.py`).
 
 ### ITEM 6 — Legendas e acabamento
 - **Status:** pendente

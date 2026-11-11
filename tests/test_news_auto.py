@@ -991,8 +991,69 @@ class NewsAutoTests(unittest.TestCase):
         self.assertIn('PRIMEIRA FALA OBRIGATÓRIA', received_instructions[0])
         self.assertIn('Perguntas feitas por um personagem DEVEM ser respondidas', received_instructions[0])
 
+    def test_item5_clean_article_body_html_and_flat_text(self):
+        # 1. HTML parsing: remove <a> isolados, <ul>/<ol>/<li>, <figure>, <aside> e classes/ids com related/leia/veja/saiba
+        html_content = '''
+        <p>O Brasil bateu recorde e exportou 5,3 milhões de sacas de café em outubro.</p>
+        <ul class="noticias-relacionadas">
+            <li><a href="http://news/1">Exportação de café cresce 31% e tem melhor agosto da história</a></li>
+            <li><a href="http://news/2">Exportação de café verde do Brasil atinge maior nível em 20 meses</a></li>
+        </ul>
+        <ol>
+            <li>Outro item de lista que deve sumir com números como 99%</li>
+        </ol>
+        <aside>
+            <p>Texto lateral que não faz parte da matéria original.</p>
+        </aside>
+        <figure>
+            <img src="foto.jpg" />
+            <figcaption>Foto do porto de Santos</figcaption>
+        </figure>
+        <div class="box-related-news">
+            <p>Mais notícias do agronegócio para você conferir.</p>
+        </div>
+        <div class="bloco-leia-tambem">
+            <p>Leia também sobre o preço do trigo no Paraná.</p>
+        </div>
+        <section id="veja-mais-destaques">
+            <p>Veja mais destaques da semana no agro nacional.</p>
+        </section>
+        <p><a href="http://link-isolado.com">Link Isolado em Parágrafo Sozinho</a></p>
+        <a href="http://link-solto.com">Link Solto Fora de Bloco</a>
+        <p>A receita foi de US$ 1,786 bilhão, de acordo com o <a href="http://cecafe.com.br">Conselho dos Exportadores</a>, uma alta de 7,8%.</p>
+        '''
+        cleaned_html = news_auto.article_text({'content:encoded': html_content})
+        self.assertIn('5,3 milhões de sacas', cleaned_html)
+        self.assertIn('US$ 1,786 bilhão', cleaned_html)
+        self.assertIn('Conselho dos Exportadores', cleaned_html)  # inline <a> preservado
+        self.assertNotIn('31%', cleaned_html)
+        self.assertNotIn('melhor agosto da história', cleaned_html)
+        self.assertNotIn('20 meses', cleaned_html)
+        self.assertNotIn('99%', cleaned_html)
+        self.assertNotIn('Texto lateral', cleaned_html)
+        self.assertNotIn('porto de Santos', cleaned_html)
+        self.assertNotIn('agronegócio', cleaned_html)
+        self.assertNotIn('trigo no Paraná', cleaned_html)
+        self.assertNotIn('agro nacional', cleaned_html)
+        self.assertNotIn('Link Isolado', cleaned_html)
+        self.assertNotIn('Link Solto', cleaned_html)
 
-
+        # 2. Fallback para texto plano com manchetes coladas do café
+        coffee_flat = (
+            'O resultado deste ano ficou 2,9% acima daquele patamar. '
+            'Exportação de café cresce 31% e tem melhor agosto da história '
+            'Exportação de café verde do Brasil atinge maior nível em 20 meses '
+            'Exportações de café solúvel sobem 20% em julho '
+            'Segundo o presidente do Cecafé, Márcio Ferreira, o desempenho reflete a entrada mais intensa '
+            'dos cafés da nova safra a partir de setembro , após chuvas atrasarem a colheita nas regiões produtoras.'
+        )
+        cleaned_flat = news_auto.article_text({'summary': coffee_flat})
+        self.assertNotIn('31%', cleaned_flat)
+        self.assertNotIn('melhor agosto da história', cleaned_flat)
+        self.assertNotIn('20 meses', cleaned_flat)
+        self.assertNotIn('20% em julho', cleaned_flat)
+        self.assertIn('2,9%', cleaned_flat)
+        self.assertIn('Segundo o presidente do Cecafé, Márcio Ferreira', cleaned_flat)
 
 
 if __name__ == '__main__':

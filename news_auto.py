@@ -8,6 +8,7 @@ passos, a redação do diálogo e o filtro de qualidade são feitos pelo Ollama 
 import calendar
 import hashlib
 import html
+from html.parser import HTMLParser
 import json
 import math
 import os
@@ -352,13 +353,204 @@ def read_feed(url):
     return entries
 
 
+VOID_HTML_TAGS = {'img', 'br', 'hr', 'meta', 'link', 'input'}
+DROP_HTML_TAGS = {'figure', 'figcaption', 'aside', 'ul', 'ol', 'li', 'script', 'style'}
+DROP_HTML_KEYWORDS = ('related', 'relacionad', 'leia', 'veja', 'saiba')
+
+
+class _NewsHTMLCleaner(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.blocks = []
+        self.current_block = []
+        self.drop_stack = []
+        self.a_stack = []
+
+    def handle_starttag(self, tag, attrs):
+        tag_lower = tag.lower()
+        attr_dict = {k.lower(): (v or '') for k, v in attrs}
+        classes = attr_dict.get('class', '').lower()
+        ids = attr_dict.get('id', '').lower()
+
+        should_drop = (
+            tag_lower in DROP_HTML_TAGS or
+            any(k in classes or k in ids for k in DROP_HTML_KEYWORDS)
+        )
+        if should_drop:
+            if tag_lower not in VOID_HTML_TAGS:
+                self.drop_stack.append(tag_lower)
+            return
+
+        if self.drop_stack:
+            if tag_lower not in VOID_HTML_TAGS:
+                self.drop_stack.append(tag_lower)
+            return
+
+        if tag_lower in ('p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'section', 'article', 'br'):
+            self._flush_block()
+            return
+
+        if tag_lower == 'a':
+            text_before = ''.join(self.current_block).strip()
+            self.a_stack.append({
+                'text_before': text_before,
+                'block_pos_start': len(self.current_block),
+            })
+
+    def handle_endtag(self, tag):
+        tag_lower = tag.lower()
+        if self.drop_stack:
+            if tag_lower in self.drop_stack:
+                while self.drop_stack and self.drop_stack[-1] != tag_lower:
+                    self.drop_stack.pop()
+                if self.drop_stack:
+                    self.drop_stack.pop()
+            return
+
+        if tag_lower == 'a':
+            if self.a_stack:
+                info = self.a_stack.pop()
+                info['block_pos_end'] = len(self.current_block)
+                if not hasattr(self, '_current_block_links'):
+                    self._current_block_links = []
+                self._current_block_links.append(info)
+            return
+
+        if tag_lower in ('p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'section', 'article'):
+            self._flush_block()
+
+    def handle_data(self, data):
+        if self.drop_stack:
+            return
+        if data.strip():
+            self.current_block.append(data)
+        elif self.current_block:
+            self.current_block.append(' ')
+
+    def _flush_block(self):
+        links = getattr(self, '_current_block_links', [])
+        self._current_block_links = []
+        if self.current_block:
+            full_text = ''.join(self.current_block).strip()
+            for link in links:
+                if not link['text_before']:
+                    text_after = ''.join(self.current_block[link['block_pos_end']:]).strip()
+                    if not text_after:
+                        self.current_block = []
+                        return
+            if full_text:
+                self.blocks.append(full_text)
+            self.current_block = []
+
+    def get_blocks(self):
+        self._flush_block()
+        return self.blocks
+
+
+def strip_glued_headlines(text):
+    """Remove sequências de 2 ou mais manchetes/chamadas curtas coladas sem pontuação final."""
+    words = text.split()
+    n = len(words)
+    if n < 12:
+        return text
+
+    def has_any_punct(w):
+        return any(w.endswith(p) for p in ('.', '!', '?', ';', ':', ','))
+
+    def has_term_punct(w):
+        return any(w.endswith(p) for p in ('.', '!', '?'))
+
+    def is_upper_start(w):
+        clean = w.lstrip('"\'“‘([')
+        return bool(clean and clean[0].isupper() and not clean.startswith(','))
+
+    def is_snippet(start_idx, end_idx):
+        if not (6 <= end_idx - start_idx <= 20):
+            return False
+        if not is_upper_start(words[start_idx]):
+            return False
+        slice_words = words[start_idx:end_idx]
+        if any(has_term_punct(w) for w in slice_words):
+            return False
+        if has_any_punct(slice_words[-1]):
+            return False
+        return True
+
+    def can_transition_to_sentence_or_end(idx):
+        if idx >= n:
+            return True
+        if not is_upper_start(words[idx]) or has_any_punct(words[idx]):
+            return False
+        for k in range(idx, n):
+            if has_term_punct(words[k]):
+                return True
+        return False
+
+    chains = []
+    i = 0
+    while i < n:
+        if not is_upper_start(words[i]):
+            i += 1
+            continue
+
+        def find_chains(curr_idx):
+            res = []
+            for next_idx in range(curr_idx + 6, min(n + 1, curr_idx + 21)):
+                if is_snippet(curr_idx, next_idx):
+                    if next_idx == n or can_transition_to_sentence_or_end(next_idx):
+                        res.append([curr_idx, next_idx])
+                    if next_idx < n:
+                        sub = find_chains(next_idx)
+                        for s in sub:
+                            res.append([curr_idx] + s)
+            return res
+
+        all_chains = find_chains(i)
+        valid = [c for c in all_chains if len(c) >= 3 and can_transition_to_sentence_or_end(c[-1])]
+        if valid:
+            best_chain = max(valid, key=lambda c: (len(c), c[-1] - c[0]))
+            chains.append((best_chain[0], best_chain[-1]))
+            i = best_chain[-1]
+        else:
+            i += 1
+
+    if not chains:
+        return text
+
+    res_words = []
+    last_idx = 0
+    for start_idx, end_idx in chains:
+        res_words.extend(words[last_idx:start_idx])
+        last_idx = end_idx
+    res_words.extend(words[last_idx:])
+    return ' '.join(res_words)
+
+
 def article_text(entry):
     """Texto da matéria publicado no RSS, limpo de créditos, chamadas e propaganda."""
     parts = [entry.get('summary', '') or ''] + [c.get('value', '') for c in entry.get('content', []) or []]
-    raw = max(parts, key=len)
-    raw = re.sub(r'(?i)<\s*(br|/p|/li|/h\d|/div|/blockquote)[^>]*>', '\n', raw)
-    raw = re.sub(r'(?is)<(script|style|figure|figcaption)[^>]*>.*?</\1>', ' ', raw)
-    text = html.unescape(re.sub(r'<[^>]+>', ' ', raw))
+    if entry.get('content:encoded'):
+        parts.append(entry.get('content:encoded'))
+    if entry.get('content_encoded'):
+        parts.append(entry.get('content_encoded'))
+    raw = max(parts, key=len) if parts else ''
+    if not raw:
+        return ''
+
+    if '<' in raw and '>' in raw:
+        try:
+            parser = _NewsHTMLCleaner()
+            parser.feed(raw)
+            blocks = parser.get_blocks()
+            text = '\n'.join(blocks)
+        except Exception:
+            raw = re.sub(r'(?i)<\s*(br|/p|/li|/h\d|/div|/blockquote)[^>]*>', '\n', raw)
+            raw = re.sub(r'(?is)<(script|style|figure|figcaption|aside|ul|ol|li)[^>]*>.*?</\1>', ' ', raw)
+            text = html.unescape(re.sub(r'<[^>]+>', ' ', raw))
+    else:
+        text = raw
+
+    text = html.unescape(text)
     text = re.sub(r'\((imagem|foto|crédito|reprodução)[^)]*\)', ' ', text, flags=re.I)
     paragraphs = []
     for paragraph in text.split('\n'):
@@ -366,7 +558,10 @@ def article_text(entry):
         if len(paragraph.split()) < 4 or BOILERPLATE.match(paragraph):
             continue
         paragraphs.append(paragraph)
-    words = ' '.join(paragraphs).split()
+
+    joined = ' '.join(paragraphs)
+    cleaned = strip_glued_headlines(joined)
+    words = cleaned.split()
     if len(words) <= MAX_BODY:
         return ' '.join(words)
     cut = ' '.join(words[:MAX_BODY])
