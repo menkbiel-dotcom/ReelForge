@@ -272,7 +272,18 @@ def make_script(news, max_seconds=30, impact_opening=False, hook_text=''):
     lines = obj.get("lines", [])
     if not 4 <= len(lines) <= 14 or any(not isinstance(l, dict) or not isinstance(l.get("text"), str) or l.get("speaker") not in (0, 1) for l in lines):
         raise RuntimeError("Resposta da IA fora do formato esperado")
-    return shorten_script([{"speaker": l["speaker"], "text": clean(l["text"])} for l in lines], budget)
+    res_lines = []
+    for l in lines:
+        entry = {"speaker": l["speaker"], "text": clean(l["text"])}
+        if l.get("reacao"):
+            entry["reacao"] = True
+        elif l.get("fato") is not None:
+            try:
+                entry["fato"] = int(l["fato"])
+            except (ValueError, TypeError):
+                pass
+        res_lines.append(entry)
+    return shorten_script(res_lines, budget)
 
 
 def font(size):
@@ -334,7 +345,41 @@ def escape_filter_path(path):
 
 def render(news, lines, gameplay, fps=30, max_seconds=45, impact_opening=False, hook_text='', direction=None):
     from render_pipeline import render as render_integrated
-    return render_integrated(sys.modules[__name__], news, lines, gameplay, fps, max_seconds, impact_opening, hook_text, direction)
+    if isinstance(news, dict):
+        cfg = load_settings()
+        writer_model = os.getenv('OLLAMA_MODEL') or cfg.get('ollama_model') or 'qwen3.5:4b'
+        judge_model = os.getenv('OLLAMA_JUDGE_MODEL') or cfg.get('judge_model') or 'qwen3:8b'
+        juiz_fraco = bool(news.get('juiz_fraco', False))
+        if 'modelos' not in news:
+            news['modelos'] = {
+                'redator': writer_model,
+                'juiz': judge_model,
+                'juiz_fraco': juiz_fraco,
+            }
+    final = render_integrated(sys.modules[__name__], news, lines, gameplay, fps, max_seconds, impact_opening, hook_text, direction)
+    json_path = final.with_suffix('.json')
+    if json_path.is_file():
+        try:
+            meta = json.loads(json_path.read_text(encoding='utf-8'))
+            changed = False
+            if 'modelos' not in meta and isinstance(news, dict) and 'modelos' in news:
+                meta['modelos'] = news['modelos']
+                changed = True
+            if 'lines' in meta and isinstance(meta['lines'], list):
+                for i, pline in enumerate(meta['lines']):
+                    if i < len(lines):
+                        orig = lines[i]
+                        if orig.get('reacao') and not pline.get('reacao'):
+                            pline['reacao'] = True
+                            changed = True
+                        elif orig.get('fato') is not None and pline.get('fato') is None:
+                            pline['fato'] = orig['fato']
+                            changed = True
+            if changed:
+                json_path.write_text(json.dumps(meta, default=str, ensure_ascii=False, indent=2), encoding='utf-8')
+        except Exception:
+            pass
+    return final
 
 
 def main():

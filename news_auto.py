@@ -298,7 +298,7 @@ HOOK_BAD_START_RE = re.compile(r'^\s*(mas|e|porque|pois|ent[aã]o|por\s+isso)\b'
 HOOK_PROVOCATION_RE = re.compile(
     r'(\?|!|\b(por\s+que|como\s+assim|sabia|imagina|j[aá]\s+pensou|voc[eê]|ser[aá]|quem|qual|quanto|'
     r'acredita|faz\s+sentido|tem\s+no[cç][aã]o|olha|pera[ií]|cara|mano|mentira|poss[ií]vel|absurdo|bizarro)\b)', re.I)
-FICTIONAL_EXAMPLE_TERMS = ('zorbax', 'valoria', 'neoquimera', 'luminopolis', '742', '819', '2089')
+FICTIONAL_EXAMPLE_TERMS = ('zorbax', 'valoria', 'neoquimera', 'luminopolis', '742', '819', '2089', 'hoverboards', 'hoverboard')
 FILLER_CLOSE = re.compile(
     r'\b(que\s+(legal|bom|show|demais|maravilha|bacana)|incr[ií]vel|uau|show|demais)\b',
     re.I
@@ -1611,15 +1611,40 @@ def _save_rejected_script(story, lines, review):
     engine.OUTPUT.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
     path = engine.OUTPUT / f'rejected_{stamp}.json'
+    cfg = {}
+    try:
+        cfg = engine.load_settings()
+    except Exception:
+        pass
+    writer_model = os.getenv('OLLAMA_MODEL') or cfg.get('ollama_model') or 'qwen3.5:4b'
+    judge_model = judge_model_name()
+    juiz_fraco = bool(story.get('juiz_fraco', False))
+    modelos = story.get('modelos') or {
+        'redator': writer_model,
+        'juiz': judge_model,
+        'juiz_fraco': juiz_fraco,
+    }
+    lines_saved = []
+    for l in lines:
+        entry = {'speaker': l.get('speaker', 0), 'text': l.get('text', '')}
+        if l.get('reacao'):
+            entry['reacao'] = True
+        elif l.get('fato') is not None:
+            try:
+                entry['fato'] = int(l['fato'])
+            except (ValueError, TypeError):
+                pass
+        lines_saved.append(entry)
     payload = {
         'title': story.get('title', ''),
         'source': story.get('source', ''),
         'nota': review.get('nota'),
         'problemas': review.get('problemas', []),
-        'juiz_fraco': bool(story.get('juiz_fraco', False)),
+        'juiz_fraco': juiz_fraco,
+        'modelos': modelos,
         'contradicao': story.get('contradicao'),
         'gancho': story.get('gancho'),
-        'lines': lines,
+        'lines': lines_saved,
     }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
     return path
@@ -1632,6 +1657,19 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
     ask = ask or engine.request_json
     loop = loop_enabled() if loop is None else loop
     allow_low = accept_low_score_enabled() if accept_low_score is None else bool(accept_low_score)
+    cfg = {}
+    try:
+        cfg = engine.load_settings()
+    except Exception:
+        pass
+    writer_model = os.getenv('OLLAMA_MODEL') or cfg.get('ollama_model') or 'qwen3.5:4b'
+    judge_model = judge_model_name()
+    juiz_fraco = bool(story.get('juiz_fraco', False))
+    story['modelos'] = {
+        'redator': writer_model,
+        'juiz': judge_model,
+        'juiz_fraco': juiz_fraco,
+    }
     if facts is None and previous is None and story.get('body'):
         facts = extract_facts(story, ask=ask)
     if facts is not None:
@@ -1641,17 +1679,18 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
     target = max(12, min(int(max_words * 0.9), max_lines * 12))
     few_shot = (
         'EXEMPLOS FICTÍCIOS: copie apenas o estilo e o ritmo, nunca os fatos.\n'
-        'Cada fala DEVE indicar "fato": N (índice 0..5 do fato correspondente) OU "reacao": true (para reações de até 6 palavras, sem números).\n'
+        'Sasuke (0): direto, seco e irônico. Naruto (1): exagerado, curioso e espontâneo.\n'
+        'Cada fala DEVE indicar "fato": N (índice 0..5 do fato correspondente) OU "reacao": true (máximo 6 palavras, sem números).\n'
         'Exemplo 1:\n'
-        '[{"speaker":0,"text":"Pagar 742 moedas num guarda-chuva voador faz sentido?","fato":0},'
-        '{"speaker":1,"text":"Cara, 742?! Não acredito!","reacao":true},'
-        '{"speaker":0,"text":"A Zorbax lançou esse modelo só pra testes no deserto.","fato":1},'
-        '{"speaker":1,"text":"Mas dava pra comprar um barco inteiro em Valoria!","fato":2}]\n'
+        '[{"speaker":0,"text":"Gastar 742 barras num hoverboard solar faz sentido?","fato":0},'
+        '{"speaker":1,"text":"Mano, isso é caro demais!","reacao":true},'
+        '{"speaker":0,"text":"A Zorbax produziu 742 hoverboards solares em Valoria.","fato":0},'
+        '{"speaker":1,"text":"Será que alguém compra esse hoverboard em Valoria?","fato":0}]\n'
         'Exemplo 2:\n'
-        '[{"speaker":0,"text":"Por que gastariam 819 milhões só em baterias de gelo?","fato":0},'
-        '{"speaker":1,"text":"Peraí, isso é sério?","reacao":true},'
-        '{"speaker":0,"text":"A rede de Luminopolis não aguenta a demanda da NeoQuimera.","fato":1},'
-        '{"speaker":1,"text":"E aí apelaram pro estoque gigante de 2089 pra segurar a barra?","fato":2}]\n'
+        '[{"speaker":0,"text":"Quem investe 819 milhões em reatores em Luminopolis?","fato":0},'
+        '{"speaker":1,"text":"Caramba, não sabia dessa loucura!","reacao":true},'
+        '{"speaker":0,"text":"A NeoQuimera colocou 819 milhões em Luminopolis.","fato":0},'
+        '{"speaker":1,"text":"Eles ainda vão abastecer 2089 torres em Luminopolis.","fato":1}]\n'
     )
     hook_instruction = (
         f'- PRIMEIRA FALA OBRIGATÓRIA: a primeira fala (speaker 0) DEVE ser exatamente este gancho: "{valid_hook}". Não altere essa pergunta.\n'

@@ -1491,6 +1491,75 @@ class NewsAutoTests(unittest.TestCase):
         self.assertEqual(len(res_lines), 6)
         self.assertTrue(any('seguindo sem checagem de fatos' in m for m in logs_allowed))
 
+    def test_item7_round2_writer_prompt_and_transparency(self):
+        story = {
+            'title': 'Brasil bate recorde e exporta 5,3 milhões de sacas de café em outubro',
+            'body': 'O Brasil exportou 5,3 milhões de sacas de café em outubro por US$ 1,786 bilhão. ' * 3,
+            'extracted_facts': [
+                'O Brasil exportou 5,3 milhões de sacas de café em outubro.',
+                'A receita atingiu US$ 1,786 bilhão.',
+            ]
+        }
+        lines = [
+            {'speaker': 0, 'text': 'O Brasil exportou quanto café em outubro?', 'fato': 0},
+            {'speaker': 1, 'text': 'Cara, isso tudo é impressionante!', 'reacao': True},
+            {'speaker': 0, 'text': 'O Brasil exportou 5,3 milhões de sacas.', 'fato': 0},
+            {'speaker': 1, 'text': 'A receita somou US$ 1,786 bilhão.', 'fato': 1},
+        ]
+
+        captured_instructions = []
+        def capture_ask(inst, payload):
+            captured_instructions.append(inst)
+            return {'lines': lines}
+
+        mock_judge = lambda i, p, m=None: (
+            {'falas': [{'i': idx, 'suportada': True, 'motivo': ''} for idx in range(4)]}
+            if 'checador de fatos' in i.lower() else
+            {'nota': 8, 'problemas': []}
+        )
+
+        with patch.dict('os.environ', {'OLLAMA_MODEL': 'qwen3.5:4b', 'OLLAMA_JUDGE_MODEL': 'qwen3:8b'}):
+            res_lines = news_auto.write_script(story, max_words=80, ask=capture_ask, judge_ask=mock_judge, facts=story['extracted_facts'])
+
+        writer_inst = captured_instructions[0]
+        self.assertIn('Sasuke (0): direto, seco e irônico', writer_inst)
+        self.assertIn('Naruto (1): exagerado, curioso e espontâneo', writer_inst)
+        self.assertIn('hoverboard', writer_inst)
+        self.assertIn('Luminopolis', writer_inst)
+
+        self.assertIn('modelos', story)
+        self.assertEqual(story['modelos']['redator'], 'qwen3.5:4b')
+        self.assertEqual(story['modelos']['juiz'], 'qwen3:8b')
+        self.assertFalse(story['modelos']['juiz_fraco'])
+
+        out_dir = Path(self.temp.name) / 'out_item7'
+        with patch.object(engine, 'OUTPUT', out_dir):
+            rej_path = news_auto._save_rejected_script(
+                story,
+                lines,
+                {'nota': 4, 'problemas': [{'i': 0, 'trecho': 'Viu', 'tipo': 'ritmo', 'motivo': 'teste'}]}
+            )
+        rej_data = json.loads(rej_path.read_text(encoding='utf-8'))
+        self.assertIn('modelos', rej_data)
+        self.assertEqual(rej_data['modelos']['redator'], 'qwen3.5:4b')
+        self.assertEqual(rej_data['modelos']['juiz'], 'qwen3:8b')
+        self.assertTrue(rej_data['lines'][1].get('reacao'))
+        self.assertEqual(rej_data['lines'][0].get('fato'), 0)
+        self.assertEqual(rej_data['lines'][2].get('fato'), 0)
+
+        # 4. Preservação de modelos e fatos no JSON do reel via engine.render
+        with tempfile.TemporaryDirectory() as td:
+            dummy_json = Path(td) / 'reel_dummy.json'
+            dummy_mp4 = Path(td) / 'reel_dummy.mp4'
+            dummy_json.write_text(json.dumps({'lines': [{'speaker': 0, 'text': 'fala 1'}, {'speaker': 1, 'text': 'fala 2'}]}), encoding='utf-8')
+            with patch('render_pipeline.render', return_value=dummy_mp4):
+                engine.render(story, lines, 'dummy.mp4')
+            meta_res = json.loads(dummy_json.read_text(encoding='utf-8'))
+            self.assertIn('modelos', meta_res)
+            self.assertEqual(meta_res['modelos']['redator'], 'qwen3.5:4b')
+            self.assertEqual(meta_res['lines'][0].get('fato'), 0)
+            self.assertTrue(meta_res['lines'][1].get('reacao'))
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

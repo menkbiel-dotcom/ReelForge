@@ -13,7 +13,7 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
 2. **Seleção e Roteiro em 2 Passos + Filtro de Qualidade Fechado (`news_auto.py` + Ollama local `qwen3.5:4b` e juiz `qwen3:8b`):**
    - `pick_story()`: O Ollama escolhe a melhor pauta com corpo completo.
    - **Passo 1 (`extract_facts()`):** O Ollama extrai de **5 a 6 fatos curtos**, identifica `"contradicao"` e gera `"gancho"` em JSON `{"fatos":[...],"contradicao":"...","gancho":"..."}` exclusivamente do título e corpo da matéria (`source_text`), validando números contra `_allowed_numbers(source)` e rejeitando unidades temporais inventadas (`TEMPORAL_UNITS`, com retry). Valida o gancho (`validate_hook`: até 10 palavras, sem números inventados e sem repetir a manchete) e grava `"contradicao"` e `"gancho"` no story e no JSON de saída do reel.
-   - **Passo 2 (`write_script()`):** O Ollama escreve o diálogo entre Sasuke (direto e irônico) e Naruto (curioso e espontâneo) usando exemplos *few-shot* **totalmente fictícios** (`EXEMPLOS FICTÍCIOS: copie apenas o estilo e o ritmo, nunca os fatos`). Se o gancho do Passo 1 for validado, ele é injetado como primeira fala obrigatória. O prompt exige que perguntas feitas por um personagem sejam respondidas pelo outro usando um dos fatos.
+   - **Passo 2 (`write_script()`):** O Ollama escreve o diálogo entre Sasuke (direto, seco e irônico) e Naruto (exagerado, curioso e espontâneo) usando exemplos *few-shot* **totalmente fictícios** (`EXEMPLOS FICTÍCIOS: copie apenas o estilo e o ritmo, nunca os fatos`) que seguem rigorosamente todas as regras. Se o gancho do Passo 1 for validado, ele é injetado como primeira fala obrigatória. O prompt exige que perguntas feitas por um personagem sejam respondidas pelo outro usando um dos fatos. Preserva os campos `fato` e `reacao` nas falas e grava nos metadados do Reel e dos scripts rejeitados o dicionário `'modelos': {'redator': ..., 'juiz': ..., 'juiz_fraco': bool}`.
    - **Validação (`validate_lines()`):**
      - Primeira fala deve ser uma provocação ou pergunta de até 10 palavras (nunca a manchete copiada nem iniciada por `"Mas..."`).
      - Cobertura do tema (`extract_title_keywords()`): extrai palavras-chave distintivas do título (normalizadas sem acento, sem stopwords e sem números); exige que pelo menos 1 apareça nos primeiros 3 turnos e que o roteiro cubra pelo menos 2 no total quando o título tiver 2 ou mais termos.
@@ -52,9 +52,9 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
 - O script `publicar_github.py` cria/atualiza o repositório como **privado por padrão** (use `--publico` para público), lê o token exclusivamente de `GITHUB_TOKEN` ou `getpass` (sem argumento `--token` e sem eco no terminal) e faz push sem `force`.
 - Testes que utilizam áudios de demonstração sintetizam automaticamente um WAV silencioso via módulo padrão `wave` quando o arquivo local não existir.
 
-## Suíte de Testes (62 Testes)
+## Suíte de Testes (63 Testes)
 
-- `tests/test_news_auto.py` (37 testes) e `tests/test_integration.py` (25 testes) — totalizando **62 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
+- `tests/test_news_auto.py` (38 testes) e `tests/test_integration.py` (25 testes) — totalizando **63 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'

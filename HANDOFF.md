@@ -126,9 +126,12 @@
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 61 testes passando (incluindo `test_item5_round2_judge_with_evidence`)
 - [x] **ITEM 6 — Juiz de fatos não falha aberto (`news_auto.py`, `verificar_fatos`)**: feito
-  - **Commit:** pendente de push — *"Faz checagem de fatos falhar fechada quando o juiz estiver indisponivel"*
+  - **Commit:** `4fb4bdc1f42c2ad40a04bfef41118276bcb71c01` — *"Faz checagem de fatos falhar fechada quando o juiz estiver indisponivel"*
   - **Arquivos tocados:** `news_auto.py`, `settings.json`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 62 testes passando (incluindo `test_item6_round2_fact_check_fails_closed`)
-- [ ] **ITEM 7 — Prompt do redator e transparência (`news_auto.py`, `engine.py`)**: pendente
+- [x] **ITEM 7 — Prompt do redator e transparência (`news_auto.py`, `engine.py`)**: feito
+  - **Commit:** pendente de push — *"Atualiza prompt few-shot do redator e registra modelos e fatos no JSON final"*
+  - **Arquivos tocados:** `news_auto.py`, `engine.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 63 testes passando (incluindo `test_item7_round2_writer_prompt_and_transparency`)
 - [ ] **ITEM 8 — A tela não pode apagar configurações (`gui.py`, `_save`)**: pendente
 - [ ] **ITEM 9 — Campos de modelo na tela (`gui.py`)**: pendente
