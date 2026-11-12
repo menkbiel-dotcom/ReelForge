@@ -163,9 +163,12 @@
 # Rodada 4 — Resiliência na Geração de Roteiros (Itens 10 a 13)
 
 - [x] **ITEM 10 — Relink automático do índice do fato (`news_auto.py`)**: feito
-  - **Commit:** `pending` — *"Relinca automaticamente indice do fato quando numeros e entidades pertencem a outro fato"*
+  - **Commit:** `51a9b024584ce5cadfdb224a09d8d237dc94aae8` — *"Relinca automaticamente indice do fato quando numeros e entidades pertencem a outro fato"*
   - **Arquivos tocados:** `news_auto.py`, `settings.json`, `tests/test_news_auto.py`, `tests/test_integration.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 73 testes passando (incluindo `test_item10_relink_automatic_fact_index`)
-- [ ] **ITEM 11 — Feedback útil entre tentativas (`news_auto.py`)**: a fazer
+- [x] **ITEM 11 — Feedback útil entre tentativas (`news_auto.py`)**: feito
+  - **Commit:** `pending` — *"Melhora feedback de correcao entre tentativas e loga status de cada tentativa"*
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 74 testes passando (incluindo `test_item11_feedback_useful_between_retries_and_attempt_logging`)
 - [ ] **ITEM 12 — Registro de falha (`news_auto.py`)**: a fazer
 - [ ] **ITEM 13 — Tentar outra pauta antes de desistir (`news_auto.py`)**: a fazer

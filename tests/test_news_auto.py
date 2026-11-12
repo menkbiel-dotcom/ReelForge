@@ -1778,6 +1778,88 @@ class NewsAutoTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, r'A fala citou números ausentes no fato 4.*90'):
             news_auto.validate_lines(lines_invalid, story, budget=80, facts=facts)
 
+    def test_item11_feedback_useful_between_retries_and_attempt_logging(self):
+        import json
+        facts = [
+            "O telescópio James Webb da Nasa observou galáxias distantes.",
+            "A missão espacial do James durou cerca de três anos.",
+            "O Webb detectou 25 novos exoplanetas e 277 asteroides.",
+            "Os cientistas analisaram amostras de poeira cósmica.",
+            "A temperatura no vácuo espacial atingiu níveis extremos.",
+            "O projeto envolveu vinte países parceiros.",
+        ]
+        story = {
+            'title': 'Descobertas do Telescópio Webb',
+            'body': 'O telescópio espacial James Webb da Nasa fez grandes descobertas científicas no espaço profundo. '
+                    'A missão espacial do James durou cerca de três anos e analisou amostras cósmicas em 90 dias. '
+                    'O Webb detectou 25 novos exoplanetas e 277 asteroides na pesquisa recente. '
+                    'A temperatura no vácuo espacial atingiu níveis extremos e vinte países parceiros participaram.',
+            'source_type': 'rss',
+            'extracted_facts': facts,
+        }
+
+        # 1. Correção indicando o fato que contém os números (quando houver) e logging de tentativas
+        corrections = []
+        logs = []
+
+        def mock_writer_with_fact(inst, payload_str):
+            payload = json.loads(payload_str)
+            if 'correcao' in payload:
+                corrections.append(payload['correcao'])
+                return {'lines': [
+                    {'speaker': 0, 'text': 'O que o telescópio Webb detectou no espaço?', 'fato': 0},
+                    {'speaker': 1, 'text': 'O Webb detectou 25 novos exoplanetas e 277 asteroides!', 'fato': 2},
+                    {'speaker': 0, 'text': 'A missão do James durou três anos no vácuo.', 'fato': 1},
+                    {'speaker': 1, 'text': 'Será que acham vida nesses novos exoplanetas?', 'fato': 2},
+                ]}
+            return {'lines': [
+                {'speaker': 0, 'text': 'O que o telescópio Webb detectou no espaço?', 'fato': 0},
+                {'speaker': 1, 'text': 'A temperatura atingiu 25 graus e 277 sensores congelaram!', 'fato': 4},
+                {'speaker': 0, 'text': 'A missão do James durou três anos no vácuo.', 'fato': 1},
+                {'speaker': 1, 'text': 'Será que acham vida nesses novos exoplanetas?', 'fato': 2},
+            ]}
+
+        mock_judge = lambda i, p, model=None: {'falas': [{'i': idx, 'suportada': True, 'motivo': ''} for idx in range(4)]} if 'checador de fatos' in i.lower() else {'nota': 8, 'responde_perguntas': True, 'contradiz_materia': False, 'problemas': []}
+
+        res = news_auto.write_script(story, max_words=80, ask=mock_writer_with_fact, judge_ask=mock_judge, facts=facts, log=logs.append)
+        self.assertEqual(len(res), 4)
+        self.assertEqual(len(corrections), 1)
+        corr1 = corrections[0]
+        self.assertIn('Fala 2', corr1)
+        self.assertIn('25 graus e 277 sensores', corr1)
+        self.assertIn('o fato 2 contém estes números', corr1)
+        self.assertTrue(any('Tentativa 1/8: rejeitada' in l for l in logs))
+        self.assertTrue(any('Tentativa 2/8: aceita' in l for l in logs))
+
+        # 2. Correção indicando "nenhum fato contém estes números: não os use"
+        corrections_none = []
+        logs_none = []
+
+        def mock_writer_no_fact(inst, payload_str):
+            payload = json.loads(payload_str)
+            if 'correcao' in payload:
+                corrections_none.append(payload['correcao'])
+                return {'lines': [
+                    {'speaker': 0, 'text': 'O que o telescópio Webb detectou no espaço?', 'fato': 0},
+                    {'speaker': 1, 'text': 'O Webb detectou 25 novos exoplanetas e 277 asteroides!', 'fato': 2},
+                    {'speaker': 0, 'text': 'A missão do James durou três anos no vácuo.', 'fato': 1},
+                    {'speaker': 1, 'text': 'Será que acham vida nesses novos exoplanetas?', 'fato': 2},
+                ]}
+            return {'lines': [
+                {'speaker': 0, 'text': 'O que o telescópio Webb detectou no espaço?', 'fato': 0},
+                {'speaker': 1, 'text': 'O telescópio analisou dados durante 90 dias seguidos!', 'fato': 4},
+                {'speaker': 0, 'text': 'A missão do James durou três anos no vácuo.', 'fato': 1},
+                {'speaker': 1, 'text': 'Será que acham vida nesses novos exoplanetas?', 'fato': 2},
+            ]}
+
+        res2 = news_auto.write_script(story, max_words=80, ask=mock_writer_no_fact, judge_ask=mock_judge, facts=facts, log=logs_none.append)
+        self.assertEqual(len(res2), 4)
+        self.assertEqual(len(corrections_none), 1)
+        corr2 = corrections_none[0]
+        self.assertIn('Fala 2', corr2)
+        self.assertIn('90 dias seguidos', corr2)
+        self.assertIn('nenhum fato contém estes números: não os use', corr2)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

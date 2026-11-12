@@ -1198,8 +1198,13 @@ def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12, fa
                          ', '.join(sorted(leaked_examples)))
     invented = _numbers(' '.join(texts)) - allowed_nums
     if invented:
-        raise ValueError('Números ausentes na matéria: ' + ', '.join(sorted(invented)) +
-                         '. Use apenas números presentes no corpo e título da matéria.')
+        inv_lines = []
+        for idx, t in enumerate(texts):
+            if _numbers(t) & invented:
+                inv_lines.append(f'Fala {idx + 1} ("{t}")')
+        prefix = f'{", ".join(inv_lines)}: ' if inv_lines else ''
+        raise ValueError(f'{prefix}Números ausentes na matéria: ' + ', '.join(sorted(invented)) +
+                         '. nenhum fato contém estes números: não os use.')
 
     # Validação de unidades temporais
     source_temporal = set(_normalize_plain(source).split()) & TEMPORAL_UNITS
@@ -1282,10 +1287,17 @@ def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12, fa
                     missing_entities = []
                 else:
                     if missing_nums:
-                        raise ValueError(f'A fala citou números ausentes no fato {f_idx} (ou título): ' +
-                                         ', '.join(sorted(missing_nums)))
+                        containing_facts = [m for m, f in enumerate(facts) if missing_nums.issubset(_allowed_numbers(f))]
+                        if not containing_facts:
+                            containing_facts = [m for m, f in enumerate(facts) if missing_nums.issubset(_allowed_numbers(f + ' ' + story.get('title', '')))]
+                        if containing_facts:
+                            fact_hint = f'o fato {containing_facts[0]} contém estes números: "{facts[containing_facts[0]]}"'
+                        else:
+                            fact_hint = 'nenhum fato contém estes números: não os use'
+                        raise ValueError(f'Fala {i + 1} ("{text}"): A fala citou números ausentes no fato {f_idx} (ou título): '
+                                         f'{", ".join(sorted(missing_nums))}. {fact_hint}.')
                     if missing_entities:
-                        raise ValueError(f'A fala citou nome/entidade "{missing_entities[0]}" ausente no fato {f_idx} (ou título).')
+                        raise ValueError(f'Fala {i + 1} ("{text}"): A fala citou nome/entidade "{missing_entities[0]}" ausente no fato {f_idx} (ou título).')
         else:
             raise ValueError(f'A fala {i + 1} deve indicar "fato": N ou "reacao": true.')
 
@@ -1722,6 +1734,20 @@ def _save_rejected_script(story, lines, review):
     return path
 
 
+def _short_reason(error):
+    if not error:
+        return 'erro desconhecido'
+    first_line = str(error).split('\n')[0].strip()
+    m = re.match(r'Fala \d+\s*\([^)]*\):\s*(.+)', first_line)
+    if m:
+        reason = m.group(1).strip()
+    else:
+        reason = first_line
+    if len(reason) > 60:
+        return reason[:57] + '...'
+    return reason
+
+
 def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, loop=None,
                  facts=None, accept_low_score=None, log=print, judge_ask=None):
     """Passo 1 (extrai 5-6 fatos) -> Passo 2 (escreve diálogo usando só os fatos) -> Filtro de qualidade (nota >= 7)."""
@@ -1803,7 +1829,7 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
     last_review = None
     quality_retries = 0
     max_attempts = 8
-    for _ in range(max_attempts):
+    for attempt in range(1, max_attempts + 1):
         if error:
             payload['correcao'] = error
         raw = ask(instruction, json.dumps(payload, ensure_ascii=False))
@@ -1811,10 +1837,14 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
             lines, problem = validate_lines(raw, story, max_words, loop, min_lines, max_lines, facts=facts, log=log)
         except ValueError as exc:
             error = str(exc)
+            motivo = _short_reason(error)
+            log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
             continue
         if problem:
             error = problem
             best_lines = lines
+            motivo = _short_reason(error)
+            log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
             continue
 
         # Verificação factual das falas pelo modelo juiz
@@ -1833,6 +1863,8 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
                 if not allow_no_fact_check_enabled():
                     review = {'nota': None, 'problemas': ['checagem de fatos indisponível']}
                     rejected_path = _save_rejected_script(story, lines, review)
+                    motivo = 'checagem de fatos indisponível'
+                    log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
                     if quality_retries >= 2:
                         raise RuntimeError(
                             f'Roteiro reprovado após 2 regenerações '
@@ -1845,13 +1877,16 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
                     log('Aviso: seguindo sem checagem de fatos (permitir_sem_checagem_de_fatos ativo).')
             unsupported = [item for item in vf.get('falas', []) if not item.get('suportada', True)]
             if unsupported:
+                motivo = 'falas não suportadas pelos fatos'
                 if quality_retries >= 2:
                     if allow_low:
                         log('Aviso: seguindo mesmo com falas não suportadas (--aceitar-nota-baixa ativo).')
+                        log(f'Tentativa {attempt}/{max_attempts}: aceita')
                         return lines
                     review = {'nota': 4, 'problemas': [f"Fala {u.get('i', 0) + 1} não suportada: {u.get('motivo', '')}" for u in unsupported]}
                     rejected_path = _save_rejected_script(story, lines, review)
                     issues = '; '.join(str(p) for p in review['problemas'])
+                    log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
                     raise RuntimeError(
                         f'Roteiro reprovado por falhas factuais após 2 regenerações (problemas: {issues}). Salvo em {rejected_path}.'
                     )
@@ -1863,6 +1898,7 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
                     mot = u.get('motivo', 'sem suporte nos fatos')
                     corr_items.append(f'Fala {idx + 1} ("{txt}"): {mot}')
                 error = 'Falas não suportadas pelos fatos. Corrija:\n' + '\n'.join(corr_items)
+                log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
                 continue
         review = evaluate_script(lines, story, ask=judge_ask or ask, log=log)
         last_review = review
@@ -1871,22 +1907,28 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
         best_lines = lines
         approved = review['nota'] is not None and review['nota'] >= 7
         if approved:
+            log(f'Tentativa {attempt}/{max_attempts}: aceita')
             return lines
+        motivo = f'nota {review["nota"]}/10' if review.get('nota') is not None else 'avaliação indisponível'
         if quality_retries >= 2:
             if allow_low:
                 log(f'Aviso: seguindo com nota {review["nota"]} (--aceitar-nota-baixa / aceitar_nota_baixa ativo).')
+                log(f'Tentativa {attempt}/{max_attempts}: aceita')
                 return lines
             rejected_path = _save_rejected_script(story, lines, review)
             issues = '; '.join(str(p) for p in review['problemas']) or 'nota abaixo do mínimo'
+            log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
             raise RuntimeError(
                 f'Roteiro reprovado no filtro de qualidade após 2 regenerações '
                 f'(nota {review["nota"]}/10; problemas: {issues}). Salvo em {rejected_path}.'
             )
         quality_retries += 1
         issues = '; '.join(str(p) for p in review['problemas']) or 'Melhore a naturalidade, o gancho provocativo e o fecho.'
+        log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
         error = f'Nota de qualidade {review["nota"]}/10 (mínimo 7). Corrija: {issues}'
     if best_lines is not None and last_review is not None:
         if allow_low:
+            log(f'Tentativa {max_attempts}/{max_attempts}: aceita')
             return best_lines
         rejected_path = _save_rejected_script(story, best_lines, last_review)
         issues = '; '.join(str(p) for p in last_review['problemas']) or 'nota abaixo do mínimo'
