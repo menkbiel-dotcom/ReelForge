@@ -57,6 +57,7 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
    - `list_ollama_models()`: Popula o Combobox editável do modelo do redator consultando `GET http://127.0.0.1:11434/api/tags` (timeout 1.5s) com fallback offline para `['qwen3.5:4b', 'qwen3:8b', 'qwen2.5:7b']`.
    - Campo "Modelo do juiz": Combobox com os mesmos modelos + opção "igual ao redator" (salva `judge_model: ""` e propaga o modelo do redator para `OLLAMA_JUDGE_MODEL`).
    - Checkbox "Aceitar nota baixa (apenas testes)": mapeado para `aceitar_nota_baixa` no `settings.json` e `REELFORGE_ACCEPT_LOW_SCORE` no ambiente.
+   - Botão "Verificar ambiente" (`App._check` + `diagnose_ollama_environment`): além de FFmpeg, `faster_whisper` e gameplays locais, consulta `GET /api/tags` avisando `ollama pull <modelo>` se redator ou juiz estiverem ausentes, envia teste `"responda só: ok"` ao redator e ao juiz medindo o tempo de resposta de cada um, e consulta `GET /api/ps` exibindo VRAM vs tamanho total (`size_vram < size` emite aviso em português sobre execução parcial na CPU e lentidão).
 
 ## Privacidade dos Assets
 
@@ -64,9 +65,9 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
 - O script `publicar_github.py` cria/atualiza o repositório como **privado por padrão** (use `--publico` para público), lê o token exclusivamente de `GITHUB_TOKEN` ou `getpass` (sem argumento `--token` e sem eco no terminal) e faz push sem `force`.
 - Testes que utilizam áudios de demonstração sintetizam automaticamente um WAV silencioso via módulo padrão `wave` quando o arquivo local não existir.
 
-## Suíte de Testes (85 Testes)
+## Suíte de Testes (87 Testes)
 
-- `tests/test_news_auto.py` (55 testes) e `tests/test_integration.py` (30 testes) — totalizando **85 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes). Todas as classes de teste herdam `IsolatedOutputMixin` (`tests/_isolation.py`), que faz patch de `engine.OUTPUT` para diretório temporário em `setUp` e garante via `test_item20_isolated_output_guard` que nenhum arquivo seja gravado em `output/` real. Destrutor `App.destroy()` cancela `_poll_id` e testes GUI coletam objetos na thread principal.
+- `tests/test_news_auto.py` (55 testes) e `tests/test_integration.py` (32 testes) — totalizando **87 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes). Todas as classes de teste herdam `IsolatedOutputMixin` (`tests/_isolation.py`), que faz patch de `engine.OUTPUT` para diretório temporário em `setUp` e garante via `test_item20_isolated_output_guard` que nenhum arquivo seja gravado em `output/` real. Destrutor `App.destroy()` cancela `_poll_id` e testes GUI coletam objetos na thread principal.
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'

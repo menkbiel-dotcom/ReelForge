@@ -278,7 +278,7 @@
 - **Próximo item:** ITEM 22 (`engine.py`, timeouts e erros do Ollama amigáveis).
 
 - [x] **ITEM 22 — Timeouts e erros do Ollama amigáveis (`engine.py`, `gui.py`)**: feito
-  - **Commit:** (será registrado após push do item 22) — *"Trata timeouts/erros do Ollama com log em erros.log, think=false e estimativa de tokens"*
+  - **Commit:** `c0b515e1b023e486b6179bcb9ce02b9ffb542ee9` — *"Trata timeouts/erros do Ollama com log em erros.log, think=false e estimativa de tokens"*
   - **Arquivos tocados:** `engine.py`, `gui.py`, `tests/test_news_auto.py`, `tests/test_integration.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 85 testes passando (incluindo `test_item22_ollama_timeout_think_and_logging`)
 
@@ -292,4 +292,16 @@
   - `App.destroy`: cancela `self._poll_id` e limpa `tk.Variable` na thread principal antes de destruir a janela; `tests/test_integration.py` força `gc.collect()` no `finally` dos testes GUI para evitar `Tcl_AsyncDelete` quando rodam junto com `test_news_auto`.
 - **Próximo item:** ITEM 23 — Diagnóstico no "Verificar ambiente" (`gui.py` / `news_auto.py`).
 
-- [ ] **ITEM 23 — Diagnóstico no "Verificar ambiente" (`gui.py` / `news_auto.py`)**: a fazer
+- [x] **ITEM 23 — Diagnóstico no "Verificar ambiente" (`gui.py`)**: feito
+  - **Commit:** (será registrado após push do item 23) — *"Adiciona diagnostico completo do Ollama (tags, ps/VRAM e teste de latencia) ao botao Verificar ambiente"*
+  - **Arquivos tocados:** `gui.py`, `tests/test_integration.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 87 testes passando (incluindo `test_diagnose_ollama_environment_reports_ps_probe_and_missing_models` e `test_gui_check_button_runs_ollama_diagnostic`)
+
+### Detalhes do ITEM 23
+- `gui.py`:
+  - `diagnose_ollama_environment(writer_model, judge_model='', base_url=None, probe_timeout=30.0)`:
+    - Consulta `GET /api/tags` verificando se redator e juiz estão presentes (`_is_model_installed`); se algum faltar, avisa em português com `ollama pull <modelo>`.
+    - Executa chamada de teste `"responda só: ok"` via `POST /api/chat` (`think: false`, `stream: false`) tanto para o redator quanto para o juiz e reporta o tempo decorrido de cada um.
+    - Consulta `GET /api/ps` listando modelos carregados com `size_vram` vs `size` (`_format_bytes`) e avisando em português caso `size_vram < size` que parte está na CPU e a geração será lenta.
+  - `App._check`: captura `ollama_model`, `judge_model` e `provider` na thread principal e registra as linhas de `diagnose_ollama_environment` no console da GUI.
+- **Estado atual:** Todos os itens da Rodada 6 (20 a 23) concluídos!

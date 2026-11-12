@@ -5,6 +5,7 @@ import json
 import os
 import queue
 import threading
+import time
 import traceback
 import tkinter as tk
 from pathlib import Path
@@ -41,6 +42,129 @@ def list_ollama_models(timeout: float = 1.5) -> list[str]:
     except Exception:
         pass
     return list(DEFAULT_OLLAMA_MODELS)
+
+
+def _format_bytes(num_bytes: int) -> str:
+    val = float(max(0, int(num_bytes or 0)))
+    for unit in ('B', 'KB', 'MB', 'GB', 'TB'):
+        if val < 1024.0 or unit == 'TB':
+            return f'{val:.2f} {unit}' if unit in ('GB', 'TB') else f'{int(round(val))} {unit}'
+        val /= 1024.0
+    return f'{int(val)} B'
+
+
+def _is_model_installed(model: str, installed: list[str]) -> bool:
+    name = (model or '').strip()
+    if not name:
+        return False
+    if name in installed:
+        return True
+    if ':' not in name and f'{name}:latest' in installed:
+        return True
+    return False
+
+
+def diagnose_ollama_environment(
+    writer_model: str,
+    judge_model: str = '',
+    base_url: str | None = None,
+    probe_timeout: float = 30.0,
+) -> list[str]:
+    """Executa diagnóstico do Ollama local (/api/tags, teste 'responda só: ok' e /api/ps)."""
+    import requests
+
+    base = (base_url or os.getenv('OLLAMA_URL', 'http://127.0.0.1:11434')).rstrip('/')
+    writer = (writer_model or '').strip() or 'qwen3.5:4b'
+    raw_judge = (judge_model or '').strip()
+    judge = writer if raw_judge in ('', 'igual ao redator') else raw_judge
+    lines: list[str] = []
+
+    # 1. Verifica /api/tags para confirmar se redator e juiz estão baixados
+    installed: list[str] | None = None
+    try:
+        r_tags = requests.get(f'{base}/api/tags', timeout=3.0)
+        if r_tags.status_code == 200:
+            data = r_tags.json() if hasattr(r_tags, 'json') else {}
+            installed = [
+                str(m.get('name'))
+                for m in (data.get('models') or [])
+                if isinstance(m, dict) and m.get('name')
+            ]
+            roles_to_check = [('redator', writer), ('juiz', judge)]
+            checked_missing: set[tuple[str, str]] = set()
+            for role, mname in roles_to_check:
+                if not _is_model_installed(mname, installed) and (role, mname) not in checked_missing:
+                    checked_missing.add((role, mname))
+                    lines.append(
+                        f"AVISO: modelo '{mname}' ({role}) ausente em /api/tags. Instale com: ollama pull {mname}"
+                    )
+            if not checked_missing:
+                lines.append(f'Ollama (/api/tags): modelos {writer} e {judge} disponíveis.')
+        else:
+            lines.append(f'AVISO: /api/tags retornou HTTP {r_tags.status_code}.')
+    except Exception as exc:
+        lines.append(f'AVISO: falha ao consultar /api/tags ({exc}). Verifique se o Ollama está aberto.')
+
+    # 2. Chamada de teste 'responda só: ok' no redator e no juiz medindo tempo de resposta
+    for role, mname in (('redator', writer), ('juiz', judge)):
+        t0 = time.monotonic()
+        try:
+            r_chat = requests.post(
+                f'{base}/api/chat',
+                json={
+                    'model': mname,
+                    'stream': False,
+                    'think': False,
+                    'messages': [{'role': 'user', 'content': 'responda só: ok'}],
+                    'options': {'temperature': 0},
+                },
+                timeout=probe_timeout,
+            )
+            elapsed = time.monotonic() - t0
+            if r_chat.status_code != 200:
+                extra = f" (execute 'ollama pull {mname}')" if r_chat.status_code == 404 else ''
+                lines.append(f'AVISO: teste {role} ({mname}) retornou HTTP {r_chat.status_code} em {elapsed:.2f} s{extra}.')
+                continue
+            payload = r_chat.json() if hasattr(r_chat, 'json') else {}
+            msg = payload.get('message') if isinstance(payload, dict) else {}
+            raw_reply = (msg.get('content') if isinstance(msg, dict) else '') or (
+                payload.get('response', '') if isinstance(payload, dict) else ''
+            )
+            cleaned_reply = engine._strip_thinking_block(raw_reply)
+            snippet = ' '.join(cleaned_reply.split())[:40] or '(vazio)'
+            lines.append(f'Teste {role} ({mname}): "{snippet}" em {elapsed:.2f} s')
+        except Exception as exc:
+            elapsed = time.monotonic() - t0
+            lines.append(f'AVISO: teste {role} ({mname}) falhou após {elapsed:.2f} s: {exc}')
+
+    # 3. Consulta /api/ps para reportar modelo carregado e uso de VRAM vs RAM/CPU
+    try:
+        r_ps = requests.get(f'{base}/api/ps', timeout=3.0)
+        if r_ps.status_code == 200:
+            ps_data = r_ps.json() if hasattr(r_ps, 'json') else {}
+            loaded = ps_data.get('models') or []
+            if not loaded:
+                lines.append('Ollama (/api/ps): nenhum modelo carregado em memória.')
+            for item in loaded:
+                if not isinstance(item, dict):
+                    continue
+                name = item.get('name') or item.get('model') or '?'
+                size = int(item.get('size') or 0)
+                size_vram = int(item.get('size_vram') or 0)
+                lines.append(
+                    f'Ollama (/api/ps): {name} — VRAM {_format_bytes(size_vram)} / Total {_format_bytes(size)}'
+                )
+                if size > 0 and size_vram < size:
+                    lines.append(
+                        f'AVISO: {name} está parcialmente na CPU (VRAM {_format_bytes(size_vram)} < Total {_format_bytes(size)}); '
+                        f'a geração será lenta.'
+                    )
+        else:
+            lines.append(f'AVISO: /api/ps retornou HTTP {r_ps.status_code}.')
+    except Exception as exc:
+        lines.append(f'AVISO: falha ao consultar /api/ps ({exc}).')
+
+    return lines
 
 
 def merge_settings(current: dict, from_ui: dict) -> dict:
@@ -654,13 +778,19 @@ class App(tk.Tk):
     def _check(self):
         import importlib.util
 
+        writer_model = self.ollama_model.get().strip()
+        judge_model = self.judge_model.get().strip()
+        provider = self.provider.get()
+
         def task():
             from media_tools import ffmpeg
             self.events.put(('log', 'FFmpeg disponível: ' + ffmpeg()))
             self.events.put(('log', 'Legendas por áudio: ' + ('instaladas' if importlib.util.find_spec('faster_whisper') else 'execute instalar_legendas.bat')))
             self.events.put(('log', f'Gameplays locais: {len(engine.gameplays())}'))
-            judge_info = f', juiz: {self.judge_model.get()}' if self.judge_model.get() else ''
-            self.events.put(('log', f'Roteiros: {self.provider.get()} local ({self.ollama_model.get()}{judge_info}).'))
+            judge_info = f', juiz: {judge_model}' if judge_model else ''
+            self.events.put(('log', f'Roteiros: {provider} local ({writer_model}{judge_info}).'))
+            for line in diagnose_ollama_environment(writer_model, judge_model):
+                self.events.put(('log', line))
 
         self._job(task)
 

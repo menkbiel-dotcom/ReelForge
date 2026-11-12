@@ -416,4 +416,99 @@ class Item9Tests(IsolatedOutputMixin, unittest.TestCase):
                             gc.collect()
 
 
+class Item23Tests(IsolatedOutputMixin, unittest.TestCase):
+    def test_diagnose_ollama_environment_reports_ps_probe_and_missing_models(self):
+        import gui
+
+        # Cenário 1: /api/tags completo, probes ok, /api/ps com size_vram < size
+        def fake_get_partial(url, timeout=None):
+            resp = Mock(status_code=200)
+            if url.endswith('/api/tags'):
+                resp.json.return_value = {'models': [{'name': 'qwen3.5:4b'}, {'name': 'qwen3:8b'}]}
+            elif url.endswith('/api/ps'):
+                resp.json.return_value = {
+                    'models': [
+                        {'name': 'qwen3:8b', 'size': 5 * 1024**3, 'size_vram': 3 * 1024**3}
+                    ]
+                }
+            return resp
+
+        def fake_post_ok(url, json=None, timeout=None):
+            self.assertTrue(url.endswith('/api/chat'))
+            self.assertEqual(json['messages'], [{'role': 'user', 'content': 'responda só: ok'}])
+            self.assertIs(json['think'], False)
+            resp = Mock(status_code=200)
+            resp.json.return_value = {'message': {'content': '<think>raciocinio</think>ok'}}
+            return resp
+
+        with patch('requests.get', side_effect=fake_get_partial), \
+             patch('requests.post', side_effect=fake_post_ok) as mock_post:
+            lines = gui.diagnose_ollama_environment('qwen3.5:4b', 'qwen3:8b')
+
+        self.assertEqual(mock_post.call_count, 2)
+        joined = '\n'.join(lines)
+        self.assertIn('modelos qwen3.5:4b e qwen3:8b disponíveis', joined)
+        self.assertIn('Teste redator (qwen3.5:4b): "ok" em ', joined)
+        self.assertIn('Teste juiz (qwen3:8b): "ok" em ', joined)
+        self.assertIn('VRAM 3.00 GB / Total 5.00 GB', joined)
+        self.assertIn('parcialmente na CPU', joined)
+
+        # Cenário 2: modelos ausentes em /api/tags e /api/ps 100% em VRAM (sem aviso de CPU)
+        def fake_get_missing(url, timeout=None):
+            resp = Mock(status_code=200)
+            if url.endswith('/api/tags'):
+                resp.json.return_value = {'models': [{'name': 'outro:7b'}]}
+            elif url.endswith('/api/ps'):
+                resp.json.return_value = {
+                    'models': [
+                        {'name': 'outro:7b', 'size': 4 * 1024**3, 'size_vram': 4 * 1024**3}
+                    ]
+                }
+            return resp
+
+        with patch('requests.get', side_effect=fake_get_missing), \
+             patch('requests.post', side_effect=fake_post_ok):
+            lines_missing = gui.diagnose_ollama_environment('qwen3.5:4b', 'qwen3:8b')
+
+        joined_missing = '\n'.join(lines_missing)
+        self.assertIn('ollama pull qwen3.5:4b', joined_missing)
+        self.assertIn('ollama pull qwen3:8b', joined_missing)
+        self.assertNotIn('parcialmente na CPU', joined_missing)
+
+    @unittest.skipUnless(HAS_TKINTER, 'Requer tkinter instalado')
+    def test_gui_check_button_runs_ollama_diagnostic(self):
+        import gui, media_tools, queue as py_queue
+        with tempfile.TemporaryDirectory() as td:
+            cfg_file = Path(td) / 'settings.json'
+            cfg_file.write_text(json.dumps({'ollama_model': 'qwen3.5:4b', 'judge_model': 'qwen3:8b'}), encoding='utf-8')
+            with patch.object(gui, 'CONFIG', cfg_file), \
+                 patch('requests.get', side_effect=Exception('offline')), \
+                 patch.object(media_tools, 'ffmpeg', return_value='ffmpeg.exe'), \
+                 patch.object(gui, 'diagnose_ollama_environment', return_value=['DIAG OK VRAM']) as mock_diag:
+                app = gui.App()
+                app.withdraw()
+                try:
+                    app._check()
+                    collected = []
+                    import time as py_time
+                    t_end = py_time.monotonic() + 5.0
+                    saw_done = False
+                    while py_time.monotonic() < t_end and not saw_done:
+                        try:
+                            kind, val = app.events.get(timeout=0.05)
+                            collected.append((kind, val))
+                            if kind == 'done':
+                                saw_done = True
+                        except py_queue.Empty:
+                            pass
+                    self.assertTrue(saw_done)
+                    mock_diag.assert_called_once_with('qwen3.5:4b', 'qwen3:8b')
+                    logs = [v for k, v in collected if k == 'log']
+                    self.assertIn('DIAG OK VRAM', logs)
+                finally:
+                    app.destroy()
+                    app = None
+                    gc.collect()
+
+
 if __name__=='__main__':unittest.main(verbosity=2)
