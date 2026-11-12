@@ -658,9 +658,9 @@ class NewsAutoTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'fecho de enchimento'):
             news_auto.validate_lines(bad_filler2, story, 80)
 
-        # 9. Número ausente no fato citado (fato 0 não tem 1,786)
+        # 9. Número ausente no fato citado (fato 0 não tem 1,786 e fala não compartilha palavras com fato 1)
         bad_num_mismatch = {'lines': [
-            {'speaker': 0, 'text': 'A receita atingiu US$ 1,786 bilhão.', 'fato': 0},  # Fato 0 é 5,3 milhões
+            {'speaker': 0, 'text': 'Sabia do café de US$ 1,786 bilhão no porto?', 'fato': 0},
             {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
             {'speaker': 0, 'text': 'Foram 5,3 milhões de sacas.', 'fato': 0},
             {'speaker': 1, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
@@ -901,7 +901,8 @@ class NewsAutoTests(unittest.TestCase):
                 raise RuntimeError('Ollama local respondeu HTTP 404.')
             return {'nota': 8, 'responde_perguntas': True, 'contradiz_materia': False, 'problemas': []}
 
-        review = news_auto.evaluate_script(lines, story_fallback, ask=mock_ask_404)
+        with patch.dict('os.environ', {'OLLAMA_MODEL': 'qwen3.5:4b', 'OLLAMA_JUDGE_MODEL': 'qwen3:8b'}):
+            review = news_auto.evaluate_script(lines, story_fallback, ask=mock_ask_404)
         self.assertTrue(story_fallback.get('juiz_fraco'))
         self.assertIn('qwen3:8b', calls_404)
         self.assertIn('qwen3.5:4b', calls_404)
@@ -1719,6 +1720,63 @@ class NewsAutoTests(unittest.TestCase):
         self.assertLess(elapsed, 0.8)
         self.assertIsInstance(cands, list)
         self.assertGreater(len(cands), 0)
+
+    def test_item10_relink_automatic_fact_index(self):
+        facts = [
+            "O telescópio James Webb da Nasa observou galáxias distantes.",
+            "A missão espacial do James durou cerca de três anos.",
+            "O Webb detectou 25 novos exoplanetas e 277 asteroides.",
+            "Os cientistas analisaram amostras de poeira cósmica.",
+            "A temperatura no vácuo espacial atingiu níveis extremos.",
+            "O projeto envolveu vinte países parceiros.",
+        ]
+        story = {
+            'title': 'Descobertas do Telescópio Webb',
+            'body': 'O telescópio espacial James Webb da Nasa fez grandes descobertas científicas no espaço profundo. '
+                    'A missão espacial do James durou cerca de três anos e analisou amostras cósmicas em 90 dias. '
+                    'O Webb detectou 25 novos exoplanetas e 277 asteroides na pesquisa recente. '
+                    'A temperatura no vácuo espacial atingiu níveis extremos e vinte países parceiros participaram.',
+            'source_type': 'rss',
+        }
+        # 1. Linha diz fato: 4, mas os números 25 e 277 estão no fato 2
+        lines_relink = {
+            'lines': [
+                {'speaker': 0, 'text': 'O que o telescópio Webb detectou no espaço?', 'fato': 0},
+                {'speaker': 1, 'text': 'O Webb detectou 25 novos exoplanetas e 277 asteroides!', 'fato': 4},
+                {'speaker': 0, 'text': 'A missão do James durou três anos no vácuo.', 'fato': 1},
+                {'speaker': 1, 'text': 'Será que acham vida nesses novos exoplanetas?', 'fato': 2},
+            ]
+        }
+        logs = []
+        valid_lines, prob = news_auto.validate_lines(lines_relink, story, budget=80, facts=facts, log=logs.append)
+        self.assertEqual(valid_lines[1]['fato'], 2)
+        self.assertIn('fala 2 recolocada do fato 4 para o fato 2', logs)
+
+        # 2. Linha cita nome próprio (entidade) que está no fato 0 mas a fala diz fato: 3
+        lines_entity_relink = {
+            'lines': [
+                {'speaker': 0, 'text': 'O que o telescópio Webb detectou no espaço?', 'fato': 0},
+                {'speaker': 1, 'text': 'O Webb detectou 25 novos exoplanetas e 277 asteroides!', 'fato': 2},
+                {'speaker': 0, 'text': 'A Nasa observou galáxias distantes no vácuo.', 'fato': 3},
+                {'speaker': 1, 'text': 'Será que acham vida nesses novos exoplanetas?', 'fato': 2},
+            ]
+        }
+        logs_entity = []
+        valid_lines_ent, _ = news_auto.validate_lines(lines_entity_relink, story, budget=80, facts=facts, log=logs_entity.append)
+        self.assertEqual(valid_lines_ent[2]['fato'], 0)
+        self.assertIn('fala 3 recolocada do fato 3 para o fato 0', logs_entity)
+
+        # 3. Linha cita número que não existe em nenhum fato (ex: 90 está no corpo da matéria mas em nenhum fato)
+        lines_invalid = {
+            'lines': [
+                {'speaker': 0, 'text': 'O que o telescópio Webb detectou no espaço?', 'fato': 0},
+                {'speaker': 1, 'text': 'O Webb analisou dados por 90 dias seguidos!', 'fato': 4},
+                {'speaker': 0, 'text': 'A missão do James durou três anos no vácuo.', 'fato': 1},
+                {'speaker': 1, 'text': 'Será que acham vida nesses novos exoplanetas?', 'fato': 2},
+            ]
+        }
+        with self.assertRaisesRegex(ValueError, r'A fala citou números ausentes no fato 4.*90'):
+            news_auto.validate_lines(lines_invalid, story, budget=80, facts=facts)
 
 
 if __name__ == '__main__':

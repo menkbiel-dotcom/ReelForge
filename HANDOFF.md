@@ -157,3 +157,15 @@
   - **Commit:** `e42745eabbd0673b735687ba29b3bf5debbad61f` — *"Aplica limite de 60s, shutdown sem espera e logs por feed na leitura de RSS"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 72 testes passando (incluindo `test_gather_candidates_feed_logging` e `test_gather_candidates_timeout_ignores_slow_feeds_and_shuts_down`)
+
+---
+
+# Rodada 4 — Resiliência na Geração de Roteiros (Itens 10 a 13)
+
+- [x] **ITEM 10 — Relink automático do índice do fato (`news_auto.py`)**: feito
+  - **Commit:** `pending` — *"Relinca automaticamente indice do fato quando numeros e entidades pertencem a outro fato"*
+  - **Arquivos tocados:** `news_auto.py`, `settings.json`, `tests/test_news_auto.py`, `tests/test_integration.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 73 testes passando (incluindo `test_item10_relink_automatic_fact_index`)
+- [ ] **ITEM 11 — Feedback útil entre tentativas (`news_auto.py`)**: a fazer
+- [ ] **ITEM 12 — Registro de falha (`news_auto.py`)**: a fazer
+- [ ] **ITEM 13 — Tentar outra pauta antes de desistir (`news_auto.py`)**: a fazer

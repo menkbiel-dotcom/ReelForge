@@ -1,5 +1,5 @@
 {
-  "topic": "Brasil",
+  "topic": "ciência",
   "provider": "ollama",
   "ollama_model": "qwen3.5:4b",
   "judge_model": "qwen3:8b",

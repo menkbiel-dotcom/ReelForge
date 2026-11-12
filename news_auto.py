@@ -1145,7 +1145,7 @@ def turn_range(story, max_words, previous=None):
     return 4, min(8, cap)
 
 
-def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12, facts=None):
+def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12, facts=None, log=print):
     """Valida o roteiro contra o corpo e título da matéria (nunca contra manchetes relacionadas)."""
     if not story.get('body') and len(source_text(story).split()) < MIN_SOURCE_WORDS:
         # Se não tem corpo nem atinge a fonte mínima, só permite se for teste explícito de manchete com >= 6 palavras,
@@ -1248,16 +1248,44 @@ def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12, fa
             fact_allowed_nums = _allowed_numbers(cited_fact)
             line_nums = _numbers(text)
             missing_nums = line_nums - fact_allowed_nums
-            if missing_nums:
-                raise ValueError(f'A fala citou números ausentes no fato {f_idx} (ou título): ' +
-                                 ', '.join(sorted(missing_nums)))
             fact_tokens = set(_tokens(cited_fact))
             fact_entities = {e.casefold() for e in _entities(cited_fact)}
             line_entities = _entities(text)
-            for ent in line_entities:
-                ent_low = ent.casefold()
-                if ent_low not in fact_entities and (_tokens(ent) and _tokens(ent)[0] not in fact_tokens):
-                    raise ValueError(f'A fala citou nome/entidade "{ent}" ausente no fato {f_idx} (ou título).')
+            missing_entities = [ent for ent in line_entities if ent.casefold() not in fact_entities and (_tokens(ent) and _tokens(ent)[0] not in fact_tokens)]
+
+            if missing_nums or missing_entities:
+                matching_m = []
+                line_content = _content_words(text)
+                for m in range(len(facts)):
+                    if m == f_idx:
+                        continue
+                    candidate_fact = facts[m] + ' ' + story.get('title', '')
+                    cand_allowed_nums = _allowed_numbers(candidate_fact)
+                    if line_nums - cand_allowed_nums:
+                        continue
+                    cand_tokens = set(_tokens(candidate_fact))
+                    cand_entities = {e.casefold() for e in _entities(candidate_fact)}
+                    cand_missing_entities = [ent for ent in line_entities if ent.casefold() not in cand_entities and (_tokens(ent) and _tokens(ent)[0] not in cand_tokens)]
+                    if cand_missing_entities:
+                        continue
+                    cand_fact_content = _content_words(facts[m])
+                    shared_words = sum(1 for lw in line_content if any(_word_matches_keyword(lw, fw) for fw in cand_fact_content))
+                    if shared_words >= 2:
+                        matching_m.append(m)
+
+                if len(matching_m) == 1:
+                    new_m = matching_m[0]
+                    log(f'fala {i + 1} recolocada do fato {f_idx} para o fato {new_m}')
+                    line['fato'] = new_m
+                    f_idx = new_m
+                    missing_nums = set()
+                    missing_entities = []
+                else:
+                    if missing_nums:
+                        raise ValueError(f'A fala citou números ausentes no fato {f_idx} (ou título): ' +
+                                         ', '.join(sorted(missing_nums)))
+                    if missing_entities:
+                        raise ValueError(f'A fala citou nome/entidade "{missing_entities[0]}" ausente no fato {f_idx} (ou título).')
         else:
             raise ValueError(f'A fala {i + 1} deve indicar "fato": N ou "reacao": true.')
 
@@ -1780,7 +1808,7 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
             payload['correcao'] = error
         raw = ask(instruction, json.dumps(payload, ensure_ascii=False))
         try:
-            lines, problem = validate_lines(raw, story, max_words, loop, min_lines, max_lines, facts=facts)
+            lines, problem = validate_lines(raw, story, max_words, loop, min_lines, max_lines, facts=facts, log=log)
         except ValueError as exc:
             error = str(exc)
             continue

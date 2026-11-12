@@ -20,6 +20,7 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
      - Cobertura do tema (`extract_title_keywords()`): extrai palavras-chave distintivas do título (normalizadas sem acento, sem stopwords e sem números); exige que pelo menos 1 apareça nos primeiros 3 turnos e que o roteiro cubra pelo menos 2 no total quando o título tiver 2 ou mais termos.
      - Gancho respondido: se a primeira fala for uma pergunta, a fala 1 ou 2 deve ser marcada "fato" (nunca "reacao") e seu fato correspondente deve compartilhar pelo menos 2 palavras de conteúdo ou 1 número com a pergunta, senão o roteiro é rejeitado.
      - Marcação "fato" não pode ser decorativa: uma fala com `fato: N` deve compartilhar pelo menos 2 palavras de conteúdo (sem stopwords, sem acento, minúsculas) ou 1 número com o fato N. Perguntas especulativas sem sobreposição são rejeitadas.
+     - Relink automático do índice do fato: quando uma fala marcada `fato: N` cita números ou entidades ausentes no fato N, mas que estão em exatamente um outro fato M (ou título) e compartilham pelo menos 2 palavras de conteúdo com a fala, corrige a marcação para `fato: M` e loga `fala X recolocada do fato N para o fato M`. Se os números não estiverem em nenhum fato nem no título, mantém a rejeição.
      - Variedade e muletas: no máximo 1 fala começando com muletas de concordância ("Exatamente", "Isso mesmo", "Verdade", "Concordo", "Pois é", "Realmente"); no máximo 3 vocativos (mano, cara, Sasuke, Naruto) no roteiro e nenhum em fala que carrega número; no máximo 50% das falas podem ser perguntas; e o Sasuke deve fazer pelo menos 1 pergunta ou provocação no diálogo.
      - Cada fala é amarrada a um fato (`{"fato": N}`) ou é uma reação curta (`{"reacao": true}`, máx. 6 palavras, sem dígitos, máx. 2 por roteiro, nunca consecutivas e nunca na última fala).
      - Proíbe citar o nome do veículo, expressões de telejornal (`"confirmado por"`, `"segundo o"`, `"nesta segunda-feira"`) e fechos de enchimento na última fala (`FILLER_CLOSE`: `"que legal"`, `"show"`, `"incrível"`).
@@ -59,9 +60,9 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
 - O script `publicar_github.py` cria/atualiza o repositório como **privado por padrão** (use `--publico` para público), lê o token exclusivamente de `GITHUB_TOKEN` ou `getpass` (sem argumento `--token` e sem eco no terminal) e faz push sem `force`.
 - Testes que utilizam áudios de demonstração sintetizam automaticamente um WAV silencioso via módulo padrão `wave` quando o arquivo local não existir.
 
-## Suíte de Testes (72 Testes)
+## Suíte de Testes (73 Testes)
 
-- `tests/test_news_auto.py` (42 testes) e `tests/test_integration.py` (30 testes) — totalizando **72 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
+- `tests/test_news_auto.py` (43 testes) e `tests/test_integration.py` (30 testes) — totalizando **73 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'
