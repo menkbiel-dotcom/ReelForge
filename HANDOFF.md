@@ -254,7 +254,7 @@
 # Rodada 6 — Isolamento de Testes, Escolha Determinística de Pauta e Diagnóstico Ollama (Itens 20 a 23)
 
 - [x] **ITEM 20 — Isolar testes do `output/` real (`tests/_isolation.py`, `tests/test_news_auto.py`, `tests/test_integration.py`)**: feito
-  - **Commit:** a preencher após commit — *"Isola engine.OUTPUT em diretorio temporario em todos os testes com guarda contra escrita real"*
+  - **Commit:** `528e616dfa60482ec0094359ea014bca02b04720` — *"Isola engine.OUTPUT em diretorio temporario em todos os testes com guarda contra escrita real"*
   - **Arquivos tocados:** `tests/_isolation.py`, `tests/test_news_auto.py`, `tests/test_integration.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 83 testes passando em duas execuções consecutivas sem alterar `output/` real (`test_item20_isolated_output_guard`)
 
@@ -265,6 +265,17 @@
 - Adicionado `test_item20_isolated_output_guard` que valida a herança do mixin em todas as classes, resolução dinâmica de `engine.OUTPUT` e executa toda a suíte em subprocesso confirmando `after - before == []` na pasta `output/` real.
 - **Próximo item:** ITEM 21 (`news_auto.py`, `pick_story` determinístico).
 
-- [ ] **ITEM 21 — Escolha de pauta determinística por padrão (`news_auto.py`)**: a fazer
+- [x] **ITEM 21 — Escolha de pauta determinística por padrão (`news_auto.py`)**: feito
+  - **Commit:** a preencher após commit — *"Torna pick_story deterministico por padrao com fallback rapido no modo LLM"*
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 84 testes passando (incluindo `test_item21_deterministic_pick_story_and_llm_fallback`)
+
+### Detalhes do ITEM 21
+- `pick_story`:
+  - Fluxo padrão não chama LLM: filtra pautas ainda não usadas na tabela `used` (`_filter_unused_candidates`, respeitando `allow_repeat`), prioriza as que passam em `require_minimum_source()` e escolhe a de maior `complexity_score` (`_candidate_rank_score`).
+  - Se `settings.json` definir `"escolha_pauta_llm": true`, envia ao LLM apenas `index`, `titulo` (máx. 140 chars) e `frase` (1ª frase com máx. 180 chars) de no máximo 12 pautas ranqueadas (< 1500 tokens). Em qualquer falha/timeout, loga `"escolha da pauta por LLM falhou; usando ranking"` e faz fallback imediato para `ranked[0]`.
+  - Atualizado `automatic()` para repassar `allow_repeat` e `log` para `pick_story`.
+- **Próximo item:** ITEM 22 (`engine.py`, timeouts e erros do Ollama amigáveis).
+
 - [ ] **ITEM 22 — Timeouts e erros do Ollama amigáveis (`engine.py`)**: a fazer
 - [ ] **ITEM 23 — Diagnóstico no "Verificar ambiente" (`gui.py` / `news_auto.py`)**: a fazer

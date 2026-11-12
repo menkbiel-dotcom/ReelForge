@@ -56,7 +56,8 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
 
     def test_ollama_picks_story_by_index(self):
         cands = [{'title': 'A', 'source': '', 'published': ''}, {'title': 'B', 'source': '', 'published': ''}]
-        story = news_auto.pick_story(cands, ask=lambda i, p: {'index': '1', 'reason': 'ok'})
+        with patch.object(engine, 'load_settings', return_value={'escolha_pauta_llm': True}):
+            story = news_auto.pick_story(cands, ask=lambda i, p: {'index': '1', 'reason': 'ok'})
         self.assertEqual(story['title'], 'B')
 
     def test_script_alternates_speakers_and_rejects_invented_numbers(self):
@@ -552,8 +553,6 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
             {'speaker': 0, 'text': 'Vale pagar 32 mil nesse aparelho?', 'fato': 1}
         ]}
         seq = iter([
-            {'index': 0, 'reason': 'primeira sem corpo'},
-            {'index': 0, 'reason': 'segunda com corpo'},
             facts_resp,
             script_resp,
             {'nota': 9, 'problemas': []},
@@ -2514,6 +2513,89 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
             after = set(p.name for p in real_output.iterdir()) if real_output.exists() else set()
             created = sorted(after - before)
             self.assertEqual(created, [], f'Suíte criou arquivos no output/ real: {created}')
+
+    def test_item21_deterministic_pick_story_and_llm_fallback(self):
+        # 1. Fluxo padrão não chama ask e escolhe a pauta não usada com maior complexity_score e corpo mínimo válido
+        used_cand = {
+            'id': 'u1',
+            'title': 'Notícia já usada no banco',
+            'source': 'G1',
+            'url': 'https://a/u1',
+            'body': 'A Petrobras anunciou R$ 50 bilhões em novos investimentos no Brasil nesta segunda-feira. ' * 5,
+            'complexity': 99.0,
+        }
+        engine.mark_used(dict(used_cand, source_type='rss'))
+        no_body_cand = {
+            'id': 'nb1',
+            'title': 'Manchete sem corpo com score alto',
+            'source': 'G1',
+            'url': 'https://a/nb1',
+            'body': '',
+            'complexity': 90.0,
+        }
+        low_score_cand = {
+            'id': 'l1',
+            'title': 'Pauta válida mais simples',
+            'source': 'UOL',
+            'url': 'https://a/l1',
+            'body': 'Empresa apresentou novo recurso de sistema digital esta semana para clientes locais. ' * 5,
+            'complexity': 10.5,
+        }
+        high_score_cand = {
+            'id': 'h1',
+            'title': 'Pauta válida com maior complexidade',
+            'source': 'CNN Brasil',
+            'url': 'https://a/h1',
+            'body': 'O Banco Central registrou alta de 12,5% e reserva de US$ 350 bilhões no país em 2026. ' * 5,
+            'complexity': 25.0,
+        }
+        cands = [used_cand, no_body_cand, low_score_cand, high_score_cand]
+        ask_mock = Mock(side_effect=AssertionError('Fluxo padrão não deve chamar LLM em pick_story'))
+        with patch.object(engine, 'load_settings', return_value={}):
+            chosen = news_auto.pick_story(cands, ask=ask_mock)
+        ask_mock.assert_not_called()
+        self.assertEqual(chosen['id'], 'h1')
+
+        # 2. Com escolha_pauta_llm: true -> envia no máx 12 pautas (só título + 1 frase, < 1500 tokens)
+        many_cands = []
+        for idx in range(15):
+            many_cands.append({
+                'id': f'c{idx}',
+                'title': f'Título notícia {idx} sobre economia e tecnologia',
+                'source': 'G1',
+                'url': f'https://a/{idx}',
+                'body': (
+                    f'Primeira frase objetiva da notícia {idx} com R$ {100 + idx} milhões envolvidos. '
+                    + ('Segundo parágrafo longo que não deve ir para o prompt de seleção. ' * 20)
+                ),
+                'complexity': 30.0 - idx,
+            })
+        captured = []
+        def llm_ok(inst, payload_str):
+            captured.append((inst, json.loads(payload_str)))
+            return {'index': 2, 'reason': 'bom gancho'}
+
+        with patch.object(engine, 'load_settings', return_value={'escolha_pauta_llm': True}):
+            chosen_llm = news_auto.pick_story(many_cands, ask=llm_ok)
+        self.assertEqual(chosen_llm['id'], 'c2')
+        self.assertEqual(len(captured), 1)
+        sent_inst, sent_payload = captured[0]
+        sent_list = sent_payload['candidatos']
+        self.assertLessEqual(len(sent_list), 12)
+        self.assertEqual(set(sent_list[0].keys()), {'index', 'titulo', 'frase'})
+        self.assertNotIn('Segundo parágrafo', json.dumps(sent_payload))
+        est_tokens = (len(sent_inst) + len(json.dumps(sent_payload, ensure_ascii=False))) / 3.5
+        self.assertLess(est_tokens, 1500)
+
+        # 3. Fallback em timeout/falha do LLM: loga mensagem e retorna pauta topo do ranking
+        logs = []
+        def llm_timeout(inst, payload_str):
+            raise TimeoutError('read timed out')
+
+        with patch.object(engine, 'load_settings', return_value={'escolha_pauta_llm': True}):
+            chosen_fb = news_auto.pick_story(many_cands, ask=llm_timeout, log=logs.append)
+        self.assertEqual(chosen_fb['id'], 'c0')
+        self.assertIn('escolha da pauta por LLM falhou; usando ranking', logs)
 
 
 if __name__ == '__main__':
