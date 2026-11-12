@@ -138,6 +138,6 @@
   - **Arquivos tocados:** `gui.py`, `tests/test_integration.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 65 testes passando (incluindo `test_merge_settings_preserves_unknown_keys_and_other_providers` e `test_gui_save_preserves_unknown_settings_on_disk`)
 - [x] **ITEM 9 — Campos de modelo na tela (`gui.py`)**: feito
-  - **Commit:** pendente de envio
+  - **Commit:** `92e989942cc55bd9abd060a540a916113b815f69` — *"Adiciona selecao de modelos Ollama e aceite de nota baixa na interface grafica"*
   - **Arquivos tocados:** `gui.py`, `news_auto.py`, `tests/test_integration.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 68 testes passando (incluindo `test_list_ollama_models_fallback_when_offline`, `test_list_ollama_models_success_from_api` e `test_gui_model_fields_and_accept_low_score_persistence`)
