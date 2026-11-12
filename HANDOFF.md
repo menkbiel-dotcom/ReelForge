@@ -293,7 +293,7 @@
 - **Próximo item:** ITEM 23 — Diagnóstico no "Verificar ambiente" (`gui.py` / `news_auto.py`).
 
 - [x] **ITEM 23 — Diagnóstico no "Verificar ambiente" (`gui.py`)**: feito
-  - **Commit:** (será registrado após push do item 23) — *"Adiciona diagnostico completo do Ollama (tags, ps/VRAM e teste de latencia) ao botao Verificar ambiente"*
+  - **Commit:** `353dd861cbe421c82af1050f83e89d5aeb7da101` — *"Adiciona diagnostico completo do Ollama (tags, ps/VRAM e teste de latencia) ao botao Verificar ambiente"*
   - **Arquivos tocados:** `gui.py`, `tests/test_integration.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 87 testes passando (incluindo `test_diagnose_ollama_environment_reports_ps_probe_and_missing_models` e `test_gui_check_button_runs_ollama_diagnostic`)
 
