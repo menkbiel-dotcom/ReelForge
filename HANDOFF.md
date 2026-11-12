@@ -154,6 +154,6 @@
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 70 testes passando (incluindo `test_strip_glued_headlines_dp_performance_and_clean` e `test_strip_glued_headlines_random_inputs_match_legacy`)
 - [x] **Reforço em `gather_candidates` (limite 60s, shutdown sem espera e logs de feed)**: feito
-  - **Commit:** pendente de envio
+  - **Commit:** `e42745eabbd0673b735687ba29b3bf5debbad61f` — *"Aplica limite de 60s, shutdown sem espera e logs por feed na leitura de RSS"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 72 testes passando (incluindo `test_gather_candidates_feed_logging` e `test_gather_candidates_timeout_ignores_slow_feeds_and_shuts_down`)
