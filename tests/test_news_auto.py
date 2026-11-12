@@ -2129,6 +2129,105 @@ class NewsAutoTests(unittest.TestCase):
         self.assertTrue(any('erro repetido 3x:' in l for l in logs_abort))
         self.assertIn('erro repetido 3x:', str(ctx.exception))
 
+    def test_item16_fact_check_failure_reasons_and_single_rejected_file(self):
+        lines = [
+            {'speaker': 0, 'text': 'Quais exoplanetas o telescópio James Webb detectou?', 'fato': 0},
+            {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
+            {'speaker': 0, 'text': 'O Webb detectou 25 novos exoplanetas e 277 asteroides.', 'fato': 2},
+            {'speaker': 1, 'text': 'A missão espacial fez descobertas por três anos!', 'fato': 1},
+        ]
+        facts = [
+            'O telescópio espacial James Webb da Nasa observou galáxias distantes.',
+            'A missão espacial durou cerca de três anos.',
+            'O Webb detectou 25 novos exoplanetas e 277 asteroides.',
+            'Os cientistas analisaram amostras de poeira cósmica.',
+        ]
+        story = {
+            'title': 'Descobertas do Telescópio Webb',
+            'source': 'Canaltech',
+            'body': 'O telescópio espacial James Webb da Nasa fez grandes descobertas científicas no espaço profundo. '
+                    'A missão espacial do James durou cerca de três anos e analisou amostras cósmicas em 90 dias. '
+                    'O Webb detectou 25 novos exoplanetas e 277 asteroides na pesquisa recente.',
+            'extracted_facts': facts,
+        }
+
+        # 1. Fallback UMA VEZ no HTTP 404 para o modelo do redator
+        logs_404 = []
+        story_fallback = dict(story)
+        def ask_404_fallback(inst, payload, model=None):
+            if model == 'qwen3:8b':
+                raise RuntimeError("Ollama local respondeu HTTP 404: modelo 'qwen3:8b' não instalado.")
+            return {'falas': [{'i': 0, 'suportada': True, 'motivo': ''},
+                              {'i': 1, 'suportada': True, 'motivo': ''},
+                              {'i': 2, 'suportada': True, 'motivo': ''},
+                              {'i': 3, 'suportada': True, 'motivo': ''}]}
+
+        with patch.dict('os.environ', {'OLLAMA_MODEL': 'qwen3.5:4b', 'OLLAMA_JUDGE_MODEL': 'qwen3:8b'}):
+            res_fb = news_auto.verificar_fatos(lines, facts, ask=ask_404_fallback, story=story_fallback, log=logs_404.append)
+        self.assertIn('falas', res_fb)
+        self.assertTrue(story_fallback.get('juiz_fraco'))
+        self.assertTrue(any('juiz padrão indisponível' in l for l in logs_404))
+
+        # 2. HTTP 404 sem sucesso registra causa real
+        story_404_fail = dict(story)
+        def ask_404_all(inst, payload, model=None):
+            raise RuntimeError("Ollama local respondeu HTTP 404.")
+
+        res_404 = news_auto.verificar_fatos(lines, facts, ask=ask_404_all, story=story_404_fail)
+        self.assertTrue(res_404.get('indisponivel'))
+        self.assertIn('404:', res_404.get('motivo', ''))
+        self.assertIn('não instalado', res_404.get('motivo', ''))
+
+        # 3. Timeout registra causa real
+        def ask_timeout(inst, payload, model=None):
+            raise RuntimeError("Connection timed out after 5 seconds")
+
+        res_timeout = news_auto.verificar_fatos(lines, facts, ask=ask_timeout, story=dict(story))
+        self.assertTrue(res_timeout.get('indisponivel'))
+        self.assertEqual(res_timeout.get('motivo'), 'timeout na chamada ao Ollama')
+
+        # 4. JSON inválido registra primeiros 300 caracteres
+        raw_garbage = ''.join(f'tok{i:04d}_' for i in range(100))
+        def ask_invalid_json(inst, payload, model=None):
+            return raw_garbage
+
+        res_invalid_json = news_auto.verificar_fatos(lines, facts, ask=ask_invalid_json, story=dict(story))
+        self.assertTrue(res_invalid_json.get('indisponivel'))
+        self.assertIn('JSON inválido', res_invalid_json.get('motivo', ''))
+        self.assertIn(raw_garbage[:300], res_invalid_json.get('motivo', ''))
+        self.assertNotIn(raw_garbage[350:], res_invalid_json.get('motivo', ''))
+
+        # 5. Resposta sem a chave 'falas'
+        def ask_missing_falas(inst, payload, model=None):
+            return {'status': 'ok', 'avaliacao': 'boa'}
+
+        res_missing = news_auto.verificar_fatos(lines, facts, ask=ask_missing_falas, story=dict(story))
+        self.assertTrue(res_missing.get('indisponivel'))
+        self.assertEqual(res_missing.get('motivo'), "ausência da chave 'falas'")
+
+        # 6. write_script gera apenas 1 rejected_*.json (sem 3 arquivos ~3ms apart) e inclui motivo_checagem, source e modelos
+        out_dir = Path(self.temp.name) / 'out_rej_item16'
+        logs_ws = []
+        writer_mock = lambda i, p, temperature=None: {'lines': lines}
+
+        with patch.object(engine, 'OUTPUT', out_dir), \
+             patch.dict('os.environ', {'REELFORGE_ALLOW_NO_FACT_CHECK': '0'}):
+            with self.assertRaises(RuntimeError) as ctx:
+                news_auto.write_script(story, max_words=80, ask=writer_mock, judge_ask=ask_missing_falas,
+                                       facts=facts, log=logs_ws.append)
+
+        self.assertIn('checagem de fatos indisponível', str(ctx.exception))
+        self.assertTrue(any("motivo da checagem: ausência da chave 'falas'" in l for l in logs_ws))
+        rejected_files = list(out_dir.glob('rejected_*.json'))
+        # Garante que seja salvo exatamente 1 arquivo de rejeição por pauta
+        self.assertEqual(len(rejected_files), 1)
+        data = json.loads(rejected_files[0].read_text(encoding='utf-8'))
+        self.assertEqual(data.get('motivo_checagem'), "ausência da chave 'falas'")
+        self.assertEqual(data.get('source'), 'Canaltech')
+        self.assertIn('redator', data.get('modelos', {}))
+        self.assertIn('juiz', data.get('modelos', {}))
+        self.assertIn('juiz_fraco', data.get('modelos', {}))
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -188,7 +188,7 @@
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 77 testes passando (incluindo `test_item14_deterministic_repair_long_reactions`)
 - [x] **ITEM 15 — Retries com diversidade e correção concreta (`engine.py`, `news_auto.py`)**: feito
-  - **Commit:** PENDING_COMMIT_SHA — *"Adiciona diversidade de temperatura, exemplos concretos na correcao e abandono antecipado"*
+  - **Commit:** 4ff6d7cb70837e90d293a0af268abbd0b0f20dee — *"Adiciona diversidade de temperatura, exemplos concretos na correcao e abandono antecipado"*
   - **Arquivos tocados:** `engine.py`, `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 78 testes passando (incluindo `test_item15_retries_diversity_concrete_correction_and_early_abort`)
 
@@ -197,7 +197,17 @@
 - `write_script` calcula temperatura escalonada por tentativa: tentativas 1 e 2 = 0.55; tentativas 3 a 8 sobem +0.1 por tentativa até 0.9.
 - `_add_concrete_example(error_msg)` anexa exemplos concretos e curtos em `payload['correcao']` para gancho, reações, fecho, números ausentes, vocativos e concordância.
 - Se o mesmo motivo curto de erro se repetir por 3 tentativas consecutivas, loga `erro repetido 3x: <motivo>`, grava diagnóstico de falha e lança `RuntimeError` para que `automatic()` tente a próxima pauta candidata.
-- [ ] **ITEM 16 — Registrar a causa real de "checagem de fatos indisponível" (`news_auto.py`)**: a fazer
+- [x] **ITEM 16 — Registrar a causa real de "checagem de fatos indisponível" (`news_auto.py`)**: feito
+  - **Commit:** PENDING_COMMIT_SHA — *"Registra causa concreta de indisponibilidade da checagem de fatos e deduplica rejeicoes"*
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 79 testes passando (incluindo `test_item16_fact_check_failure_reasons_and_single_rejected_file`)
+
+### Detalhes do ITEM 16
+- `_extract_fact_check_failure_reason` captura a causa real da falha: status HTTP (ex.: `404: modelo 'qwen3:8b' não instalado`), timeout (`timeout na chamada ao Ollama`), JSON inválido (primeiros 300 caracteres) ou ausência da chave 'falas'.
+- `verificar_fatos` devolve `{"indisponivel": True, "motivo": motivo_concreto}` e loga a causa concreta no console.
+- Em caso de HTTP 404, faz fallback UMA VEZ para o modelo redator como juiz e marca `juiz_fraco=true`.
+- Investigação dos 3 arquivos `rejected_*.json` salvos com ~3ms de diferença: ocorria porque `_save_rejected_script` era chamado a cada tentativa do loop quando `vf.get('indisponivel')` acontecia, antes de verificar `quality_retries >= 2`. Corrigido para salvar apenas após esgotar as 2 regenerações, e adicionado reuso/sobrescrita por `story['_rejected_path']` garantindo que apenas 1 arquivo de rejeição seja salvo por pauta.
+- Garantido que `source`, `modelos` e `motivo_checagem` estejam sempre presentes em `rejected_*.json`.
 - [ ] **ITEM 17 — Tamanho mínimo e fecho do roteiro (`news_auto.py`)**: a fazer
 - [ ] **ITEM 18 — Robustez do Passo 1 (`news_auto.py`)**: a fazer
 - [ ] **ITEM 19 — Estilo das falas (`news_auto.py`)**: a fazer

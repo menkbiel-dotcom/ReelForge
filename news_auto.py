@@ -1649,6 +1649,36 @@ def deterministic_check(lines):
     return (2 if issues else 0), issues
 
 
+def _extract_fact_check_failure_reason(exc=None, raw_response=None, judge_model=None):
+    """Extrai a causa real/concreta da falha na verificação de fatos."""
+    if exc is not None:
+        exc_str = str(exc)
+        is_404 = ('404' in exc_str) or (getattr(exc, 'response', None) and getattr(exc.response, 'status_code', None) == 404)
+        if is_404:
+            m_name = judge_model or 'qwen3:8b'
+            return f"404: modelo '{m_name}' não instalado"
+        http_m = re.search(r'HTTP\s*(\d{3})', exc_str, re.I)
+        if http_m:
+            code = http_m.group(1)
+            return f"status HTTP {code}"
+        if 'timeout' in exc_str.lower() or 'timed out' in exc_str.lower():
+            return "timeout na chamada ao Ollama"
+        if isinstance(exc, (json.JSONDecodeError, ValueError)) and ('json' in exc_str.lower() or 'decode' in exc_str.lower()):
+            raw_preview = getattr(exc, 'doc', exc_str)[:300]
+            return f"JSON inválido ({raw_preview})"
+        return exc_str[:300]
+    if raw_response is not None:
+        if isinstance(raw_response, str):
+            return f"JSON inválido ({raw_response[:300]})"
+        if not isinstance(raw_response, dict):
+            return f"JSON inválido ({str(raw_response)[:300]})"
+        if 'falas' not in raw_response:
+            return "ausência da chave 'falas'"
+        if not isinstance(raw_response.get('falas'), list):
+            return "ausência da chave 'falas'"
+    return "resposta inválida do juiz de fatos"
+
+
 def verificar_fatos(lines, facts, ask=None, story=None, log=print):
     """Verifica se cada fala do roteiro é suportada pelos fatos extraídos da matéria."""
     instruction = (
@@ -1662,14 +1692,37 @@ def verificar_fatos(lines, facts, ask=None, story=None, log=print):
         'falas': [{'i': i, 'personagem': NAMES[l.get('speaker', 0)], 'fala': l.get('text', '')}
                   for i, l in enumerate(lines)],
     }, ensure_ascii=False)
+    last_motivo = None
+    target_model = judge_model_name()
+    if story and story.get('juiz_fraco'):
+        import engine
+        cfg = {}
+        try:
+            cfg = engine.load_settings()
+        except Exception:
+            pass
+        target_model = os.getenv('OLLAMA_MODEL') or cfg.get('ollama_model') or 'qwen3.5:4b'
+
     for _ in range(2):
         try:
             res = call_judge(instruction, payload, ask=ask, story=story, log=log)
             if isinstance(res, dict) and isinstance(res.get('falas'), list):
                 return res
-        except Exception:
+            last_motivo = _extract_fact_check_failure_reason(raw_response=res, judge_model=target_model)
+        except Exception as exc:
+            cur_model = target_model
+            if story and story.get('juiz_fraco'):
+                import engine
+                cfg = {}
+                try:
+                    cfg = engine.load_settings()
+                except Exception:
+                    pass
+                cur_model = os.getenv('OLLAMA_MODEL') or cfg.get('ollama_model') or 'qwen3.5:4b'
+            last_motivo = _extract_fact_check_failure_reason(exc=exc, judge_model=cur_model)
             continue
-    return {'indisponivel': True}
+    motivo_final = last_motivo or 'causa desconhecida'
+    return {'indisponivel': True, 'motivo': motivo_final}
 
 
 class QualityProblem(dict):
@@ -1771,8 +1824,13 @@ def evaluate_script(lines, story, ask=None, log=print):
 def _save_rejected_script(story, lines, review):
     import engine
     engine.OUTPUT.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
-    path = engine.OUTPUT / f'rejected_{stamp}.json'
+    if story and story.get('_rejected_path'):
+        path = Path(story['_rejected_path'])
+    else:
+        stamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        path = engine.OUTPUT / f'rejected_{stamp}.json'
+        if story is not None:
+            story['_rejected_path'] = str(path)
     cfg = {}
     try:
         cfg = engine.load_settings()
@@ -1780,14 +1838,14 @@ def _save_rejected_script(story, lines, review):
         pass
     writer_model = os.getenv('OLLAMA_MODEL') or cfg.get('ollama_model') or 'qwen3.5:4b'
     judge_model = judge_model_name()
-    juiz_fraco = bool(story.get('juiz_fraco', False))
-    modelos = story.get('modelos') or {
+    juiz_fraco = bool(story.get('juiz_fraco', False)) if story else False
+    modelos = (story.get('modelos') if story else None) or {
         'redator': writer_model,
         'juiz': judge_model,
         'juiz_fraco': juiz_fraco,
     }
     lines_saved = []
-    for l in lines:
+    for l in (lines or []):
         entry = {'speaker': l.get('speaker', 0), 'text': l.get('text', '')}
         if l.get('reacao'):
             entry['reacao'] = True
@@ -1797,15 +1855,24 @@ def _save_rejected_script(story, lines, review):
             except (ValueError, TypeError):
                 pass
         lines_saved.append(entry)
+
+    src = story.get('source') if story else ''
+    if isinstance(src, dict):
+        src = src.get('title', '')
+    source_val = src or (story.get('source_type') if story else '') or 'rss'
+
+    motivo_checagem = review.get('motivo_checagem') or (story.get('motivo_checagem') if story else None)
+
     payload = {
-        'title': story.get('title', ''),
-        'source': story.get('source', ''),
+        'title': story.get('title', '') if story else '',
+        'source': source_val,
         'nota': review.get('nota'),
         'problemas': review.get('problemas', []),
         'juiz_fraco': juiz_fraco,
         'modelos': modelos,
-        'contradicao': story.get('contradicao'),
-        'gancho': story.get('gancho'),
+        'motivo_checagem': motivo_checagem,
+        'contradicao': story.get('contradicao') if story else None,
+        'gancho': story.get('gancho') if story else None,
         'lines': lines_saved,
     }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -2023,19 +2090,25 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
 
         if vf is not None:
             if vf.get('indisponivel'):
+                motivo_concreto = vf.get('motivo') or 'indisponível'
                 log('verificação de fatos indisponível')
+                log(f'motivo da checagem: {motivo_concreto}')
                 if not allow_no_fact_check_enabled():
-                    review = {'nota': None, 'problemas': ['checagem de fatos indisponível']}
-                    rejected_path = _save_rejected_script(story, lines, review)
-                    motivo = 'checagem de fatos indisponível'
+                    motivo = f'checagem de fatos indisponível: {motivo_concreto}'
                     log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
                     if quality_retries >= 2:
+                        review = {
+                            'nota': None,
+                            'problemas': ['checagem de fatos indisponível'],
+                            'motivo_checagem': motivo_concreto,
+                        }
+                        rejected_path = _save_rejected_script(story, lines, review)
                         raise RuntimeError(
                             f'Roteiro reprovado após 2 regenerações '
                             f'(problemas: checagem de fatos indisponível). Salvo em {rejected_path}.'
                         )
                     quality_retries += 1
-                    error = 'Checagem de fatos indisponível no Ollama.'
+                    error = f'Checagem de fatos indisponível no Ollama ({motivo_concreto}).'
                     attempts_history.append({
                         'tentativa': attempt,
                         'resposta_bruta': raw_str[:4000],
