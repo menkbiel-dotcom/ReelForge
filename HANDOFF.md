@@ -233,7 +233,7 @@
   - Mantidas todas as validações de números permitidos (`_allowed_numbers`), unidades temporais (`TEMPORAL_UNITS`) e tamanho do gancho (`validate_hook`).
   - Atualizadas fixtures mock em testes legados (`test_low_score...`, `test_fictional_few_shot...`, `test_automatic_retries...`) para fornecer contradição/gancho em seus mocks de fatos.
 - [x] **ITEM 19 — Estilo das falas (`news_auto.py`)**: feito
-  - **Commit:** a preencher após commit — *"Reforca estilo falado e informal no prompt do redator com novo exemplo ficticio"*
+  - **Commit:** `1c73b7c03b7d2f48d50ff81c200e4767d8e156a0` — *"Reforca estilo falado e informal no prompt do redator com novo exemplo ficticio"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 82 testes passando (incluindo `test_item19_writer_prompt_reinforcement_and_fictional_examples`)
 
