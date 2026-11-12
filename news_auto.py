@@ -1849,6 +1849,28 @@ def _short_reason(error):
     return reason
 
 
+def _add_concrete_example(error_msg):
+    err = str(error_msg).strip()
+    if not err or 'Exemplo' in err:
+        return err
+    err_lower = err.casefold()
+    if 'reação' in err_lower and ('palavras' in err_lower or 'números' in err_lower or 'dígitos' in err_lower or 'máximo permitido é 6' in err_lower):
+        return err + ' Exemplo de reação válida: "Caramba!" ou "Sério mesmo?"'
+    elif 'primeira fala' in err_lower and ('palavras' in err_lower or 'começar com' in err_lower or 'gancho' in err_lower):
+        return err + ' Exemplo de gancho válido: "Você viu quanto café o Brasil exportou?" (máximo 10 palavras).'
+    elif 'fecho' in err_lower or 'última fala' in err_lower:
+        return err + ' Exemplo de fecho válido: "Será que esse ritmo se mantém até o fim do ano?"'
+    elif 'números ausentes' in err_lower or 'número' in err_lower:
+        return err + ' Exemplo: cite apenas números exatos que constam no fato indicado.'
+    elif 'vocativo' in err_lower:
+        return err + ' Exemplo: "O valor foi de 10 milhões." (sem "mano" ou "cara" na mesma fala que carrega números).'
+    elif 'concordância' in err_lower or 'muletas' in err_lower:
+        return err + ' Exemplo: vá direto ao fato em vez de começar com "Exatamente" ou "Isso mesmo".'
+    elif 'perguntas' in err_lower:
+        return err + ' Exemplo: use afirmações e explicações nos fatos, deixando perguntas apenas para o gancho ou provocações.'
+    return err
+
+
 def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, loop=None,
                  facts=None, accept_low_score=None, log=print, judge_ask=None):
     """Passo 1 (extrai 5-6 fatos) -> Passo 2 (escreve diálogo usando só os fatos) -> Filtro de qualidade (nota >= 7)."""
@@ -1931,37 +1953,63 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
     quality_retries = 0
     max_attempts = 8
     attempts_history = []
+    last_val_error = None
+    repeat_count = 0
     for attempt in range(1, max_attempts + 1):
         if error:
-            payload['correcao'] = error
-        raw = ask(instruction, json.dumps(payload, ensure_ascii=False))
+            payload['correcao'] = _add_concrete_example(error)
+        temp = 0.55 if attempt <= 2 else min(0.9, round(0.55 + (attempt - 2) * 0.1, 2))
+        try:
+            raw = ask(instruction, json.dumps(payload, ensure_ascii=False), temperature=temp)
+        except TypeError:
+            raw = ask(instruction, json.dumps(payload, ensure_ascii=False))
         repair_reactions(raw, log=log)
         raw_str = json.dumps(raw, ensure_ascii=False) if isinstance(raw, (dict, list)) else str(raw)
         try:
             lines, problem = validate_lines(raw, story, max_words, loop, min_lines, max_lines, facts=facts, log=log)
         except ValueError as exc:
             error = str(exc)
+            motivo = _short_reason(error)
+            if motivo == last_val_error:
+                repeat_count += 1
+            else:
+                last_val_error = motivo
+                repeat_count = 1
             attempts_history.append({
                 'tentativa': attempt,
                 'resposta_bruta': raw_str[:4000],
                 'erro': error,
                 'erro_validacao': error,
             })
-            motivo = _short_reason(error)
             log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
+            if repeat_count >= 3:
+                log(f'erro repetido 3x: {motivo}')
+                falha_path = _save_failure_log(story, facts, attempts_history)
+                raise RuntimeError(f'Não foi possível gerar um roteiro válido (erro repetido 3x: {motivo}). Detalhes em {falha_path}')
             continue
         if problem:
             error = problem
             best_lines = lines
+            motivo = _short_reason(error)
+            if motivo == last_val_error:
+                repeat_count += 1
+            else:
+                last_val_error = motivo
+                repeat_count = 1
             attempts_history.append({
                 'tentativa': attempt,
                 'resposta_bruta': raw_str[:4000],
                 'erro': error,
                 'erro_validacao': error,
             })
-            motivo = _short_reason(error)
             log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
+            if repeat_count >= 3:
+                log(f'erro repetido 3x: {motivo}')
+                falha_path = _save_failure_log(story, facts, attempts_history)
+                raise RuntimeError(f'Não foi possível gerar um roteiro válido (erro repetido 3x: {motivo}). Detalhes em {falha_path}')
             continue
+        last_val_error = None
+        repeat_count = 0
 
         # Verificação factual das falas pelo modelo juiz
         if judge_ask is not None:

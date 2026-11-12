@@ -1887,14 +1887,16 @@ class NewsAutoTests(unittest.TestCase):
         }
 
         # Mock writer que sempre falha e retorna resposta longa (> 4000 caracteres)
-        long_text = 'palavra ' * 800
         attempts_called = []
 
         def mock_failing_writer(inst, payload_str):
+            att_idx = len(attempts_called)
             attempts_called.append(payload_str)
-            return {'lines': [
-                {'speaker': 0, 'text': long_text, 'fato': 0},
-            ]}
+            num_lines = [1, 2, 3, 9, 10, 11, 12, 13][att_idx % 8]
+            return {
+                'lines': [{'speaker': 0, 'text': f'Linha {i}', 'fato': 0} for i in range(num_lines)],
+                'extra_debug_payload': 'x' * 5000,
+            }
 
         with self.assertRaises(RuntimeError) as ctx:
             news_auto.write_script(story, max_words=80, ask=mock_failing_writer, facts=facts)
@@ -2053,6 +2055,79 @@ class NewsAutoTests(unittest.TestCase):
         self.assertEqual(len(out_lines), 4)
         self.assertIn('fala 2: reação reparada', logs_ws)
         self.assertEqual(out_lines[1]['text'], 'Caramba!')
+
+    def test_item15_retries_diversity_concrete_correction_and_early_abort(self):
+        import json
+        story = {
+            'title': 'Descobertas do Telescópio Webb',
+            'body': 'O telescópio espacial James Webb da Nasa fez grandes descobertas científicas no espaço profundo. '
+                    'A missão espacial do James durou cerca de três anos e analisou amostras cósmicas em 90 dias. '
+                    'O Webb detectou 25 novos exoplanetas e 277 asteroides na pesquisa recente. '
+                    'A temperatura no vácuo espacial atingiu níveis extremos e vinte países parceiros participaram.',
+            'source_type': 'rss',
+            'extracted_facts': [
+                'O telescópio espacial James Webb da Nasa observou galáxias distantes.',
+                'A missão espacial durou cerca de três anos.',
+                'O Webb detectou 25 novos exoplanetas e 277 asteroides.',
+                'Os cientistas analisaram amostras de poeira cósmica.',
+            ],
+        }
+
+        # 1. Verifica temperaturas passadas por tentativa e exemplo concreto na correção
+        temperatures_received = []
+        corrections_received = []
+
+        def mock_writer_temp(inst, payload_str, temperature=None):
+            temperatures_received.append(temperature)
+            payload = json.loads(payload_str)
+            if 'correcao' in payload:
+                corrections_received.append(payload['correcao'])
+            if len(temperatures_received) < 4:
+                filler = ' ' + ' '.join(['extra'] * (len(temperatures_received) + 1))
+                return {'lines': [
+                    {'speaker': 0, 'text': f'Quais exoplanetas o telescópio James Webb detectou nesta missão{filler}?', 'fato': 0},
+                    {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
+                    {'speaker': 0, 'text': 'O Webb detectou 25 novos exoplanetas e 277 asteroides.', 'fato': 2},
+                    {'speaker': 1, 'text': 'A missão espacial fez descobertas por três anos!', 'fato': 1},
+                ]}
+            return {'lines': [
+                {'speaker': 0, 'text': 'Quais exoplanetas o telescópio James Webb detectou?', 'fato': 0},
+                {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
+                {'speaker': 0, 'text': 'O Webb detectou 25 novos exoplanetas e 277 asteroides.', 'fato': 2},
+                {'speaker': 1, 'text': 'A missão espacial fez descobertas por três anos!', 'fato': 1},
+            ]}
+
+        mock_judge = lambda i, p, model=None: {'falas': [{'i': idx, 'suportada': True, 'motivo': ''} for idx in range(4)]} if 'checador de fatos' in i.lower() else {'nota': 8, 'responde_perguntas': True, 'contradiz_materia': False, 'problemas': []}
+
+        news_auto.write_script(story, max_words=80, ask=mock_writer_temp, judge_ask=mock_judge, facts=story['extracted_facts'])
+        self.assertEqual(len(temperatures_received), 4)
+        self.assertEqual(temperatures_received[0], 0.55)
+        self.assertEqual(temperatures_received[1], 0.55)
+        self.assertEqual(temperatures_received[2], 0.65)
+        self.assertEqual(temperatures_received[3], 0.75)
+        self.assertTrue(len(corrections_received) >= 1)
+        self.assertIn('Exemplo', corrections_received[0])
+
+        # 2. Abandono antecipado se o MESMO erro de validação se repetir 3 vezes seguidas
+        calls_abort = []
+        logs_abort = []
+
+        def mock_writer_repeat(inst, payload_str, temperature=None):
+            calls_abort.append(temperature)
+            return {'lines': [
+                {'speaker': 0, 'text': 'Quais exoplanetas o telescópio James Webb detectou nesta missão espacial agora?', 'fato': 0},
+                {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
+                {'speaker': 0, 'text': 'O Webb detectou 25 novos exoplanetas e 277 asteroides.', 'fato': 2},
+                {'speaker': 1, 'text': 'A missão espacial fez descobertas por três anos!', 'fato': 1},
+            ]}
+
+        with self.assertRaises(RuntimeError) as ctx:
+            news_auto.write_script(story, max_words=80, ask=mock_writer_repeat, judge_ask=mock_judge, facts=story['extracted_facts'], log=logs_abort.append)
+
+        # Abandona logo na 3ª tentativa em vez de gastar 8 tentativas
+        self.assertEqual(len(calls_abort), 3)
+        self.assertTrue(any('erro repetido 3x:' in l for l in logs_abort))
+        self.assertIn('erro repetido 3x:', str(ctx.exception))
 
 
 if __name__ == '__main__':

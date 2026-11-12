@@ -184,10 +184,19 @@
 # Rodada 5 — Reparo Determinístico, Retries Inteligentes e Robustez de Geração (Itens 14 a 19)
 
 - [x] **ITEM 14 — Reparo determinístico de reações longas (`news_auto.py`)**: feito
-  - **Commit:** `pending` — *"Repara deterministicamente falas de reacao longas ou com digitos antes da validacao"*
+  - **Commit:** `991668a4e640ae98741198c6c86f9c4f20916c50` — *"Repara deterministicamente falas de reacao longas ou com digitos antes da validacao"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 77 testes passando (incluindo `test_item14_deterministic_repair_long_reactions`)
-- [ ] **ITEM 15 — Retries com diversidade e correção concreta (`engine.py`, `news_auto.py`)**: a fazer
+- [x] **ITEM 15 — Retries com diversidade e correção concreta (`engine.py`, `news_auto.py`)**: feito
+  - **Commit:** PENDING_COMMIT_SHA — *"Adiciona diversidade de temperatura, exemplos concretos na correcao e abandono antecipado"*
+  - **Arquivos tocados:** `engine.py`, `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 78 testes passando (incluindo `test_item15_retries_diversity_concrete_correction_and_early_abort`)
+
+### Detalhes do ITEM 15
+- `engine.request_json` aceita `temperature` (padrão 0.55) e repassa para as opções do Ollama.
+- `write_script` calcula temperatura escalonada por tentativa: tentativas 1 e 2 = 0.55; tentativas 3 a 8 sobem +0.1 por tentativa até 0.9.
+- `_add_concrete_example(error_msg)` anexa exemplos concretos e curtos em `payload['correcao']` para gancho, reações, fecho, números ausentes, vocativos e concordância.
+- Se o mesmo motivo curto de erro se repetir por 3 tentativas consecutivas, loga `erro repetido 3x: <motivo>`, grava diagnóstico de falha e lança `RuntimeError` para que `automatic()` tente a próxima pauta candidata.
 - [ ] **ITEM 16 — Registrar a causa real de "checagem de fatos indisponível" (`news_auto.py`)**: a fazer
 - [ ] **ITEM 17 — Tamanho mínimo e fecho do roteiro (`news_auto.py`)**: a fazer
 - [ ] **ITEM 18 — Robustez do Passo 1 (`news_auto.py`)**: a fazer
