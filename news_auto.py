@@ -1076,7 +1076,7 @@ def validate_hook(gancho, story, source):
     return g
 
 
-def extract_facts(story, ask=None):
+def extract_facts(story, ask=None, log=print):
     """Passo 1: extrai de 5 a 6 fatos curtos, contradição e gancho EXCLUSIVAMENTE do texto da matéria."""
     import engine
     require_minimum_source(story)
@@ -1123,6 +1123,40 @@ def extract_facts(story, ask=None):
 
         raw_gancho = raw.get('gancho') if isinstance(raw, dict) else None
         valid_hook = validate_hook(raw_gancho, story, source) if raw_gancho else None
+
+        # ITEM 18: Se contradição ou gancho vierem nulos/vazios, faz 1 retry específico
+        # pedindo apenas esses dois campos a partir dos fatos já extraídos (sem reextrair os fatos).
+        if not contradicao or not valid_hook:
+            retry_instruction = (
+                'Passo 1B — Identificação de ângulo: a partir dos fatos já extraídos da matéria, '
+                'identifique uma contradição ou paradoxo real e formule um gancho provocativo.\n'
+                'Regras obrigatórias:\n'
+                '- "contradicao": aponte uma contradição ou paradoxo real da matéria, ou null se não houver.\n'
+                '- "gancho": pergunta instigante de até 10 palavras para abrir o Reel (não repita a manchete e só use números permitidos).\n'
+                'Responda APENAS JSON: {"contradicao":"...","gancho":"..."}'
+            )
+            retry_payload = {
+                'manchete': story.get('title', ''),
+                'fatos_extraidos': cleaned[:6],
+            }
+            try:
+                retry_raw = ask(retry_instruction, json.dumps(retry_payload, ensure_ascii=False))
+                if isinstance(retry_raw, dict):
+                    if not contradicao:
+                        cand_c = retry_raw.get('contradicao')
+                        if cand_c is not None:
+                            cand_c = engine.clean(str(cand_c))
+                            if cand_c.lower() not in ('null', 'none', ''):
+                                contradicao = cand_c
+                    if not valid_hook:
+                        cand_g = retry_raw.get('gancho')
+                        if cand_g:
+                            valid_hook = validate_hook(cand_g, story, source)
+            except Exception:
+                pass
+
+            if not contradicao or not valid_hook:
+                log("sem contradição/gancho")
 
         result = FactsResult(cleaned[:6], contradicao=contradicao, gancho=valid_hook)
         story['extracted_facts'] = cleaned[:6]
@@ -2022,7 +2056,7 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
         'juiz_fraco': juiz_fraco,
     }
     if facts is None and previous is None and story.get('body'):
-        facts = extract_facts(story, ask=ask)
+        facts = extract_facts(story, ask=ask, log=log)
     if facts is not None:
         story['extracted_facts'] = facts if isinstance(facts, list) else facts.get('fatos', facts)
     valid_hook = story.get('gancho')
@@ -2298,7 +2332,7 @@ def automatic(topic, kind='Notícia', max_seconds=45, allow_repeat=False, log=pr
             ('\nMotivo: ' + story['selection_reason'] if story.get('selection_reason') else ''))
         story['related_context'] = enrich(story, limit=4)
         log(f'Passo 1: Extraindo de 5 a 6 fatos verificados da matéria ({len(story["body"].split())} palavras)...')
-        facts = extract_facts(story, ask=ask)
+        facts = extract_facts(story, ask=ask, log=log)
         story['extracted_facts'] = facts
         log(f'Passo 2: Escrevendo diálogo informal a partir de {len(facts)} fatos...')
         story.update(kind=kind, source_type='rss', summary=source_text(story))

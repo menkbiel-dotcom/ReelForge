@@ -395,7 +395,7 @@ class NewsAutoTests(unittest.TestCase):
             'A rede elétrica do Texas tem risco de faltar luz no resto do estado.',
             'O acordo garante energia até 2045.',
             'O objetivo é abastecer data centers de IA.',
-        ]}
+        ], 'contradicao': 'Investimento recorde mas risco de falta de luz.', 'gancho': 'Por que gastar 3,4 bilhões só em gerador?'}
         script = {'lines': [
             {'speaker': 0, 'text': 'Por que gastar 3,4 bilhões só em gerador?', 'fato': 0},
             {'speaker': 0, 'text': 'Cara, a Anthropic comprou tudo da Caterpillar!', 'fato': 1},
@@ -483,7 +483,7 @@ class NewsAutoTests(unittest.TestCase):
             'O modelo é focado em áudio de estúdio.',
             'O público-alvo são profissionais de som.',
             'O aparelho chegou ao mercado nacional.',
-        ]}
+        ], 'contradicao': 'Aparelho portátil com preço exorbitante de carro.', 'gancho': 'Pagaria R$ 32 mil num Walkman novo?'}
         good = {'lines': [
             {'speaker': 0, 'text': 'Pagaria R$ 32 mil num Walkman novo?', 'fato': 1},
             {'speaker': 1, 'text': 'O preço oficial é de R$ 32 mil no Brasil.', 'fato': 1},
@@ -537,7 +537,7 @@ class NewsAutoTests(unittest.TestCase):
             'O foco é áudio de estúdio.',
             'A venda ocorre no mercado nacional.',
             'O produto mira audiófilos.',
-        ]}
+        ], 'contradicao': 'Aparelho caro voltado a audiófilos.', 'gancho': 'Pagaria R$ 32 mil num Walkman novo?'}
         script_resp = {'lines': [
             {'speaker': 0, 'text': 'Pagaria R$ 32 mil num Walkman novo?', 'fato': 1},
             {'speaker': 0, 'text': 'O preço oficial é de R$ 32 mil no Brasil.', 'fato': 1},
@@ -810,7 +810,7 @@ class NewsAutoTests(unittest.TestCase):
                 'As remessas aumentaram sem parar.',
                 'O café brasileiro bateu recorde.',
                 'Os produtores comemoram o resultado.',
-            ]}
+            ], 'contradicao': 'Volume recorde com preços em oscilação.', 'gancho': 'Viu o recorde nos quatro primeiros meses?'}
 
         facts = news_auto.extract_facts(story, ask=mock_ask)
         self.assertEqual(len(facts), 5)
@@ -2314,6 +2314,67 @@ class NewsAutoTests(unittest.TestCase):
         # 6. Exemplo concreto atualizado para erro de fecho
         ex = news_auto._add_concrete_example("Problema no fecho da história")
         self.assertIn('Exemplo de fecho válido com opinião: "Pra mim, investir bilhões nisso sem testar antes é loucura total."', ex)
+
+    def test_item18_step1_hook_retry_and_graceful_fallback(self):
+        story = {
+            'title': 'Descoberta de nova jazida de lítio em Minas Gerais',
+            'body': 'A mineradora confirmou uma nova jazida com 50 milhões de toneladas de lítio no Vale do Jequitinhonha. ' * 3,
+        }
+        facts_initial = [
+            'A mineradora confirmou jazida no Vale do Jequitinhonha.',
+            'A jazida possui 50 milhões de toneladas de lítio.',
+            'A reserva fica no estado de Minas Gerais.',
+            'O projeto visa produção sustentável de baterias.',
+            'O investimento totaliza bilhões no setor.',
+        ]
+
+        # Caso A: contradição e gancho vazios no passo 1 -> retry específico preenche ambos
+        calls_a = []
+        def ask_a(instruction, payload_str):
+            calls_a.append((instruction, json.loads(payload_str)))
+            if len(calls_a) == 1:
+                return {'fatos': facts_initial, 'contradicao': None, 'gancho': None}
+            return {
+                'contradicao': 'Grande reserva de lítio, mas infraestrutura regional ainda precária.',
+                'gancho': 'Viu a nova reserva de 50 milhões de toneladas?',
+            }
+
+        logs_a = []
+        res_a = news_auto.extract_facts(story, ask=ask_a, log=logs_a.append)
+        self.assertEqual(len(calls_a), 2)
+        self.assertIn('fatos_extraidos', calls_a[1][1])
+        self.assertEqual(res_a['contradicao'], 'Grande reserva de lítio, mas infraestrutura regional ainda precária.')
+        self.assertEqual(res_a['gancho'], 'Viu a nova reserva de 50 milhões de toneladas?')
+        self.assertNotIn('sem contradição/gancho', logs_a)
+
+        # Caso B: retry também devolve vazio -> segue sem gancho forçado e loga "sem contradição/gancho"
+        calls_b = []
+        def ask_b(instruction, payload_str):
+            calls_b.append(payload_str)
+            if len(calls_b) == 1:
+                return {'fatos': facts_initial, 'contradicao': '', 'gancho': ''}
+            return {'contradicao': None, 'gancho': None}
+
+        logs_b = []
+        res_b = news_auto.extract_facts(story, ask=ask_b, log=logs_b.append)
+        self.assertEqual(len(calls_b), 2)
+        self.assertIsNone(res_b['gancho'])
+        self.assertIsNone(res_b['contradicao'])
+        self.assertIn('sem contradição/gancho', logs_b)
+
+        # Caso C: retry devolve gancho inválido (> 10 palavras) -> validate_hook rejeita e loga fallback
+        calls_c = []
+        def ask_c(instruction, payload_str):
+            calls_c.append(payload_str)
+            if len(calls_c) == 1:
+                return {'fatos': facts_initial, 'contradicao': 'Contradição válida aqui', 'gancho': None}
+            return {'gancho': 'Você sabia que foram encontradas muitas toneladas de lítio em minas gerais para baterias elétricas agora?'}
+
+        logs_c = []
+        res_c = news_auto.extract_facts(story, ask=ask_c, log=logs_c.append)
+        self.assertEqual(len(calls_c), 2)
+        self.assertIsNone(res_c['gancho'])
+        self.assertIn('sem contradição/gancho', logs_c)
 
 
 if __name__ == '__main__':

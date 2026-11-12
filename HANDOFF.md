@@ -221,5 +221,15 @@
     - Rejeita fechos iniciados por `"Será que ...?"` genérico sem termos de opinião/julgamento (`'acho', 'duvido', 'certeza', 'loucura', 'exagero', 'vale', 'compensa', 'justifica', 'arriscado', 'furada', 'besteira', 'revolucao', 'revolução', 'futuro', 'tendencia', 'tendência', 'perigo', 'bizarro', 'absurdo', 'sensato', 'burrice', 'piada', 'ilusao', 'ilusão', 'coragem', 'otimismo', 'pessimismo'`).
     - Rejeita fecho que repete dados já ditos no roteiro ($\ge 3$ palavras de conteúdo compartilhadas com qualquer fala anterior).
   - `_add_concrete_example`: atualizado para fecho com: `Exemplo de fecho válido com opinião: "Pra mim, investir bilhões nisso sem testar antes é loucura total." (nunca use "Será que ...?" genérico e não repita fatos já ditos).`
-- [ ] **ITEM 18 — Robustez do Passo 1 (`news_auto.py`)**: a fazer
+- [x] **ITEM 18 — Robustez do Passo 1 (`news_auto.py`)**: feito
+  - **Commit:** a preencher após commit — *"Adiciona retry especifico para contradicao e gancho no passo 1 e fallback gracioso"*
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 81 testes passando (incluindo `test_item18_step1_hook_retry_and_graceful_fallback`)
+
+### Detalhes do ITEM 18
+- `extract_facts`:
+  - Se `contradicao` ou `valid_hook` vierem nulos/vazios na resposta inicial do Passo 1, realiza 1 retry específico (`Passo 1B — Identificação de ângulo`) pedindo exclusivamente `{"contradicao": "...", "gancho": "..."}` a partir dos fatos já extraídos (`cleaned[:6]`), sem reextrair a lista de fatos.
+  - Se após o retry a contradição ou gancho continuarem nulos, vazios ou inválidos (gancho reprovado por `validate_hook`), segue sem falhar a pauta, logando `"sem contradição/gancho"` e retornando o `FactsResult` sem gancho forçado.
+  - Mantidas todas as validações de números permitidos (`_allowed_numbers`), unidades temporais (`TEMPORAL_UNITS`) e tamanho do gancho (`validate_hook`).
+  - Atualizadas fixtures mock em testes legados (`test_low_score...`, `test_fictional_few_shot...`, `test_automatic_retries...`) para fornecer contradição/gancho em seus mocks de fatos.
 - [ ] **ITEM 19 — Estilo das falas (`news_auto.py`)**: a fazer
