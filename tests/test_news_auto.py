@@ -1860,6 +1860,74 @@ class NewsAutoTests(unittest.TestCase):
         self.assertIn('90 dias seguidos', corr2)
         self.assertIn('nenhum fato contém estes números: não os use', corr2)
 
+    def test_item12_failure_log_file_and_runtime_error(self):
+        import json
+        import re
+        from pathlib import Path
+        import engine
+
+        facts = [
+            "O telescópio James Webb da Nasa observou galáxias distantes.",
+            "A missão espacial do James durou cerca de três anos.",
+            "O Webb detectou 25 novos exoplanetas e 277 asteroides.",
+            "Os cientistas analisaram amostras de poeira cósmica.",
+            "A temperatura no vácuo espacial atingiu níveis extremos.",
+            "O projeto envolveu vinte países parceiros.",
+        ]
+        story = {
+            'id': 'teste_item12_id_123',
+            'title': 'Descobertas do Telescópio Webb',
+            'body': 'O telescópio espacial James Webb da Nasa fez grandes descobertas científicas no espaço profundo. '
+                    'A missão espacial do James durou cerca de três anos e analisou amostras cósmicas em 90 dias. '
+                    'O Webb detectou 25 novos exoplanetas e 277 asteroides na pesquisa recente. '
+                    'A temperatura no vácuo espacial atingiu níveis extremos e vinte países parceiros participaram.',
+            'source_type': 'rss',
+            'extracted_facts': facts,
+            'link': 'https://exemplo.com/materia_teste_falha_12',
+        }
+
+        # Mock writer que sempre falha e retorna resposta longa (> 4000 caracteres)
+        long_text = 'palavra ' * 800
+        attempts_called = []
+
+        def mock_failing_writer(inst, payload_str):
+            attempts_called.append(payload_str)
+            return {'lines': [
+                {'speaker': 0, 'text': long_text, 'fato': 0},
+            ]}
+
+        with self.assertRaises(RuntimeError) as ctx:
+            news_auto.write_script(story, max_words=80, ask=mock_failing_writer, facts=facts)
+
+        err_msg = str(ctx.exception)
+        m = re.match(r'^Não foi possível gerar um roteiro válido em 8 tentativas\. Detalhes em (.+falha_roteiro_.+\.json)$', err_msg)
+        self.assertIsNotNone(m, f'Mensagem de erro não confere com o padrão: {err_msg}')
+        log_path = Path(m.group(1))
+        self.assertTrue(log_path.exists(), f'Arquivo de falha não foi gravado: {log_path}')
+
+        try:
+            data = json.loads(log_path.read_text(encoding='utf-8'))
+            self.assertEqual(data.get('titulo'), story['title'])
+            self.assertEqual(data.get('fatos'), facts)
+            self.assertEqual(len(data.get('tentativas', [])), 8)
+            for att in data['tentativas']:
+                self.assertLessEqual(len(att['resposta_bruta']), 4000)
+                self.assertTrue(att.get('erro'))
+                self.assertTrue(att.get('tentativa'))
+        finally:
+            try:
+                log_path.unlink()
+            except Exception:
+                pass
+
+        # Garante que a pauta NÃO foi marcada como usada
+        db = engine.conn()
+        try:
+            row = db.execute("SELECT 1 FROM used WHERE id=?", (story['id'],)).fetchone()
+            self.assertIsNone(row)
+        finally:
+            db.close()
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -1734,6 +1734,29 @@ def _save_rejected_script(story, lines, review):
     return path
 
 
+def _save_failure_log(story, facts, attempts_history):
+    import engine
+    engine.OUTPUT.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+    path = engine.OUTPUT / f'falha_roteiro_{stamp}.json'
+    fatos_list = story.get('extracted_facts')
+    if fatos_list is None:
+        if isinstance(facts, list):
+            fatos_list = facts
+        elif isinstance(facts, dict):
+            fatos_list = facts.get('fatos', [])
+        else:
+            fatos_list = []
+    payload = {
+        'titulo': story.get('title', ''),
+        'fatos': fatos_list,
+        'fatos_extraidos': fatos_list,
+        'tentativas': attempts_history,
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
+    return path
+
+
 def _short_reason(error):
     if not error:
         return 'erro desconhecido'
@@ -1829,20 +1852,34 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
     last_review = None
     quality_retries = 0
     max_attempts = 8
+    attempts_history = []
     for attempt in range(1, max_attempts + 1):
         if error:
             payload['correcao'] = error
         raw = ask(instruction, json.dumps(payload, ensure_ascii=False))
+        raw_str = json.dumps(raw, ensure_ascii=False) if isinstance(raw, (dict, list)) else str(raw)
         try:
             lines, problem = validate_lines(raw, story, max_words, loop, min_lines, max_lines, facts=facts, log=log)
         except ValueError as exc:
             error = str(exc)
+            attempts_history.append({
+                'tentativa': attempt,
+                'resposta_bruta': raw_str[:4000],
+                'erro': error,
+                'erro_validacao': error,
+            })
             motivo = _short_reason(error)
             log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
             continue
         if problem:
             error = problem
             best_lines = lines
+            attempts_history.append({
+                'tentativa': attempt,
+                'resposta_bruta': raw_str[:4000],
+                'erro': error,
+                'erro_validacao': error,
+            })
             motivo = _short_reason(error)
             log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
             continue
@@ -1872,6 +1909,12 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
                         )
                     quality_retries += 1
                     error = 'Checagem de fatos indisponível no Ollama.'
+                    attempts_history.append({
+                        'tentativa': attempt,
+                        'resposta_bruta': raw_str[:4000],
+                        'erro': error,
+                        'erro_validacao': error,
+                    })
                     continue
                 else:
                     log('Aviso: seguindo sem checagem de fatos (permitir_sem_checagem_de_fatos ativo).')
@@ -1898,6 +1941,12 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
                     mot = u.get('motivo', 'sem suporte nos fatos')
                     corr_items.append(f'Fala {idx + 1} ("{txt}"): {mot}')
                 error = 'Falas não suportadas pelos fatos. Corrija:\n' + '\n'.join(corr_items)
+                attempts_history.append({
+                    'tentativa': attempt,
+                    'resposta_bruta': raw_str[:4000],
+                    'erro': error,
+                    'erro_validacao': error,
+                })
                 log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
                 continue
         review = evaluate_script(lines, story, ask=judge_ask or ask, log=log)
@@ -1926,6 +1975,12 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
         issues = '; '.join(str(p) for p in review['problemas']) or 'Melhore a naturalidade, o gancho provocativo e o fecho.'
         log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
         error = f'Nota de qualidade {review["nota"]}/10 (mínimo 7). Corrija: {issues}'
+        attempts_history.append({
+            'tentativa': attempt,
+            'resposta_bruta': raw_str[:4000],
+            'erro': error,
+            'erro_validacao': error,
+        })
     if best_lines is not None and last_review is not None:
         if allow_low:
             log(f'Tentativa {max_attempts}/{max_attempts}: aceita')
@@ -1936,9 +1991,10 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
             f'Roteiro reprovado no filtro de qualidade (nota {last_review["nota"]}/10; '
             f'problemas: {issues}). Salvo em {rejected_path}.'
         )
-    if best_lines:
+    if best_lines and allow_low:
         return best_lines
-    raise RuntimeError('O Ollama não produziu um roteiro válido: ' + error)
+    falha_path = _save_failure_log(story, facts, attempts_history)
+    raise RuntimeError(f'Não foi possível gerar um roteiro válido em 8 tentativas. Detalhes em {falha_path}')
 
 
 def shorten(story, lines, max_words, ask=None):

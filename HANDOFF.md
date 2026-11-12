@@ -167,8 +167,11 @@
   - **Arquivos tocados:** `news_auto.py`, `settings.json`, `tests/test_news_auto.py`, `tests/test_integration.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 73 testes passando (incluindo `test_item10_relink_automatic_fact_index`)
 - [x] **ITEM 11 — Feedback útil entre tentativas (`news_auto.py`)**: feito
-  - **Commit:** `pending` — *"Melhora feedback de correcao entre tentativas e loga status de cada tentativa"*
+  - **Commit:** `873daca2caf2ad354df057af76a2ad5b21a0ac60` — *"Melhora feedback de correcao entre tentativas e loga status de cada tentativa"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 74 testes passando (incluindo `test_item11_feedback_useful_between_retries_and_attempt_logging`)
-- [ ] **ITEM 12 — Registro de falha (`news_auto.py`)**: a fazer
+- [x] **ITEM 12 — Registro de falha (`news_auto.py`)**: feito
+  - **Commit:** `pending` — *"Registra diagnostico completo de falha em JSON quando esgotar 8 tentativas"*
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 75 testes passando (incluindo `test_item12_failure_log_file_and_runtime_error`)
 - [ ] **ITEM 13 — Tentar outra pauta antes de desistir (`news_auto.py`)**: a fazer
