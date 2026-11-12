@@ -248,3 +248,23 @@
   - Adicionados termos distintivos do Exemplo 3 (`'kryptonix'`, `'zyphoria'`, `'mecazoids'`, `'mecazoid'`, `'412'`, `'953'`) para garantir que sejam barrados por `validate_lines` caso vazem no roteiro sem constar na matéria real.
 - Testes:
   - Adicionado `test_item19_writer_prompt_reinforcement_and_fictional_examples` em `tests/test_news_auto.py` validando todos os 15 termos em `FICTIONAL_EXAMPLE_TERMS`, rejeição de vazamentos do Exemplo 3 e inspeção do prompt gerado por `write_script`.
+
+---
+
+# Rodada 6 — Isolamento de Testes, Escolha Determinística de Pauta e Diagnóstico Ollama (Itens 20 a 23)
+
+- [x] **ITEM 20 — Isolar testes do `output/` real (`tests/_isolation.py`, `tests/test_news_auto.py`, `tests/test_integration.py`)**: feito
+  - **Commit:** a preencher após commit — *"Isola engine.OUTPUT em diretorio temporario em todos os testes com guarda contra escrita real"*
+  - **Arquivos tocados:** `tests/_isolation.py`, `tests/test_news_auto.py`, `tests/test_integration.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 83 testes passando em duas execuções consecutivas sem alterar `output/` real (`test_item20_isolated_output_guard`)
+
+### Detalhes do ITEM 20
+- Criado `tests/_isolation.py` com `IsolatedOutputMixin`, fazendo `patch.object(engine, 'OUTPUT', tempdir)` no `setUp()` com limpeza automática via `addCleanup`.
+- Todas as classes `unittest.TestCase` de `tests/test_news_auto.py` (`NewsAutoTests`) e `tests/test_integration.py` (`SpeechTests`, `CaptionTests`, `AppTests`, `Item6Tests`, `Item8Tests`, `Item9Tests`) agora herdam `IsolatedOutputMixin`.
+- Verificado que `_save_rejected_script` e `_save_failure_log` em `news_auto.py` leem `engine.OUTPUT` dinamicamente em tempo de chamada.
+- Adicionado `test_item20_isolated_output_guard` que valida a herança do mixin em todas as classes, resolução dinâmica de `engine.OUTPUT` e executa toda a suíte em subprocesso confirmando `after - before == []` na pasta `output/` real.
+- **Próximo item:** ITEM 21 (`news_auto.py`, `pick_story` determinístico).
+
+- [ ] **ITEM 21 — Escolha de pauta determinística por padrão (`news_auto.py`)**: a fazer
+- [ ] **ITEM 22 — Timeouts e erros do Ollama amigáveis (`engine.py`)**: a fazer
+- [ ] **ITEM 23 — Diagnóstico no "Verificar ambiente" (`gui.py` / `news_auto.py`)**: a fazer

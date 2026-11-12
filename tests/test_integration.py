@@ -14,6 +14,7 @@ import captions
 import speech
 import script_io
 import engine
+from tests._isolation import IsolatedOutputMixin
 
 ROOT = Path(__file__).resolve().parents[1]
 HAS_TKINTER = importlib.util.find_spec('tkinter') is not None
@@ -56,12 +57,13 @@ def response(status=200):
     return r
 
 
-class SpeechTests(unittest.TestCase):
+class SpeechTests(IsolatedOutputMixin, unittest.TestCase):
     def setUp(self):
+        super().setUp()
         self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name)
         self.env=patch.dict(os.environ,{'ELEVENLABS_API_KEY':'test-secret','FISH_API_KEY':'fish-secret'})
         self.env.start()
-    def tearDown(self): self.env.stop();self.temp.cleanup()
+    def tearDown(self): self.env.stop();self.temp.cleanup();super().tearDown()
     def test_cloud_cache_reuses_audio_without_second_request(self):
         with patch('requests.post',return_value=response()) as request:
             a=asyncio.run(speech.synthesize_one('Olá!',profile(),self.root))
@@ -117,7 +119,7 @@ class SpeechTests(unittest.TestCase):
         self.assertEqual(synth.call_args.args[1]['voice'],'selected-voice')
 
 
-class CaptionTests(unittest.TestCase):
+class CaptionTests(IsolatedOutputMixin, unittest.TestCase):
     def test_normalization_preserves_script_punctuation(self):
         words=captions.match_words('Olá, você!', [{'text':'Olá','start':.1,'end':.4},{'text':'voce','start':.5,'end':.9}],1)
         self.assertEqual(words[0]['text'],'Olá,');self.assertFalse(any(w['estimated'] for w in words))
@@ -145,7 +147,7 @@ class CaptionTests(unittest.TestCase):
         captions.align_lines([line],'.',mode='estimated');self.assertEqual(line['timing_source'],'estimated')
 
 
-class AppTests(unittest.TestCase):
+class AppTests(IsolatedOutputMixin, unittest.TestCase):
     @unittest.skipUnless(HAS_DEMO_GAMEPLAY and HAS_DEMO_AUDIO, 'Requer gameplay e áudios de demonstração locais')
     def test_import_resolves_recordings_relative_to_manifest(self):
         _,lines,bg=script_io.load(ROOT/'assets/demo/dialogue.json')
@@ -188,7 +190,7 @@ class AppTests(unittest.TestCase):
         finally:app.destroy()
 
 
-class Item6Tests(unittest.TestCase):
+class Item6Tests(IsolatedOutputMixin, unittest.TestCase):
     def test_captions_interpolated_words_expand_minimum_duration(self):
         text = "Isso com o preço caiu no Brasil"
         recognized = [
@@ -242,7 +244,7 @@ class Item6Tests(unittest.TestCase):
             self.assertIn((510, 640), captured_sizes)
 
 
-class Item8Tests(unittest.TestCase):
+class Item8Tests(IsolatedOutputMixin, unittest.TestCase):
     def test_merge_settings_preserves_unknown_keys_and_other_providers(self):
         import gui
         current = {
@@ -330,7 +332,7 @@ class Item8Tests(unittest.TestCase):
                     app.destroy()
 
 
-class Item9Tests(unittest.TestCase):
+class Item9Tests(IsolatedOutputMixin, unittest.TestCase):
     def test_list_ollama_models_fallback_when_offline(self):
         import gui
         with patch('requests.get', side_effect=Exception('Ollama offline')):

@@ -1,6 +1,8 @@
 """Testes offline do fluxo automático RSS -> Ollama (rede e modelo simulados)."""
 import importlib.util
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -12,6 +14,7 @@ import engine
 import news_auto
 import render_pipeline
 import voice_studio
+from tests._isolation import IsolatedOutputMixin
 
 HAS_NUMPY = importlib.util.find_spec('numpy') is not None
 
@@ -26,8 +29,9 @@ FEED = [entry('Governo anuncia novo programa de internet nas escolas públicas',
         entry('Sony relança Walkman com preço de R$ 32 mil no Brasil', 'O Globo', 'https://a/3')]
 
 
-class NewsAutoTests(unittest.TestCase):
+class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
     def setUp(self):
+        super().setUp()
         self.temp = tempfile.TemporaryDirectory()
         self.db = patch.object(engine, 'DB', Path(self.temp.name) / 'h.sqlite3')
         self.db.start()
@@ -35,6 +39,7 @@ class NewsAutoTests(unittest.TestCase):
     def tearDown(self):
         self.db.stop()
         self.temp.cleanup()
+        super().tearDown()
 
     def test_candidates_strip_source_and_skip_social_posts(self):
         with patch('news_auto.read_feed', return_value=FEED):
@@ -2460,6 +2465,55 @@ class NewsAutoTests(unittest.TestCase):
 
         # Checa moderação de vocativos
         self.assertIn('vocativos (mano, cara) com moderação', step2_inst)
+
+    def test_item20_isolated_output_guard(self):
+        # 1. Verifica que o engine.OUTPUT ativo neste teste está isolado do diretório output/ real
+        real_output = (engine.ROOT / 'output').resolve()
+        self.assertNotEqual(engine.OUTPUT.resolve(), real_output)
+
+        # 2. Verifica que todas as classes TestCase de ambos os módulos herdam IsolatedOutputMixin
+        import inspect
+        import tests.test_integration as ti
+        for mod in (sys.modules[__name__], ti):
+            for _, cls in inspect.getmembers(mod, inspect.isclass):
+                if issubclass(cls, unittest.TestCase) and cls.__module__ == mod.__name__:
+                    self.assertTrue(
+                        issubclass(cls, IsolatedOutputMixin),
+                        f'{mod.__name__}.{cls.__name__} deve herdar IsolatedOutputMixin',
+                    )
+
+        # 3. Verifica que _save_rejected_script e _save_failure_log usam engine.OUTPUT em tempo de chamada
+        dir_a = Path(self.temp.name) / 'out_a'
+        dir_b = Path(self.temp.name) / 'out_b'
+        with patch.object(engine, 'OUTPUT', dir_a):
+            p_rej_a = news_auto._save_rejected_script({'title': 'T1'}, [{'speaker': 0, 'text': 'Oi'}], {'nota': 4, 'problemas': []})
+            p_fail_a = news_auto._save_failure_log({'title': 'T1'}, ['f1'], [])
+        with patch.object(engine, 'OUTPUT', dir_b):
+            p_rej_b = news_auto._save_rejected_script({'title': 'T2'}, [{'speaker': 0, 'text': 'Oi'}], {'nota': 4, 'problemas': []})
+            p_fail_b = news_auto._save_failure_log({'title': 'T2'}, ['f2'], [])
+
+        self.assertEqual(p_rej_a.parent, dir_a)
+        self.assertEqual(p_fail_a.parent, dir_a)
+        self.assertEqual(p_rej_b.parent, dir_b)
+        self.assertEqual(p_fail_b.parent, dir_b)
+        self.assertTrue(p_rej_a.is_file() and p_fail_a.is_file())
+        self.assertTrue(p_rej_b.is_file() and p_fail_b.is_file())
+
+        # 4. Guarda em subprocesso: rodar toda a suíte não cria nenhum arquivo novo no output/ real
+        if os.environ.get('REELFORGE_SKIP_OUTPUT_GUARD') != '1':
+            before = set(p.name for p in real_output.iterdir()) if real_output.exists() else set()
+            env = dict(os.environ, REELFORGE_SKIP_OUTPUT_GUARD='1')
+            proc = subprocess.run(
+                [sys.executable, '-m', 'unittest', 'tests.test_news_auto', 'tests.test_integration'],
+                cwd=str(engine.ROOT),
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 0, f'Subprocesso falhou:\n{proc.stdout}\n{proc.stderr}')
+            after = set(p.name for p in real_output.iterdir()) if real_output.exists() else set()
+            created = sorted(after - before)
+            self.assertEqual(created, [], f'Suíte criou arquivos no output/ real: {created}')
 
 
 if __name__ == '__main__':
