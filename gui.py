@@ -154,7 +154,7 @@ class App(tk.Tk):
         self.status = tk.StringVar(value='Pronto. Escolha um tema ou clique em "Criar plano + roteiro".')
         self._apply_theme()
         self._layout()
-        self.after(120, self._poll)
+        self._poll_id = self.after(120, self._poll)
 
     def _apply_theme(self):
         bg = '#0F1420'
@@ -573,7 +573,7 @@ class App(tk.Tk):
             tag = 'naruto'
         elif msg.lstrip().startswith('NOTÍCIA:') or msg.startswith('Pauta escolhida:'):
             tag = 'headline'
-        elif 'Traceback' in msg or 'Error:' in msg:
+        elif 'Traceback' in msg or 'Error:' in msg or msg.startswith('Erro:'):
             tag = 'error'
         if tag:
             self.log.insert('end', msg + '\n', tag)
@@ -607,8 +607,9 @@ class App(tk.Tk):
         def worker():
             try:
                 fn()
-            except Exception:
-                self.events.put(('error', traceback.format_exc()))
+            except Exception as exc:
+                engine.log_error_traceback(exc, traceback.format_exc())
+                self.events.put(('error', f'Erro: {exc}'))
             finally:
                 self.events.put(('done', None))
 
@@ -632,7 +633,23 @@ class App(tk.Tk):
                         self.status.set('Concluído com sucesso.')
         except queue.Empty:
             pass
-        self.after(120, self._poll)
+        self._poll_id = self.after(120, self._poll)
+
+    def destroy(self):
+        poll_id = getattr(self, '_poll_id', None)
+        if poll_id is not None:
+            try:
+                self.after_cancel(poll_id)
+            except Exception:
+                pass
+            self._poll_id = None
+        for attr, val in list(self.__dict__.items()):
+            if isinstance(val, tk.Variable):
+                try:
+                    delattr(self, attr)
+                except Exception:
+                    pass
+        super().destroy()
 
     def _check(self):
         import importlib.util

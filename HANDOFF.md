@@ -266,7 +266,7 @@
 - **Próximo item:** ITEM 21 (`news_auto.py`, `pick_story` determinístico).
 
 - [x] **ITEM 21 — Escolha de pauta determinística por padrão (`news_auto.py`)**: feito
-  - **Commit:** a preencher após commit — *"Torna pick_story deterministico por padrao com fallback rapido no modo LLM"*
+  - **Commit:** `647542b93a86324011882abb9c33acfc3e9749b3` — *"Torna pick_story deterministico por padrao com fallback rapido no modo LLM"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 84 testes passando (incluindo `test_item21_deterministic_pick_story_and_llm_fallback`)
 
@@ -277,5 +277,19 @@
   - Atualizado `automatic()` para repassar `allow_repeat` e `log` para `pick_story`.
 - **Próximo item:** ITEM 22 (`engine.py`, timeouts e erros do Ollama amigáveis).
 
-- [ ] **ITEM 22 — Timeouts e erros do Ollama amigáveis (`engine.py`)**: a fazer
+- [x] **ITEM 22 — Timeouts e erros do Ollama amigáveis (`engine.py`, `gui.py`)**: feito
+  - **Commit:** (será registrado após push do item 22) — *"Trata timeouts/erros do Ollama com log em erros.log, think=false e estimativa de tokens"*
+  - **Arquivos tocados:** `engine.py`, `gui.py`, `tests/test_news_auto.py`, `tests/test_integration.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 85 testes passando (incluindo `test_item22_ollama_timeout_think_and_logging`)
+
+### Detalhes do ITEM 22
+- `engine.py`:
+  - `ollama_timeout_seconds(cfg)`: lê `"ollama_timeout_s"` de `settings.json` ou `OLLAMA_TIMEOUT_S` (padrão `300` s) e passa em `timeout=(5, read_timeout)`.
+  - `request_json`: envia `"think": False` na raiz do payload `/api/chat`; remove `"thinking"` da resposta/mensagem e limpa blocos `<think>...</think>` (`_strip_thinking_block`) antes de `json.loads`. Loga `"Ollama: modelo X, N tokens de prompt estimados"` (`(len(instruction) + len(payload)) / 3.5`) no início e `"Ollama: modelo X respondeu em Y.Y s"` ao terminar.
+  - Em `requests.exceptions.ReadTimeout` / `ConnectionError`, grava o traceback completo em `output/erros.log` via `log_error_traceback` e lança `RuntimeError` em português sem traceback cru, orientando checar `'ollama ps'`, se o Ollama está aberto, modelo menor ou `num_ctx`.
+- `gui.py`:
+  - `_job`: exceções da thread worker gravam o traceback completo em `engine.log_error_traceback` e enviam apenas `('error', f'Erro: {exc}')` para a UI.
+  - `App.destroy`: cancela `self._poll_id` e limpa `tk.Variable` na thread principal antes de destruir a janela; `tests/test_integration.py` força `gc.collect()` no `finally` dos testes GUI para evitar `Tcl_AsyncDelete` quando rodam junto com `test_news_auto`.
+- **Próximo item:** ITEM 23 — Diagnóstico no "Verificar ambiente" (`gui.py` / `news_auto.py`).
+
 - [ ] **ITEM 23 — Diagnóstico no "Verificar ambiente" (`gui.py` / `news_auto.py`)**: a fazer

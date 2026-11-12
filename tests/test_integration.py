@@ -1,5 +1,6 @@
 import asyncio
 import copy
+import gc
 import importlib.util
 import json
 import os
@@ -173,7 +174,10 @@ class AppTests(IsolatedOutputMixin, unittest.TestCase):
                 app._save();saved=(Path(d)/'settings.json').read_text()
                 self.assertNotIn('private-voice-key',saved);self.assertNotIn('private-llm-key',saved)
                 self.assertEqual(app.voice_a.get(),'')
-            finally:app.destroy()
+            finally:
+                app.destroy()
+                app=None
+                gc.collect()
     @unittest.skipUnless(HAS_TKINTER and HAS_DEMO_GAMEPLAY and HAS_DEMO_AUDIO, 'Requer tkinter e assets de demonstração')
     def test_imported_script_survives_changed_render_settings(self):
         import gui
@@ -187,7 +191,10 @@ class AppTests(IsolatedOutputMixin, unittest.TestCase):
             self.assertEqual(len(lines),6)
             self.assertEqual(lines[0]['audio_source'],'imported')
             self.assertEqual(app.preview_signature,'changed-caption-mode')
-        finally:app.destroy()
+        finally:
+            app.destroy()
+            app=None
+            gc.collect()
 
 
 class Item6Tests(IsolatedOutputMixin, unittest.TestCase):
@@ -330,6 +337,8 @@ class Item8Tests(IsolatedOutputMixin, unittest.TestCase):
                     self.assertEqual(disk_cfg['voice_profiles']['voicestudio']['hidden_meta'], 999)
                 finally:
                     app.destroy()
+                    app = None
+                    gc.collect()
 
 
 class Item9Tests(IsolatedOutputMixin, unittest.TestCase):
@@ -403,6 +412,8 @@ class Item9Tests(IsolatedOutputMixin, unittest.TestCase):
                             self.assertFalse(disk_cfg['aceitar_nota_baixa'])
                         finally:
                             app.destroy()
+                            app = None
+                            gc.collect()
 
 
 if __name__=='__main__':unittest.main(verbosity=2)

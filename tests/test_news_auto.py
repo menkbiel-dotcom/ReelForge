@@ -2597,6 +2597,64 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
         self.assertEqual(chosen_fb['id'], 'c0')
         self.assertIn('escolha da pauta por LLM falhou; usando ranking', logs)
 
+    def test_item22_ollama_timeout_think_and_logging(self):
+        import requests
+
+        # 1. Timeout configurável via settings.json, payload "think": false, limpeza de <think>/"thinking" e logs
+        mock_resp = Mock(status_code=200)
+        mock_resp.json.return_value = {
+            'thinking': 'cadeia de raciocinio na raiz',
+            'message': {
+                'thinking': 'raciocinio interno na mensagem',
+                'content': '<think>pensando passo a passo</think>\n{"status": "ok", "valor": 42}',
+            },
+        }
+        logs = []
+        inst = 'Instrucao teste ollama'
+        payload = '{"dados": "abcde"}'
+        expected_tokens = max(1, int(round((len(inst) + len(payload)) / 3.5)))
+
+        fake_session = Mock()
+        fake_session.__enter__ = Mock(return_value=fake_session)
+        fake_session.__exit__ = Mock(return_value=False)
+        fake_session.post.return_value = mock_resp
+
+        with patch('requests.Session', return_value=fake_session), \
+             patch.object(engine, 'load_settings', return_value={'ollama_model': 'qwen3:8b', 'ollama_timeout_s': 120}):
+            res = engine.request_json(inst, payload, log=logs.append)
+
+        self.assertEqual(res, {'status': 'ok', 'valor': 42})
+        post_kwargs = fake_session.post.call_args.kwargs
+        self.assertIs(post_kwargs['json']['think'], False)
+        self.assertEqual(post_kwargs['timeout'], (5, 120.0))
+        self.assertTrue(any(f'Ollama: modelo qwen3:8b, {expected_tokens} tokens de prompt estimados' in m for m in logs))
+        self.assertTrue(any('Ollama: modelo qwen3:8b respondeu em ' in m for m in logs))
+
+        # 2. Timeout padrão = 300 quando omitido de settings.json
+        fake_session.post.reset_mock()
+        with patch('requests.Session', return_value=fake_session), \
+             patch.object(engine, 'load_settings', return_value={}):
+            engine.request_json('a', 'b', log=lambda *a: None)
+        self.assertEqual(fake_session.post.call_args.kwargs['timeout'], (5, 300.0))
+
+        # 3. ReadTimeout e ConnectionError levantam RuntimeError amigável em português e gravam em output/erros.log
+        for exc_cls in (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError):
+            fake_session.post.side_effect = exc_cls('falha simulada de rede/tempo')
+            with patch('requests.Session', return_value=fake_session), \
+                 patch.object(engine, 'load_settings', return_value={'ollama_model': 'qwen3:8b', 'ollama_timeout_s': 120}):
+                with self.assertRaises(RuntimeError) as ctx:
+                    engine.request_json('inst', 'pay', log=lambda *a: None)
+            msg = str(ctx.exception)
+            self.assertIn('O Ollama não respondeu em 120 s com o modelo qwen3:8b.', msg)
+            self.assertIn("Verifique se o modelo está carregado inteiro na GPU ('ollama ps')", msg)
+            self.assertIn('tente um modelo menor ou diminua num_ctx', msg)
+            self.assertIsNone(ctx.exception.__cause__)
+
+        err_log = engine.OUTPUT / 'erros.log'
+        self.assertTrue(err_log.is_file())
+        log_txt = err_log.read_text(encoding='utf-8')
+        self.assertIn('falha simulada de rede/tempo', log_txt)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

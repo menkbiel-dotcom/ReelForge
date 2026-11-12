@@ -11,6 +11,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
@@ -226,25 +227,90 @@ def validate_hook(text):
     return text
 
 
-def request_json(instruction, payload, model=None, temperature=0.55):
+def log_error_traceback(exc=None, tb_text=None):
+    """Registra traceback completo em output/erros.log sem expor stack trace cru na UI."""
+    import traceback
+    try:
+        OUTPUT.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        text = tb_text if tb_text is not None else traceback.format_exc()
+        if not text or text.strip() == 'NoneType: None':
+            text = repr(exc) if exc is not None else ''
+        entry = f"[{stamp}] {text.rstrip()}\n" + ("-" * 60) + "\n"
+        log_path = OUTPUT / "erros.log"
+        with log_path.open("a", encoding="utf-8") as fh:
+            fh.write(entry)
+        return log_path
+    except Exception:
+        return None
+
+
+def _strip_thinking_block(text):
+    cleaned = re.sub(r'<think>.*?</think>', '', str(text or ''), flags=re.S | re.I)
+    cleaned = re.sub(r'<think>.*$', '', cleaned, flags=re.S | re.I)
+    return cleaned.strip()
+
+
+def ollama_timeout_seconds(cfg=None):
+    cfg = cfg if cfg is not None else load_settings()
+    raw = os.getenv("OLLAMA_TIMEOUT_S")
+    if raw is None or not str(raw).strip():
+        raw = cfg.get("ollama_timeout_s", 300)
+    try:
+        val = float(raw)
+        if val <= 0:
+            return 300.0
+        return val
+    except (TypeError, ValueError):
+        return 300.0
+
+
+def request_json(instruction, payload, model=None, temperature=0.55, log=print):
     import requests
     cfg = load_settings()
     model = model or os.getenv("OLLAMA_MODEL") or cfg.get("ollama_model") or "qwen3.5:4b"
     temp = 0.55 if temperature is None else float(temperature)
-    with requests.Session() as session:
-        session.trust_env = False
-        base = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
-        response = session.post(base + "/api/chat", json={
-            "model": model, "stream": False, "format": "json", "think": False,
-            "messages": [{"role": "system", "content": instruction},
-                         {"role": "user", "content": payload}],
-            "keep_alive": "20m",
-            "options": {"temperature": temp, "num_ctx": 4096},
-        }, timeout=(5, 300), allow_redirects=False)
-        if response.status_code != 200:
-            raise RuntimeError(f"Ollama local respondeu HTTP {response.status_code}.")
-        content = response.json()["message"]["content"]
-    if not content.strip():
+    read_timeout = ollama_timeout_seconds(cfg)
+    timeout_disp = int(read_timeout) if float(read_timeout).is_integer() else round(read_timeout, 1)
+    prompt_chars = len(str(instruction or "")) + len(str(payload or ""))
+    est_tokens = max(1, int(round(prompt_chars / 3.5))) if prompt_chars else 0
+    log(f"Ollama: modelo {model}, {est_tokens} tokens de prompt estimados")
+    t0 = time.monotonic()
+    try:
+        with requests.Session() as session:
+            session.trust_env = False
+            base = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
+            response = session.post(base + "/api/chat", json={
+                "model": model, "stream": False, "format": "json", "think": False,
+                "messages": [{"role": "system", "content": instruction},
+                             {"role": "user", "content": payload}],
+                "keep_alive": "20m",
+                "options": {"temperature": temp, "num_ctx": 4096},
+            }, timeout=(5, read_timeout), allow_redirects=False)
+            elapsed = time.monotonic() - t0
+            log(f"Ollama: modelo {model} respondeu em {elapsed:.1f} s")
+            if response.status_code != 200:
+                raise RuntimeError(f"Ollama local respondeu HTTP {response.status_code}.")
+            res_json = response.json()
+            if isinstance(res_json, dict):
+                res_json.pop("thinking", None)
+                msg = res_json.get("message")
+                if isinstance(msg, dict):
+                    msg.pop("thinking", None)
+                    content = msg.get("content", "")
+                else:
+                    content = ""
+            else:
+                content = ""
+            content = _strip_thinking_block(content)
+    except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError) as exc:
+        log_error_traceback(exc)
+        raise RuntimeError(
+            f"O Ollama não respondeu em {timeout_disp} s com o modelo {model}. "
+            f"Verifique se o modelo está carregado inteiro na GPU ('ollama ps'), se o Ollama está aberto, "
+            f"e tente um modelo menor ou diminua num_ctx."
+        ) from None
+    if not content:
         raise RuntimeError("O Ollama devolveu uma resposta vazia.")
     return json.loads(content)
 
