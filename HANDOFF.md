@@ -209,7 +209,7 @@
 - Investigação dos 3 arquivos `rejected_*.json` salvos com ~3ms de diferença: ocorria porque `_save_rejected_script` era chamado a cada tentativa do loop quando `vf.get('indisponivel')` acontecia, antes de verificar `quality_retries >= 2`. Corrigido para salvar apenas após esgotar as 2 regenerações, e adicionado reuso/sobrescrita por `story['_rejected_path']` garantindo que apenas 1 arquivo de rejeição seja salvo por pauta.
 - Garantido que `source`, `modelos` e `motivo_checagem` estejam sempre presentes em `rejected_*.json`.
 - [x] **ITEM 17 — Tamanho mínimo e fecho do roteiro (`news_auto.py`)**: feito
-  - **Commit:** pendente de push — *"Exige tamanho minimo de 8 falas, media de palavras e fecho com opiniao"*
+  - **Commit:** `f4ad7010ae9b829da60738d2b48f47084b8be06b` — *"Exige tamanho minimo de 8 falas, media de palavras e fecho com opiniao"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 80 testes passando (incluindo `test_item17_minimum_size_and_script_ending`)
 
