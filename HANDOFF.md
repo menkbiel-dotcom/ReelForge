@@ -150,7 +150,10 @@
   - **Commit:** `39ebffcae080a5e8d4d0c4545d1381976bac4887` — *"Adiciona fixtures de roteiros rejeitados usadas nos testes"*
   - **Arquivos tocados:** `tests/fixtures/rejected_20261111_181036_244323.json`, `tests/fixtures/rejected_20261111_192441_627729.json`
 - [x] **Substituição de `strip_glued_headlines` por programação dinâmica (`news_auto.py`)**: feito
-  - **Commit:** pendente de envio
+  - **Commit:** `c222866c2b9bc0cfacab2d211fc665b4eca3adab` — *"Substitui strip_glued_headlines por programacao dinamica para evitar tempo exponencial"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 70 testes passando (incluindo `test_strip_glued_headlines_dp_performance_and_clean` e `test_strip_glued_headlines_random_inputs_match_legacy`)
-- [ ] **Reforço em `gather_candidates` (limite 60s, shutdown sem espera e logs de feed)**: pendente
+- [x] **Reforço em `gather_candidates` (limite 60s, shutdown sem espera e logs de feed)**: feito
+  - **Commit:** pendente de envio
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 72 testes passando (incluindo `test_gather_candidates_feed_logging` e `test_gather_candidates_timeout_ignores_slow_feeds_and_shuts_down`)

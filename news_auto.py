@@ -15,7 +15,7 @@ import os
 import re
 import time
 import unicodedata
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import datetime
 from urllib.parse import quote
 
@@ -834,7 +834,7 @@ def _google_search_query(query):
     return query
 
 
-def gather_candidates(topic, kind='Notícia', limit=15, allow_repeat=False, max_age_hours=72):
+def gather_candidates(topic, kind='Notícia', limit=15, allow_repeat=False, max_age_hours=72, log=print, timeout=60):
     """Reúne pautas recentes dos RSS dos veículos (priorizando matérias com corpo completo)."""
     import engine
     query = (str(topic or '').strip() + SUFFIX.get(kind, '')).strip()
@@ -845,19 +845,46 @@ def gather_candidates(topic, kind='Notícia', limit=15, allow_repeat=False, max_
     def load(job):
         name, keys = job
         try:
-            return [(parse_entry(e, name), keys) for e in read_feed(FEEDS[name])]
+            log(f'Lendo feed {name}...')
+            entries = read_feed(FEEDS[name])
+            log(f'{name}: {len(entries)} itens')
+            return [(parse_entry(e, name), keys) for e in entries]
         except Exception:
+            log(f'{name}: 0 itens')
             return []
 
     def load_google(url):
         try:
-            return [(parse_entry(e), []) for e in read_feed(url)]
+            log('Lendo feed Google News...')
+            entries = read_feed(url)
+            log(f'Google News: {len(entries)} itens')
+            return [(parse_entry(e), []) for e in entries]
         except Exception:
+            log('Google News: 0 itens')
             return []
 
-    with ThreadPoolExecutor(max_workers=10) as pool:
-        rich = [x for batch in pool.map(load, plan) for x in batch]
-        headlines = [x for batch in pool.map(load_google, google) for x in batch]
+    rich = []
+    headlines = []
+    pool = ThreadPoolExecutor(max_workers=10)
+    try:
+        futures_rich = [pool.submit(load, job) for job in plan]
+        futures_google = [pool.submit(load_google, u) for u in google]
+        all_futures = futures_rich + futures_google
+        done, not_done = wait(all_futures, timeout=timeout)
+        for fut in futures_rich:
+            if fut in done:
+                try:
+                    rich.extend(fut.result())
+                except Exception:
+                    pass
+        for fut in futures_google:
+            if fut in done:
+                try:
+                    headlines.extend(fut.result())
+                except Exception:
+                    pass
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
     now = time.time()
     fresh = lambda item: not item['timestamp'] or now - item['timestamp'] <= max_age_hours * 3600
     scored_rich = []
@@ -1853,7 +1880,7 @@ def automatic(topic, kind='Notícia', max_seconds=45, allow_repeat=False, log=pr
     """Fluxo completo em dois passos + filtro de qualidade: RSS -> pauta -> 5-6 fatos -> roteiro -> avaliação."""
     import engine
     log('Lendo os RSS dos veículos e do Google News...')
-    candidates = gather_candidates(topic, kind, 15, allow_repeat)
+    candidates = gather_candidates(topic, kind, 15, allow_repeat, log=log)
     full = sum(1 for c in candidates if c['body'])
     log(f'{len(candidates)} pautas analisadas ({full} com matéria completa). Ollama escolhendo...')
     remaining = list(candidates)

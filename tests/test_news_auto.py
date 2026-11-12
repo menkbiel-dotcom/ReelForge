@@ -1686,6 +1686,40 @@ class NewsAutoTests(unittest.TestCase):
                 f'Divergência na iteração {test_idx}'
             )
 
+    def test_gather_candidates_feed_logging(self):
+        logs = []
+        with patch('news_auto.read_feed', return_value=FEED):
+            cands = news_auto.gather_candidates('tecnologia', log=logs.append)
+        self.assertTrue(any(l.startswith('Lendo feed ') for l in logs))
+        self.assertTrue(any(': ' in l and 'itens' in l for l in logs))
+        self.assertTrue(any('Google News: ' in l and 'itens' in l for l in logs))
+
+    def test_gather_candidates_timeout_ignores_slow_feeds_and_shuts_down(self):
+        import time
+
+        def rich_entry(title, source, link):
+            return {
+                'title': f'{title} - {source}',
+                'source': {'title': source},
+                'link': link,
+                'published': 'Sun, 08 Nov 2026 02:00:00 GMT',
+                'summary': 'Tecnologia avança com internet e novos sistemas no Brasil. ' * 20
+            }
+
+        def slow_read_feed(url):
+            if 'google' in url:
+                time.sleep(1.0)
+                return []
+            return [rich_entry('Governo anuncia tecnologia', 'G1', 'https://g1/1')]
+
+        t0 = time.perf_counter()
+        with patch('news_auto.read_feed', side_effect=slow_read_feed):
+            cands = news_auto.gather_candidates('tecnologia', timeout=0.25)
+        elapsed = time.perf_counter() - t0
+        self.assertLess(elapsed, 0.8)
+        self.assertIsInstance(cands, list)
+        self.assertGreater(len(cands), 0)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
