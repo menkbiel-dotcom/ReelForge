@@ -1977,6 +1977,83 @@ class NewsAutoTests(unittest.TestCase):
 
         self.assertEqual(logs_all_fail.count('Pauta falhou na geração; tentando outra'), 2)
 
+    def test_item14_deterministic_repair_long_reactions(self):
+        import re
+        # 1. Reação de 7 palavras com pontuação forte vira <= 6 palavras cortada
+        raw_7_words = {
+            'lines': [
+                {'speaker': 0, 'text': 'Você viu as notícias espaciais hoje?', 'fato': 0},
+                {'speaker': 1, 'text': 'Caramba, eu não esperava por essa agora!', 'reacao': True},
+                {'speaker': 0, 'text': 'O Webb descobriu novos planetas.', 'fato': 1},
+                {'speaker': 1, 'text': 'Será que encontramos vida fora?', 'fato': 1},
+            ]
+        }
+        logs_1 = []
+        news_auto.repair_reactions(raw_7_words, log=logs_1.append)
+        repaired_text = raw_7_words['lines'][1]['text']
+        self.assertLessEqual(len(repaired_text.split()), 6)
+        self.assertEqual(repaired_text, 'Caramba!')
+        self.assertIn('fala 2: reação reparada', logs_1)
+
+        # 2. Reação com número é substituída por reação fixa sem dígitos
+        raw_digits = {
+            'lines': [
+                {'speaker': 0, 'text': 'Você viu as notícias espaciais hoje?', 'fato': 0},
+                {'speaker': 1, 'text': 'Caramba, foram 10 recordes quebrados hoje!', 'reacao': True},
+                {'speaker': 0, 'text': 'O Webb descobriu novos planetas.', 'fato': 1},
+                {'speaker': 1, 'text': 'Será que encontramos vida fora?', 'fato': 1},
+            ]
+        }
+        logs_2 = []
+        news_auto.repair_reactions(raw_digits, log=logs_2.append)
+        repaired_digit_text = raw_digits['lines'][1]['text']
+        self.assertLessEqual(len(repaired_digit_text.split()), 6)
+        self.assertFalse(bool(re.search(r'\d', repaired_digit_text)))
+        self.assertIn(repaired_digit_text, news_auto.FIXED_REACTIONS)
+        self.assertIn('fala 2: reação reparada', logs_2)
+
+        # 3. Reparo NÃO altera falas marcadas com "fato"
+        raw_fact = {
+            'lines': [
+                {'speaker': 0, 'text': 'Esta fala longa tem 10 palavras e o número 25 no texto.', 'fato': 0},
+                {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
+            ]
+        }
+        news_auto.repair_reactions(raw_fact)
+        self.assertEqual(raw_fact['lines'][0]['text'], 'Esta fala longa tem 10 palavras e o número 25 no texto.')
+
+        # 4. write_script auto-repara reação de 7 palavras antes de validar
+        story = {
+            'title': 'Descobertas do Telescópio Webb',
+            'body': 'O telescópio espacial James Webb da Nasa fez grandes descobertas científicas no espaço profundo. '
+                    'A missão espacial do James durou cerca de três anos e analisou amostras cósmicas em 90 dias. '
+                    'O Webb detectou 25 novos exoplanetas e 277 asteroides na pesquisa recente. '
+                    'A temperatura no vácuo espacial atingiu níveis extremos e vinte países parceiros participaram.',
+            'source_type': 'rss',
+            'extracted_facts': [
+                'O telescópio espacial James Webb da Nasa observou galáxias distantes.',
+                'A missão espacial durou cerca de três anos.',
+                'O Webb detectou 25 novos exoplanetas e 277 asteroides.',
+                'Os cientistas analisaram amostras de poeira cósmica.',
+            ],
+        }
+        logs_ws = []
+        def mock_writer_long_reaction(inst, payload_str):
+            return {
+                'lines': [
+                    {'speaker': 0, 'text': 'O que o telescópio James Webb detectou no espaço?', 'fato': 0},
+                    {'speaker': 1, 'text': 'Caramba, eu não esperava por essa agora!', 'reacao': True},
+                    {'speaker': 0, 'text': 'O Webb detectou 25 novos exoplanetas e 277 asteroides.', 'fato': 2},
+                    {'speaker': 1, 'text': 'A Nasa fez a missão espacial por três anos!', 'fato': 1},
+                ]
+            }
+
+        mock_judge = lambda i, p, model=None: {'falas': [{'i': idx, 'suportada': True, 'motivo': ''} for idx in range(4)]} if 'checador de fatos' in i.lower() else {'nota': 8, 'responde_perguntas': True, 'contradiz_materia': False, 'problemas': []}
+        out_lines = news_auto.write_script(story, max_words=80, ask=mock_writer_long_reaction, judge_ask=mock_judge, facts=story['extracted_facts'], log=logs_ws.append)
+        self.assertEqual(len(out_lines), 4)
+        self.assertIn('fala 2: reação reparada', logs_ws)
+        self.assertEqual(out_lines[1]['text'], 'Caramba!')
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

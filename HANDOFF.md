@@ -178,3 +178,17 @@
   - **Commit:** `f641357d6c5363d8bae9f25a10ee7394d8d4bd16` — *"Tenta pautas candidatas alternativas quando a geracao do roteiro esgotar tentativas"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 76 testes passando (incluindo `test_item13_automatic_retries_next_candidate_on_script_failure`)
+
+---
+
+# Rodada 5 — Reparo Determinístico, Retries Inteligentes e Robustez de Geração (Itens 14 a 19)
+
+- [x] **ITEM 14 — Reparo determinístico de reações longas (`news_auto.py`)**: feito
+  - **Commit:** `pending` — *"Repara deterministicamente falas de reacao longas ou com digitos antes da validacao"*
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 77 testes passando (incluindo `test_item14_deterministic_repair_long_reactions`)
+- [ ] **ITEM 15 — Retries com diversidade e correção concreta (`engine.py`, `news_auto.py`)**: a fazer
+- [ ] **ITEM 16 — Registrar a causa real de "checagem de fatos indisponível" (`news_auto.py`)**: a fazer
+- [ ] **ITEM 17 — Tamanho mínimo e fecho do roteiro (`news_auto.py`)**: a fazer
+- [ ] **ITEM 18 — Robustez do Passo 1 (`news_auto.py`)**: a fazer
+- [ ] **ITEM 19 — Estilo das falas (`news_auto.py`)**: a fazer

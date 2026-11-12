@@ -1145,7 +1145,83 @@ def turn_range(story, max_words, previous=None):
     return 4, min(8, cap)
 
 
-def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12, facts=None, log=print):
+FIXED_REACTIONS = [
+    "Caramba!",
+    "Sério mesmo?",
+    "Não acredito.",
+    "Para tudo!",
+    "Hmm, estranho.",
+    "Que loucura!",
+    "Inacreditável!",
+]
+
+
+def repair_reactions(raw_or_lines, log=print):
+    """Repara deterministicamente falas de reação com mais de 6 palavras ou dígitos.
+
+    (a) Corta na primeira pontuação forte (. ! ? , ; — –) se o trecho resultante tiver 1 a 6 palavras e nenhum dígito;
+    (b) Senão, substitui por uma reação curta da lista fixa sem repetir a mesma no roteiro.
+    """
+    if isinstance(raw_or_lines, dict):
+        lines = raw_or_lines.get('lines', [])
+    elif isinstance(raw_or_lines, list):
+        lines = raw_or_lines
+    else:
+        return raw_or_lines
+
+    if not isinstance(lines, list):
+        return raw_or_lines
+
+    import engine
+    used_reactions = set()
+    for line in lines:
+        if isinstance(line, dict) and bool(line.get('reacao')):
+            t = line.get('text', '')
+            if isinstance(t, str):
+                w = t.split()
+                if 1 <= len(w) <= 6 and not re.search(r'\d', t):
+                    used_reactions.add(t.strip())
+
+    for i, line in enumerate(lines):
+        if not isinstance(line, dict) or not bool(line.get('reacao')):
+            continue
+        text = line.get('text', '')
+        if not isinstance(text, str):
+            continue
+        t_clean = engine.clean(re.sub(r'^\s*(sasuke|naruto)\s*[:\-–]\s*', '', text, flags=re.I))
+        t_clean = re.sub(r'[#*_]|[\U0001F000-\U0001FFFF]', '', t_clean).strip()
+        words = t_clean.split()
+        has_digits = bool(re.search(r'\d', t_clean))
+        if len(words) <= 6 and not has_digits:
+            continue
+
+        repaired = None
+        m = re.search(r'[.!?\,;—–]+', t_clean)
+        if m:
+            head = t_clean[:m.end()].strip()
+            if head.endswith((',', ';', '—', '–')):
+                head = head.rstrip(',;—– ').strip() + '!'
+            head_words = head.split()
+            if 1 <= len(head_words) <= 6 and not re.search(r'\d', head):
+                repaired = head
+
+        if not repaired:
+            for cand in FIXED_REACTIONS:
+                if cand not in used_reactions:
+                    repaired = cand
+                    break
+            if not repaired:
+                repaired = FIXED_REACTIONS[0]
+
+        if repaired:
+            line['text'] = repaired
+            used_reactions.add(repaired)
+            log(f'fala {i + 1}: reação reparada')
+
+    return raw_or_lines
+
+
+def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12, facts=None, log=print, repair_reactions_enabled=False):
     """Valida o roteiro contra o corpo e título da matéria (nunca contra manchetes relacionadas)."""
     if not story.get('body') and len(source_text(story).split()) < MIN_SOURCE_WORDS:
         # Se não tem corpo nem atinge a fonte mínima, só permite se for teste explícito de manchete com >= 6 palavras,
@@ -1153,6 +1229,8 @@ def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12, fa
         if story.get('source_type') == 'rss' or len(source_text(story).split()) < 5:
             raise ValueError('Matéria sem corpo suficiente para validação.')
     lines = raw.get('lines') if isinstance(raw, dict) else None
+    if repair_reactions_enabled and isinstance(lines, list):
+        repair_reactions(lines, log=log)
     if not isinstance(lines, list) or not min_lines <= len(lines) <= max_lines:
         raise ValueError(f'Entregue entre {min_lines} e {max_lines} falas em "lines" '
                          f'(vieram {len(lines) if isinstance(lines, list) else 0}).')
@@ -1857,6 +1935,7 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
         if error:
             payload['correcao'] = error
         raw = ask(instruction, json.dumps(payload, ensure_ascii=False))
+        repair_reactions(raw, log=log)
         raw_str = json.dumps(raw, ensure_ascii=False) if isinstance(raw, (dict, list)) else str(raw)
         try:
             lines, problem = validate_lines(raw, story, max_words, loop, min_lines, max_lines, facts=facts, log=log)
