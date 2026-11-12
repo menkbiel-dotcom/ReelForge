@@ -175,6 +175,6 @@
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 75 testes passando (incluindo `test_item12_failure_log_file_and_runtime_error`)
 - [x] **ITEM 13 — Tentar outra pauta antes de desistir (`news_auto.py`)**: feito
-  - **Commit:** `pending` — *"Tenta pautas candidatas alternativas quando a geracao do roteiro esgotar tentativas"*
+  - **Commit:** `f641357d6c5363d8bae9f25a10ee7394d8d4bd16` — *"Tenta pautas candidatas alternativas quando a geracao do roteiro esgotar tentativas"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 76 testes passando (incluindo `test_item13_automatic_retries_next_candidate_on_script_failure`)
