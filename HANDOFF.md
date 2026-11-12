@@ -134,7 +134,10 @@
   - **Arquivos tocados:** `news_auto.py`, `engine.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 63 testes passando (incluindo `test_item7_round2_writer_prompt_and_transparency`)
 - [x] **ITEM 8 — A tela não pode apagar configurações (`gui.py`, `_save`)**: feito
-  - **Commit:** pendente de envio
+  - **Commit:** `5260986cfcaa87bb8f3aa2f40b101756a407059b` — *"Preserva configuracoes desconhecidas ao salvar ajustes pela interface grafica"*
   - **Arquivos tocados:** `gui.py`, `tests/test_integration.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 65 testes passando (incluindo `test_merge_settings_preserves_unknown_keys_and_other_providers` e `test_gui_save_preserves_unknown_settings_on_disk`)
-- [ ] **ITEM 9 — Campos de modelo na tela (`gui.py`)**: pendente
+- [x] **ITEM 9 — Campos de modelo na tela (`gui.py`)**: feito
+  - **Commit:** pendente de envio
+  - **Arquivos tocados:** `gui.py`, `news_auto.py`, `tests/test_integration.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 68 testes passando (incluindo `test_list_ollama_models_fallback_when_offline`, `test_list_ollama_models_success_from_api` e `test_gui_model_fields_and_accept_low_score_persistence`)

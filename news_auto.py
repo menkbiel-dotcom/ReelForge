@@ -1406,7 +1406,12 @@ def judge_model_name():
     try:
         import engine
         cfg = engine.load_settings()
-        return cfg.get('judge_model') or 'qwen3:8b'
+        val = cfg.get('judge_model')
+        if val:
+            return val
+        if val == '':
+            return os.getenv('OLLAMA_MODEL') or cfg.get('ollama_model') or 'qwen3.5:4b'
+        return 'qwen3:8b'
     except Exception:
         return 'qwen3:8b'
 

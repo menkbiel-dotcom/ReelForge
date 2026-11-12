@@ -330,4 +330,76 @@ class Item8Tests(unittest.TestCase):
                     app.destroy()
 
 
+class Item9Tests(unittest.TestCase):
+    def test_list_ollama_models_fallback_when_offline(self):
+        import gui
+        with patch('requests.get', side_effect=Exception('Ollama offline')):
+            models = gui.list_ollama_models(timeout=1.5)
+            self.assertEqual(models, ['qwen3.5:4b', 'qwen3:8b', 'qwen2.5:7b'])
+
+    def test_list_ollama_models_success_from_api(self):
+        import gui
+        mock_resp = Mock(status_code=200)
+        mock_resp.json.return_value = {
+            'models': [
+                {'name': 'llama3.1:8b', 'size': 12345},
+                {'name': 'qwen2.5:7b', 'size': 67890},
+            ]
+        }
+        with patch('requests.get', return_value=mock_resp) as mock_get:
+            models = gui.list_ollama_models(timeout=1.5)
+            self.assertEqual(models, ['llama3.1:8b', 'qwen2.5:7b'])
+            mock_get.assert_called_once_with('http://127.0.0.1:11434/api/tags', timeout=1.5)
+
+    @unittest.skipUnless(HAS_TKINTER, 'Tkinter necessário para instanciar GUI')
+    def test_gui_model_fields_and_accept_low_score_persistence(self):
+        import gui
+        with tempfile.TemporaryDirectory() as td:
+            cfg_file = Path(td) / 'settings.json'
+            initial_data = {
+                'topic': 'tecnologia',
+                'ollama_model': 'qwen3.5:4b',
+                'judge_model': 'qwen3:8b',
+                'aceitar_nota_baixa': False,
+            }
+            cfg_file.write_text(json.dumps(initial_data, indent=2), encoding='utf-8')
+            with patch.object(gui, 'CONFIG', cfg_file):
+                with patch('requests.get', side_effect=Exception('offline')):
+                    app = gui.App()
+                    try:
+                        self.assertEqual(app.ollama_model.get(), 'qwen3.5:4b')
+                        self.assertEqual(app.judge_model.get(), 'qwen3:8b')
+                        self.assertFalse(app.aceitar_nota_baixa.get())
+                        self.assertIn('igual ao redator', app._judge_models)
+                        self.assertIn('qwen3.5:4b', app._ollama_models)
+
+                        app.ollama_model.set('qwen2.5:7b')
+                        app.judge_model.set('qwen3:8b')
+                        app.aceitar_nota_baixa.set(True)
+                        saved_cfg = app._save()
+
+                        self.assertEqual(saved_cfg['ollama_model'], 'qwen2.5:7b')
+                        self.assertEqual(saved_cfg['judge_model'], 'qwen3:8b')
+                        self.assertTrue(saved_cfg['aceitar_nota_baixa'])
+                        self.assertEqual(os.environ.get('OLLAMA_MODEL'), 'qwen2.5:7b')
+                        self.assertEqual(os.environ.get('OLLAMA_JUDGE_MODEL'), 'qwen3:8b')
+                        self.assertEqual(os.environ.get('REELFORGE_ACCEPT_LOW_SCORE'), '1')
+
+                        app.judge_model.set('igual ao redator')
+                        app.aceitar_nota_baixa.set(False)
+                        saved_cfg2 = app._save()
+
+                        self.assertEqual(saved_cfg2['judge_model'], '')
+                        self.assertFalse(saved_cfg2['aceitar_nota_baixa'])
+                        self.assertEqual(os.environ.get('OLLAMA_JUDGE_MODEL'), 'qwen2.5:7b')
+                        self.assertEqual(os.environ.get('REELFORGE_ACCEPT_LOW_SCORE'), '0')
+
+                        disk_cfg = json.loads(cfg_file.read_text(encoding='utf-8'))
+                        self.assertEqual(disk_cfg['ollama_model'], 'qwen2.5:7b')
+                        self.assertEqual(disk_cfg['judge_model'], '')
+                        self.assertFalse(disk_cfg['aceitar_nota_baixa'])
+                    finally:
+                        app.destroy()
+
+
 if __name__=='__main__':unittest.main(verbosity=2)

@@ -18,6 +18,29 @@ load_dotenv(HOME / '.env')
 CONFIG = HOME / 'settings.json'
 
 TOPIC_PRESETS = ['tecnologia', 'economia', 'ciência', 'educação', 'mundo', 'cultura', 'esporte']
+DEFAULT_OLLAMA_MODELS = ['qwen3.5:4b', 'qwen3:8b', 'qwen2.5:7b']
+
+
+def list_ollama_models(timeout: float = 1.5) -> list[str]:
+    """Lista os modelos instalados no Ollama local (GET /api/tags).
+    Fallback para a lista padrão caso o Ollama esteja offline ou a requisição falhe.
+    """
+    try:
+        import requests
+        r = requests.get('http://127.0.0.1:11434/api/tags', timeout=timeout)
+        if r.status_code == 200:
+            data = r.json()
+            models = []
+            for item in data.get('models', []):
+                if isinstance(item, dict) and item.get('name'):
+                    name = item['name']
+                    if name not in models:
+                        models.append(name)
+            if models:
+                return models
+    except Exception:
+        pass
+    return list(DEFAULT_OLLAMA_MODELS)
 
 
 def merge_settings(current: dict, from_ui: dict) -> dict:
@@ -78,9 +101,30 @@ class App(tk.Tk):
             saved = json.loads(CONFIG.read_text(encoding='utf-8'))
         except (OSError, ValueError):
             saved = {}
+        self._ollama_models = list_ollama_models()
+        saved_writer = saved.get('ollama_model', 'qwen3.5:4b')
+        if saved_writer and saved_writer not in self._ollama_models:
+            self._ollama_models.insert(0, saved_writer)
+
+        saved_judge = saved.get('judge_model')
+        if not saved_judge:
+            initial_judge = 'igual ao redator'
+        else:
+            initial_judge = saved_judge
+
+        judge_options = ['igual ao redator']
+        for m in self._ollama_models:
+            if m not in judge_options:
+                judge_options.append(m)
+        if saved_judge and saved_judge not in judge_options:
+            judge_options.append(saved_judge)
+        self._judge_models = judge_options
+
         self.topic = tk.StringVar(value=saved.get('topic', 'tecnologia'))
         self.provider = tk.StringVar(value=saved.get('provider', 'ollama'))
-        self.ollama_model = tk.StringVar(value=saved.get('ollama_model', 'qwen3.5:4b'))
+        self.ollama_model = tk.StringVar(value=saved_writer)
+        self.judge_model = tk.StringVar(value=initial_judge)
+        self.aceitar_nota_baixa = tk.BooleanVar(value=bool(saved.get('aceitar_nota_baixa', False)))
         self.openai_key = tk.StringVar(value='')
         self.gameplay = tk.StringVar(value=saved.get('gameplay', ''))
         self.bg_brightness = tk.StringVar(value=str(saved.get('gameplay_brightness', -0.06)))
@@ -223,17 +267,21 @@ class App(tk.Tk):
         ttk.Label(content, text='Motor de IA local', style='Card.TLabel').grid(row=3, column=0, sticky='w')
         ai_row = ttk.Frame(content, style='Card.TFrame')
         ai_row.grid(row=3, column=1, columnspan=2, sticky='ew', pady=4)
-        ttk.Combobox(ai_row, textvariable=self.provider, values=['ollama'], state='readonly', width=14).pack(side='left')
-        ttk.Label(ai_row, text='Modelo:', style='Card.TLabel').pack(side='left', padx=(14, 6))
-        ttk.Entry(ai_row, textvariable=self.ollama_model, state='readonly', width=18).pack(side='left')
+        ttk.Combobox(ai_row, textvariable=self.provider, values=['ollama'], state='readonly', width=9).pack(side='left')
+        ttk.Label(ai_row, text='Modelo:', style='Card.TLabel').pack(side='left', padx=(10, 4))
+        ttk.Combobox(ai_row, textvariable=self.ollama_model, values=self._ollama_models, width=14).pack(side='left')
+        ttk.Label(ai_row, text='Modelo do juiz:', style='Card.TLabel').pack(side='left', padx=(10, 4))
+        ttk.Combobox(ai_row, textvariable=self.judge_model, values=self._judge_models, width=16).pack(side='left')
 
         ttk.Checkbutton(content, text='Permitir repetir notícia já usada anteriormente',
                         variable=self.repeat).grid(row=4, column=0, columnspan=3, sticky='w', pady=(6, 2))
         ttk.Checkbutton(content, text='Diretor IA (apenas quando você cola um texto manual em "Fonte manual")',
                         variable=self.director_enabled).grid(row=5, column=0, columnspan=3, sticky='w', pady=2)
+        ttk.Checkbutton(content, text='Aceitar nota baixa (apenas testes)',
+                        variable=self.aceitar_nota_baixa).grid(row=6, column=0, columnspan=3, sticky='w', pady=2)
         ttk.Label(content,
                   text='Fluxo automático em 2 passos: extrai 5–6 fatos verificados da matéria, escreve o diálogo informal e avalia nota >= 7.',
-                  style='CardMuted.TLabel').grid(row=6, column=0, columnspan=3, sticky='w', pady=(8, 0))
+                  style='CardMuted.TLabel').grid(row=7, column=0, columnspan=3, sticky='w', pady=(8, 0))
 
         entry(video, 0, 'Gameplay de fundo', self.gameplay)
         ttk.Button(video, text='Escolher MP4...', command=self._choose).grid(row=0, column=3, padx=(8, 0), pady=4)
@@ -470,7 +518,10 @@ class App(tk.Tk):
         from render_pipeline import background_color, music_volume
         brightness, gamma = background_color(self.bg_brightness.get(), self.bg_gamma.get())
         self.voice_profiles[self.tts_provider.get()] = self._voice_form()
-        ui_cfg = {'topic': self.topic.get(), 'provider': self.provider.get(), 'ollama_model': self.ollama_model.get(),
+        judge_choice = self.judge_model.get().strip()
+        judge_val = '' if judge_choice.lower() in ('igual ao redator', '') else judge_choice
+        ui_cfg = {'topic': self.topic.get(), 'provider': self.provider.get(), 'ollama_model': self.ollama_model.get().strip(),
+                  'judge_model': judge_val, 'aceitar_nota_baixa': self.aceitar_nota_baixa.get(),
                   'gameplay': self.gameplay.get(), 'fps': int(self.fps.get()),
                   'gameplay_brightness': brightness, 'gameplay_gamma': gamma,
                   'loop': self.loop.get(), 'script_loop': self.script_loop.get(),
@@ -496,7 +547,12 @@ class App(tk.Tk):
                           REELFORGE_SCRIPT_LOOP='1' if cfg['script_loop'] else '0',
                           REELFORGE_MUSIC='1' if cfg['music_enabled'] else '0',
                           REELFORGE_MUSIC_VOLUME=str(cfg['music_volume']))
-        os.environ.update({'AI_PROVIDER': self.provider.get(), 'OLLAMA_MODEL': self.ollama_model.get()})
+        os.environ.update({'AI_PROVIDER': self.provider.get(), 'OLLAMA_MODEL': self.ollama_model.get().strip()})
+        if judge_val:
+            os.environ['OLLAMA_JUDGE_MODEL'] = judge_val
+        else:
+            os.environ['OLLAMA_JUDGE_MODEL'] = self.ollama_model.get().strip()
+        os.environ['REELFORGE_ACCEPT_LOW_SCORE'] = '1' if self.aceitar_nota_baixa.get() else '0'
         os.environ.update({'TTS_PROVIDER': self.tts_provider.get(), 'TTS_VOICE_A': self.voice_a.get().strip(),
                            'TTS_VOICE_B': self.voice_b.get().strip(), 'TTS_MODEL': self.tts_model.get().strip(),
                            'TTS_RATE_A': self.rate_a.get(), 'TTS_RATE_B': self.rate_b.get(),
@@ -586,7 +642,8 @@ class App(tk.Tk):
             self.events.put(('log', 'FFmpeg disponível: ' + ffmpeg()))
             self.events.put(('log', 'Legendas por áudio: ' + ('instaladas' if importlib.util.find_spec('faster_whisper') else 'execute instalar_legendas.bat')))
             self.events.put(('log', f'Gameplays locais: {len(engine.gameplays())}'))
-            self.events.put(('log', f'Roteiros: {self.provider.get()} local ({self.ollama_model.get()}).'))
+            judge_info = f', juiz: {self.judge_model.get()}' if self.judge_model.get() else ''
+            self.events.put(('log', f'Roteiros: {self.provider.get()} local ({self.ollama_model.get()}{judge_info}).'))
 
         self._job(task)
 

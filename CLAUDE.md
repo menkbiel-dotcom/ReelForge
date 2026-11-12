@@ -48,6 +48,9 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
 
 6. **Interface Gráfica (`gui.py`):**
    - `merge_settings(current, from_ui)`: Ao salvar configurações pela GUI (`_save`), mescla as alterações com o `settings.json` existente sem apagar chaves desconhecidas pela tela (como `aceitar_nota_baixa`, `permitir_sem_checagem_de_fatos`, `judge_model`, `whisper_model`), preservando também provedores adicionais e parâmetros ocultos em `voice_profiles`.
+   - `list_ollama_models()`: Popula o Combobox editável do modelo do redator consultando `GET http://127.0.0.1:11434/api/tags` (timeout 1.5s) com fallback offline para `['qwen3.5:4b', 'qwen3:8b', 'qwen2.5:7b']`.
+   - Campo "Modelo do juiz": Combobox com os mesmos modelos + opção "igual ao redator" (salva `judge_model: ""` e propaga o modelo do redator para `OLLAMA_JUDGE_MODEL`).
+   - Checkbox "Aceitar nota baixa (apenas testes)": mapeado para `aceitar_nota_baixa` no `settings.json` e `REELFORGE_ACCEPT_LOW_SCORE` no ambiente.
 
 ## Privacidade dos Assets
 
@@ -55,9 +58,9 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
 - O script `publicar_github.py` cria/atualiza o repositório como **privado por padrão** (use `--publico` para público), lê o token exclusivamente de `GITHUB_TOKEN` ou `getpass` (sem argumento `--token` e sem eco no terminal) e faz push sem `force`.
 - Testes que utilizam áudios de demonstração sintetizam automaticamente um WAV silencioso via módulo padrão `wave` quando o arquivo local não existir.
 
-## Suíte de Testes (65 Testes)
+## Suíte de Testes (68 Testes)
 
-- `tests/test_news_auto.py` (38 testes) e `tests/test_integration.py` (27 testes) — totalizando **65 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
+- `tests/test_news_auto.py` (38 testes) e `tests/test_integration.py` (30 testes) — totalizando **68 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'
