@@ -198,7 +198,7 @@
 - `_add_concrete_example(error_msg)` anexa exemplos concretos e curtos em `payload['correcao']` para gancho, reações, fecho, números ausentes, vocativos e concordância.
 - Se o mesmo motivo curto de erro se repetir por 3 tentativas consecutivas, loga `erro repetido 3x: <motivo>`, grava diagnóstico de falha e lança `RuntimeError` para que `automatic()` tente a próxima pauta candidata.
 - [x] **ITEM 16 — Registrar a causa real de "checagem de fatos indisponível" (`news_auto.py`)**: feito
-  - **Commit:** PENDING_COMMIT_SHA — *"Registra causa concreta de indisponibilidade da checagem de fatos e deduplica rejeicoes"*
+  - **Commit:** 989f2bae272c7820e1d11f6a2a5e485fc9b39742 — *"Registra causa concreta de indisponibilidade da checagem de fatos e deduplica rejeicoes"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 79 testes passando (incluindo `test_item16_fact_check_failure_reasons_and_single_rejected_file`)
 
@@ -208,6 +208,18 @@
 - Em caso de HTTP 404, faz fallback UMA VEZ para o modelo redator como juiz e marca `juiz_fraco=true`.
 - Investigação dos 3 arquivos `rejected_*.json` salvos com ~3ms de diferença: ocorria porque `_save_rejected_script` era chamado a cada tentativa do loop quando `vf.get('indisponivel')` acontecia, antes de verificar `quality_retries >= 2`. Corrigido para salvar apenas após esgotar as 2 regenerações, e adicionado reuso/sobrescrita por `story['_rejected_path']` garantindo que apenas 1 arquivo de rejeição seja salvo por pauta.
 - Garantido que `source`, `modelos` e `motivo_checagem` estejam sempre presentes em `rejected_*.json`.
-- [ ] **ITEM 17 — Tamanho mínimo e fecho do roteiro (`news_auto.py`)**: a fazer
+- [x] **ITEM 17 — Tamanho mínimo e fecho do roteiro (`news_auto.py`)**: feito
+  - **Commit:** pendente de push — *"Exige tamanho minimo de 8 falas, media de palavras e fecho com opiniao"*
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 80 testes passando (incluindo `test_item17_minimum_size_and_script_ending`)
+
+### Detalhes do ITEM 17
+- `validate_lines`:
+  - `min_lines=8` por padrão (exige entre 8 e 12 falas em "lines" para reels de ≈ 25 a 40 s).
+  - Média mínima de 6 palavras por fala calculada e exigida antes do juiz (`avg_words = total / len(texts) >= 6.0` quando `min_lines >= 8`).
+  - Fecho / provocação na última fala:
+    - Rejeita fechos iniciados por `"Será que ...?"` genérico sem termos de opinião/julgamento (`'acho', 'duvido', 'certeza', 'loucura', 'exagero', 'vale', 'compensa', 'justifica', 'arriscado', 'furada', 'besteira', 'revolucao', 'revolução', 'futuro', 'tendencia', 'tendência', 'perigo', 'bizarro', 'absurdo', 'sensato', 'burrice', 'piada', 'ilusao', 'ilusão', 'coragem', 'otimismo', 'pessimismo'`).
+    - Rejeita fecho que repete dados já ditos no roteiro ($\ge 3$ palavras de conteúdo compartilhadas com qualquer fala anterior).
+  - `_add_concrete_example`: atualizado para fecho com: `Exemplo de fecho válido com opinião: "Pra mim, investir bilhões nisso sem testar antes é loucura total." (nunca use "Será que ...?" genérico e não repita fatos já ditos).`
 - [ ] **ITEM 18 — Robustez do Passo 1 (`news_auto.py`)**: a fazer
 - [ ] **ITEM 19 — Estilo das falas (`news_auto.py`)**: a fazer

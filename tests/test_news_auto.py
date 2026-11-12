@@ -88,11 +88,11 @@ class NewsAutoTests(unittest.TestCase):
                            ('Sabia que uma empresa fez um acordo?', 'Isso é importante.',
                             'A tecnologia avança.', 'O que você acha disso?')]}
         with self.assertRaisesRegex(ValueError, 'genérico'):
-            news_auto.validate_lines(vague, story, 60)
+            news_auto.validate_lines(vague, story, 60, min_lines=4)
         rich = {'lines': [{'speaker': 0, 'text': t, 'fato': 0} for t in
                           ('Por que a Anthropic gastou 3,4 bilhões?', 'O acordo foi direto com a Caterpillar.',
                            'Os geradores vão para o Texas.', 'Será que a rede aguenta os data centers?')]}
-        lines, problem = news_auto.validate_lines(rich, story, 60)
+        lines, problem = news_auto.validate_lines(rich, story, 60, min_lines=4)
         self.assertEqual(problem, '')
         self.assertEqual(len(lines), 4)
 
@@ -132,7 +132,7 @@ class NewsAutoTests(unittest.TestCase):
             'Será que a gasolina baixa agora?'
         )]}
         with self.assertRaisesRegex(ValueError, 'veículo|confirmado por'):
-            news_auto.validate_lines(bad_cpg, story, 80)
+            news_auto.validate_lines(bad_cpg, story, 80, min_lines=4)
         bad_uol = {'lines': [{'speaker': 0, 'text': t, 'fato': 0} for t in (
             'Viu a descoberta de 200 milhões de barris?',
             'A Petrobras achou petróleo na Bacia de Campos.',
@@ -140,7 +140,7 @@ class NewsAutoTests(unittest.TestCase):
             'Será que a gasolina baixa agora?'
         )]}
         with self.assertRaisesRegex(ValueError, 'veículo|confirmado por'):
-            news_auto.validate_lines(bad_uol, story, 80)
+            news_auto.validate_lines(bad_uol, story, 80, min_lines=4)
 
     def test_related_headlines_are_rejected_as_fact_evidence(self):
         story = {
@@ -158,7 +158,7 @@ class NewsAutoTests(unittest.TestCase):
             'Quantos acertos você conseguiu fazer?'
         )]}
         with self.assertRaisesRegex(ValueError, 'Contaminação|manchete relacionada'):
-            news_auto.validate_lines(leaked_entity, story, 80)
+            news_auto.validate_lines(leaked_entity, story, 80, min_lines=4)
         leaked_number = {'lines': [{'speaker': 0, 'text': t, 'fato': 0} for t in (
             'Já conferiu as 180 questões do Enem?',
             'O MEC e o Inep liberaram o gabarito no Brasil.',
@@ -166,7 +166,7 @@ class NewsAutoTests(unittest.TestCase):
             'Quantos acertos você conseguiu fazer?'
         )]}
         with self.assertRaisesRegex(ValueError, 'Números ausentes'):
-            news_auto.validate_lines(leaked_number, story, 80)
+            news_auto.validate_lines(leaked_number, story, 80, min_lines=4)
         with self.assertRaisesRegex(ValueError, 'sem corpo'):
             news_auto.require_minimum_source({'title': 'Só título curto', 'body': ''})
 
@@ -474,7 +474,7 @@ class NewsAutoTests(unittest.TestCase):
             'Vale tudo isso só para ouvir música?'
         )]}
         with self.assertRaisesRegex(ValueError, 'exemplos fictícios'):
-            news_auto.validate_lines(leaked, story, 80)
+            news_auto.validate_lines(leaked, story, 80, min_lines=4)
 
         prompts = []
         facts_resp = {'fatos': [
@@ -512,7 +512,7 @@ class NewsAutoTests(unittest.TestCase):
             'É um projeto grande da estatal no Brasil.',
             'Será que a Petrobras vai construir mais plataformas?'
         )]}
-        lines, problem = news_auto.validate_lines(valid_with_digit, story, 80)
+        lines, problem = news_auto.validate_lines(valid_with_digit, story, 80, min_lines=4)
         self.assertEqual(problem, '')
         self.assertEqual(len(lines), 4)
 
@@ -523,7 +523,7 @@ class NewsAutoTests(unittest.TestCase):
             'Será que a Petrobras vai construir mais plataformas?'
         )]}
         with self.assertRaisesRegex(ValueError, 'Números ausentes'):
-            news_auto.validate_lines(absent_digit, story, 80)
+            news_auto.validate_lines(absent_digit, story, 80, min_lines=4)
 
     def test_automatic_retries_next_candidate_when_chosen_story_lacks_minimum_source(self):
         cands = [
@@ -583,7 +583,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 1, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
         ]}
         with self.assertRaisesRegex(ValueError, 'deve indicar "fato": N ou "reacao": true'):
-            news_auto.validate_lines(bad_no_tag, story, 80)
+            news_auto.validate_lines(bad_no_tag, story, 80, min_lines=4)
 
         # 2. Reação com mais de 6 palavras
         bad_long_reaction = {'lines': [
@@ -593,7 +593,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 1, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
         ]}
         with self.assertRaisesRegex(ValueError, 'máximo permitido é 6'):
-            news_auto.validate_lines(bad_long_reaction, story, 80)
+            news_auto.validate_lines(bad_long_reaction, story, 80, min_lines=4)
 
         # 3. Reação com dígitos
         bad_digits_reaction = {'lines': [
@@ -603,7 +603,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 1, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
         ]}
         with self.assertRaisesRegex(ValueError, 'não podem conter números'):
-            news_auto.validate_lines(bad_digits_reaction, story, 80)
+            news_auto.validate_lines(bad_digits_reaction, story, 80, min_lines=4)
 
         # 4. Reações consecutivas
         bad_consecutive_reactions = {'lines': [
@@ -613,7 +613,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 1, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
         ]}
         with self.assertRaisesRegex(ValueError, 'não podem ser consecutivas'):
-            news_auto.validate_lines(bad_consecutive_reactions, story, 80)
+            news_auto.validate_lines(bad_consecutive_reactions, story, 80, min_lines=4)
 
         # 5. Mais de 2 reações
         bad_3_reactions = {'lines': [
@@ -626,7 +626,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 0, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
         ]}
         with self.assertRaisesRegex(ValueError, 'máximo 2 por roteiro'):
-            news_auto.validate_lines(bad_3_reactions, story, 80)
+            news_auto.validate_lines(bad_3_reactions, story, 80, min_lines=4)
 
         # 6. Última fala sendo reação
         bad_last_reaction = {'lines': [
@@ -636,7 +636,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 1, 'text': 'Pois é!', 'reacao': True},
         ]}
         with self.assertRaisesRegex(ValueError, 'última fala NÃO pode ser reação'):
-            news_auto.validate_lines(bad_last_reaction, story, 80)
+            news_auto.validate_lines(bad_last_reaction, story, 80, min_lines=4)
 
         # 7. Fecho de enchimento (FILLER_CLOSE)
         bad_filler = {'lines': [
@@ -646,7 +646,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 1, 'text': 'Que legal ver o Brasil fazendo números assim!', 'fato': 0},
         ]}
         with self.assertRaisesRegex(ValueError, 'fecho de enchimento'):
-            news_auto.validate_lines(bad_filler, story, 80)
+            news_auto.validate_lines(bad_filler, story, 80, min_lines=4)
 
         # 8. Outro fecho com FILLER_CLOSE
         bad_filler2 = {'lines': [
@@ -656,7 +656,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 1, 'text': 'Isso é show demais!', 'fato': 0},
         ]}
         with self.assertRaisesRegex(ValueError, 'fecho de enchimento'):
-            news_auto.validate_lines(bad_filler2, story, 80)
+            news_auto.validate_lines(bad_filler2, story, 80, min_lines=4)
 
         # 9. Número ausente no fato citado (fato 0 não tem 1,786 e fala não compartilha palavras com fato 1)
         bad_num_mismatch = {'lines': [
@@ -666,7 +666,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 1, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
         ]}
         with self.assertRaisesRegex(ValueError, 'números ausentes no fato 0'):
-            news_auto.validate_lines(bad_num_mismatch, story, 80)
+            news_auto.validate_lines(bad_num_mismatch, story, 80, min_lines=4)
 
         # 10. Entidade ausente no fato citado (Europa só está no fato 2)
         bad_ent_mismatch = {'lines': [
@@ -676,7 +676,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 1, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
         ]}
         with self.assertRaisesRegex(ValueError, 'ausente no fato 1'):
-            news_auto.validate_lines(bad_ent_mismatch, story, 80)
+            news_auto.validate_lines(bad_ent_mismatch, story, 80, min_lines=4)
 
         # 11. Roteiro válido
         valid = {'lines': [
@@ -687,7 +687,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 0, 'text': 'Mesmo assim o preço caiu 9,5% no ano.', 'fato': 3},
             {'speaker': 1, 'text': 'Será que o Brasil exporta mais café?', 'fato': 0},
         ]}
-        lines, prob = news_auto.validate_lines(valid, story, 80)
+        lines, prob = news_auto.validate_lines(valid, story, 80, min_lines=4)
         self.assertEqual(prob, '')
         self.assertEqual(len(lines), 6)
         self.assertTrue(lines[1].get('reacao'))
@@ -738,7 +738,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 1, 'text': 'Será que o preço do café continua caindo?', 'fato': 3},
         ]}
         with self.assertRaisesRegex(ValueError, 'Quantidade na fala 3 não condiz com a matéria'):
-            news_auto.validate_lines(bad_quase_um, story, 80)
+            news_auto.validate_lines(bad_quase_um, story, 80, min_lines=4)
 
         # Caso 2 obrigatório: "mais de dezesseis milhões" com fonte 16,591 milhões -> ACEITA (floor(16.591) == 16)
         valid_mais_de = {'lines': [
@@ -749,7 +749,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 0, 'text': 'Bateu a marca antiga de 1,657 bilhão.', 'fato': 2},
             {'speaker': 1, 'text': 'Será que os embarques continuam batendo recorde?', 'fato': 3},
         ]}
-        lines, prob = news_auto.validate_lines(valid_mais_de, story, 100)
+        lines, prob = news_auto.validate_lines(valid_mais_de, story, 100, min_lines=4)
         self.assertEqual(prob, '')
         self.assertEqual(len(lines), 6)
 
@@ -762,7 +762,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 0, 'text': 'Bateu a marca antiga de 1,657 bilhão.', 'fato': 2},
             {'speaker': 1, 'text': 'Será que os embarques continuam batendo recorde?', 'fato': 3},
         ]}
-        lines, prob = news_auto.validate_lines(valid_exact, story, 100)
+        lines, prob = news_auto.validate_lines(valid_exact, story, 100, min_lines=4)
         self.assertEqual(prob, '')
         self.assertEqual(len(lines), 6)
 
@@ -790,7 +790,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 1, 'text': 'Será que o volume continua alto?', 'fato': 0},
         ]}
         with self.assertRaisesRegex(ValueError, 'Unidades temporais ausentes na matéria: trimestre'):
-            news_auto.validate_lines(bad_temporal_script, story, 80)
+            news_auto.validate_lines(bad_temporal_script, story, 80, min_lines=4)
 
         # 2. extract_facts com fato contendo "primeiro trimestre" quando fonte tem apenas "quatro primeiros meses"
         calls = []
@@ -1105,7 +1105,7 @@ class NewsAutoTests(unittest.TestCase):
 
         raw_fert = {'lines': lines_with_facts}
         with self.assertRaisesRegex(ValueError, r'Roteiro não cobre as palavras-chave do título: ausente\(s\) fertilizantes'):
-            news_auto.validate_lines(raw_fert, story_fert, budget=150, facts=facts_fert)
+            news_auto.validate_lines(raw_fert, story_fert, budget=150, min_lines=4, facts=facts_fert)
 
         # 3. Se nenhuma palavra-chave aparecer nos 3 primeiros turnos, rejeita
         delayed_lines = {'lines': [
@@ -1117,7 +1117,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 1, 'text': 'Será que melhora a segurança alimentar?', 'fato': 5},
         ]}
         with self.assertRaisesRegex(ValueError, r'Nenhuma palavra-chave do título apareceu nos 3 primeiros turnos'):
-            news_auto.validate_lines(delayed_lines, story_fert, budget=120, facts=facts_fert)
+            news_auto.validate_lines(delayed_lines, story_fert, budget=120, min_lines=4, facts=facts_fert)
 
         # 4. Quando cobre as palavras-chave nos primeiros turnos e no total, é aceito
         valid_lines = {'lines': [
@@ -1126,7 +1126,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 0, 'text': 'Isso vai levar cerca de 20 anos.', 'fato': 0},
             {'speaker': 1, 'text': 'Será que melhora a segurança alimentar?', 'fato': 5},
         ]}
-        res, prob = news_auto.validate_lines(valid_lines, story_fert, budget=80, facts=facts_fert)
+        res, prob = news_auto.validate_lines(valid_lines, story_fert, budget=80, min_lines=4, facts=facts_fert)
         self.assertEqual(prob, '')
         self.assertEqual(len(res), 4)
 
@@ -1150,7 +1150,7 @@ class NewsAutoTests(unittest.TestCase):
         import copy
         anth_valid = copy.deepcopy(anth_data)
         anth_valid['lines'][5] = {'speaker': 1, 'text': 'Será que a rede elétrica do Texas vai aguentar?', 'fato': 2}
-        res_anth, prob_anth = news_auto.validate_lines(anth_valid, story_anth, budget=120, facts=facts_anth)
+        res_anth, prob_anth = news_auto.validate_lines(anth_valid, story_anth, budget=120, min_lines=4, facts=facts_anth)
         self.assertEqual(prob_anth, '')
         self.assertEqual(len(res_anth), 6)
 
@@ -1194,7 +1194,7 @@ class NewsAutoTests(unittest.TestCase):
         # Gancho: "Quanto dinheiro o Brasil gasta importando comida hoje?"
         # Falas 1 (reação) e 2 (fato 0 sobre R$ 460 bi para fertilizantes) não respondem com fatos sobre comida importada
         with self.assertRaisesRegex(ValueError, 'o gancho não foi respondido'):
-            news_auto.validate_lines({'lines': lines}, story_fert, budget=150, facts=facts_fert)
+            news_auto.validate_lines({'lines': lines}, story_fert, budget=150, min_lines=4, facts=facts_fert)
 
         # 2. Quando o fato da fala 1 ou 2 responde à pergunta (compartilha número ou >= 2 palavras de conteúdo), é aceito
         valid_qa = {'lines': [
@@ -1203,7 +1203,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 0, 'text': 'Isso vai levar cerca de 20 anos.', 'fato': 0},
             {'speaker': 1, 'text': 'O objetivo é elevar a produção nacional.', 'fato': 4},
         ]}
-        res, prob = news_auto.validate_lines(valid_qa, story_fert, budget=80, facts=facts_fert)
+        res, prob = news_auto.validate_lines(valid_qa, story_fert, budget=80, min_lines=4, facts=facts_fert)
         self.assertEqual(prob, '')
         self.assertEqual(len(res), 4)
 
@@ -1214,7 +1214,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 0, 'text': 'São R$ 460 bilhões para fertilizantes!', 'fato': 0},
             {'speaker': 1, 'text': 'A meta é atingir 50% até 2050.', 'fato': 4},
         ]}
-        res, prob = news_auto.validate_lines(valid_reaction_then_ans, story_fert, budget=80, facts=facts_fert)
+        res, prob = news_auto.validate_lines(valid_reaction_then_ans, story_fert, budget=80, min_lines=4, facts=facts_fert)
         self.assertEqual(prob, '')
         self.assertEqual(len(res), 4)
 
@@ -1241,7 +1241,7 @@ class NewsAutoTests(unittest.TestCase):
 
         # Rejeita a última fala com mensagem clara
         with self.assertRaisesRegex(ValueError, r'A fala 6 não apresenta sobreposição com o fato 2'):
-            news_auto.validate_lines(anth_data, story, budget=120, facts=facts)
+            news_auto.validate_lines(anth_data, story, budget=120, min_lines=4, facts=facts)
 
         # 2. Quando a pergunta compartilha pelo menos 2 palavras de conteúdo com o fato citado, é aceita
         import copy
@@ -1251,7 +1251,7 @@ class NewsAutoTests(unittest.TestCase):
             'text': 'Será que a rede elétrica do Texas vai aguentar?',
             'fato': 2
         }
-        res, prob = news_auto.validate_lines(fixed_data, story, budget=120, facts=facts)
+        res, prob = news_auto.validate_lines(fixed_data, story, budget=120, min_lines=4, facts=facts)
         self.assertEqual(prob, '')
         self.assertEqual(len(res), 6)
 
@@ -1262,7 +1262,7 @@ class NewsAutoTests(unittest.TestCase):
             'text': 'Isso vai mesmo até 2045?',
             'fato': 3
         }
-        res_num, prob_num = news_auto.validate_lines(number_line_data, story, budget=120, facts=facts)
+        res_num, prob_num = news_auto.validate_lines(number_line_data, story, budget=120, min_lines=4, facts=facts)
         self.assertEqual(prob_num, '')
         self.assertEqual(len(res_num), 6)
 
@@ -1306,7 +1306,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 1, 'text': 'Entre R$ 220 bilhões e R$ 460 bilhões, mano.', 'fato': 0},
         ]
         with self.assertRaisesRegex(ValueError, r'contém vocativo \("mano"\) em fala que carrega número'):
-            news_auto.validate_lines({'lines': fert_test_lines}, fert_story, budget=100, facts=fert_facts)
+            news_auto.validate_lines({'lines': fert_test_lines}, fert_story, budget=100, min_lines=4, facts=fert_facts)
 
         # 2. No máximo 1 fala começando com muletas de concordância
         bad_crutches = {'lines': [
@@ -1316,7 +1316,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 1, 'text': 'Será que os embarques batem outro recorde?', 'fato': 4},
         ]}
         with self.assertRaisesRegex(ValueError, r'No máximo 1 fala pode começar com muletas de concordância'):
-            news_auto.validate_lines(bad_crutches, story, budget=100, facts=facts)
+            news_auto.validate_lines(bad_crutches, story, budget=100, min_lines=4, facts=facts)
 
         # 3. No máximo 3 vocativos no roteiro
         too_many_vocatives = {'lines': [
@@ -1328,7 +1328,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 1, 'text': 'A receita somou US$ 1,786 bilhão.', 'fato': 1},
         ]}
         with self.assertRaisesRegex(ValueError, r'O roteiro tem 4 vocativos .* o limite máximo permitido é 3'):
-            news_auto.validate_lines(too_many_vocatives, story, budget=100, facts=facts)
+            news_auto.validate_lines(too_many_vocatives, story, budget=100, min_lines=4, facts=facts)
 
         # 4. No máximo 50% das falas podem ser perguntas
         too_many_questions = {'lines': [
@@ -1338,7 +1338,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 1, 'text': 'Os embarques bateram recorde histórico.', 'fato': 4},
         ]}
         with self.assertRaisesRegex(ValueError, r'No máximo 50% das falas podem ser perguntas'):
-            news_auto.validate_lines(too_many_questions, story, budget=100, facts=facts)
+            news_auto.validate_lines(too_many_questions, story, budget=100, min_lines=4, facts=facts)
 
         # 5. Sasuke deve fazer pelo menos 1 pergunta ou provocação
         sasuke_no_provocation = {'lines': [
@@ -1348,7 +1348,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 1, 'text': 'O preço médio caiu 9,5% no período.', 'fato': 3},
         ]}
         with self.assertRaisesRegex(ValueError, r'O Sasuke deve fazer pelo menos 1 pergunta ou provocação'):
-            news_auto.validate_lines(sasuke_no_provocation, story, budget=100, facts=facts)
+            news_auto.validate_lines(sasuke_no_provocation, story, budget=100, min_lines=4, facts=facts)
 
         # 6. Roteiro válido com variedade equilibrada passa
         valid_script = {'lines': [
@@ -1359,7 +1359,7 @@ class NewsAutoTests(unittest.TestCase):
             {'speaker': 0, 'text': 'Mas o preço médio caiu 9,5% pelo conilon.', 'fato': 3},
             {'speaker': 1, 'text': 'Será que os embarques continuam batendo recorde?', 'fato': 4},
         ]}
-        res, prob = news_auto.validate_lines(valid_script, story, budget=100, facts=facts)
+        res, prob = news_auto.validate_lines(valid_script, story, budget=100, min_lines=4, facts=facts)
         self.assertEqual(prob, '')
         self.assertEqual(len(res), 6)
 
@@ -1748,7 +1748,7 @@ class NewsAutoTests(unittest.TestCase):
             ]
         }
         logs = []
-        valid_lines, prob = news_auto.validate_lines(lines_relink, story, budget=80, facts=facts, log=logs.append)
+        valid_lines, prob = news_auto.validate_lines(lines_relink, story, budget=80, min_lines=4, facts=facts, log=logs.append)
         self.assertEqual(valid_lines[1]['fato'], 2)
         self.assertIn('fala 2 recolocada do fato 4 para o fato 2', logs)
 
@@ -1762,7 +1762,7 @@ class NewsAutoTests(unittest.TestCase):
             ]
         }
         logs_entity = []
-        valid_lines_ent, _ = news_auto.validate_lines(lines_entity_relink, story, budget=80, facts=facts, log=logs_entity.append)
+        valid_lines_ent, _ = news_auto.validate_lines(lines_entity_relink, story, budget=80, min_lines=4, facts=facts, log=logs_entity.append)
         self.assertEqual(valid_lines_ent[2]['fato'], 0)
         self.assertIn('fala 3 recolocada do fato 3 para o fato 0', logs_entity)
 
@@ -1776,7 +1776,7 @@ class NewsAutoTests(unittest.TestCase):
             ]
         }
         with self.assertRaisesRegex(ValueError, r'A fala citou números ausentes no fato 4.*90'):
-            news_auto.validate_lines(lines_invalid, story, budget=80, facts=facts)
+            news_auto.validate_lines(lines_invalid, story, budget=80, min_lines=4, facts=facts)
 
     def test_item11_feedback_useful_between_retries_and_attempt_logging(self):
         import json
@@ -2227,6 +2227,93 @@ class NewsAutoTests(unittest.TestCase):
         self.assertIn('redator', data.get('modelos', {}))
         self.assertIn('juiz', data.get('modelos', {}))
         self.assertIn('juiz_fraco', data.get('modelos', {}))
+
+    def test_item17_minimum_size_and_script_ending(self):
+        story = {
+            'title': 'Descobertas do Telescópio Webb no Espaço Profundo',
+            'body': 'O telescópio James Webb fez grandes descobertas astronômicas no espaço profundo. '
+                    'O telescópio James Webb detectou 25 novos exoplanetas e 277 asteroides pelo universo. '
+                    'O projeto custou bilhões de dólares e envolveu vinte países parceiros.',
+        }
+        facts = [
+            'O telescópio James Webb fez grandes descobertas astronômicas no espaço profundo.',
+            'O telescópio James Webb detectou 25 novos exoplanetas e 277 asteroides pelo universo.',
+            'O projeto custou bilhões de dólares e envolveu vinte países parceiros.',
+        ]
+
+        # 1. Roteiro com menos de 8 falas (7 falas) é rejeitado pelo padrão min_lines=8
+        script_7 = {'lines': [
+            {'speaker': 0, 'text': 'Você viu as descobertas do James Webb no espaço profundo?', 'fato': 0},
+            {'speaker': 1, 'text': 'Caramba, notícia sensacional!', 'reacao': True},
+            {'speaker': 0, 'text': 'O telescópio detectou 25 novos exoplanetas e 277 asteroides.', 'fato': 1},
+            {'speaker': 1, 'text': 'Sério mesmo?', 'reacao': True},
+            {'speaker': 0, 'text': 'O telescópio James Webb teve apoio de vinte países parceiros.', 'fato': 2},
+            {'speaker': 1, 'text': 'Esse telescópio espacial é muito impressionante.', 'fato': 0},
+            {'speaker': 0, 'text': 'Pra mim, esse projeto espacial é o futuro da ciência.', 'fato': 0},
+        ]}
+        with self.assertRaisesRegex(ValueError, r'Entregue entre 8 e 12 falas em "lines" \(vieram 7\)'):
+            news_auto.validate_lines(script_7, story, budget=80, facts=facts)
+
+        # 2. Roteiro com 8 falas mas média < 6 palavras por fala é rejeitado
+        script_short_words = {'lines': [
+            {'speaker': 0, 'text': 'Viu o Webb no espaço?', 'fato': 0},
+            {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
+            {'speaker': 0, 'text': 'O Webb achou 25 exoplanetas.', 'fato': 1},
+            {'speaker': 1, 'text': 'Sério mesmo?', 'reacao': True},
+            {'speaker': 0, 'text': 'Foram vinte países parceiros envolvidos.', 'fato': 2},
+            {'speaker': 1, 'text': 'Tudo isso de parceiros?', 'fato': 2},
+            {'speaker': 0, 'text': 'Sim, vinte países ajudaram.', 'fato': 2},
+            {'speaker': 1, 'text': 'Achei esse futuro muito bizarro.', 'fato': 0},
+        ]}
+        with self.assertRaisesRegex(ValueError, r'Média de palavras por fala .* abaixo do mínimo de 6 palavras'):
+            news_auto.validate_lines(script_short_words, story, budget=80, facts=facts)
+
+        # 3. Fecho com "Será que ...?" genérico sem opinião é rejeitado
+        script_generic_fecho = {'lines': [
+            {'speaker': 0, 'text': 'Você viu as descobertas do James Webb no espaço profundo?', 'fato': 0},
+            {'speaker': 1, 'text': 'Caramba, que descoberta sensacional!', 'reacao': True},
+            {'speaker': 0, 'text': 'O Webb detectou 25 novos exoplanetas e também 277 asteroides.', 'fato': 1},
+            {'speaker': 1, 'text': 'Nunca imaginei tantos exoplanetas novos pelo universo!', 'fato': 1},
+            {'speaker': 0, 'text': 'O projeto envolveu vinte países parceiros ao redor do mundo.', 'fato': 2},
+            {'speaker': 1, 'text': 'Esse projeto envolveu muitos parceiros internacionais!', 'fato': 2},
+            {'speaker': 0, 'text': 'O telescópio espacial fez grandes descobertas pelo espaço profundo.', 'fato': 0},
+            {'speaker': 1, 'text': 'Será que esse telescópio espacial vai continuar fazendo descobertas?', 'fato': 0},
+        ]}
+        with self.assertRaisesRegex(ValueError, r'A última fala não pode ser um "Será que \.\.\.\?" genérico'):
+            news_auto.validate_lines(script_generic_fecho, story, budget=80, facts=facts)
+
+        # 4. Fecho que repete >= 3 palavras de conteúdo de fala anterior é rejeitado
+        script_repeat_fecho = {'lines': [
+            {'speaker': 0, 'text': 'Você viu as descobertas do James Webb no espaço profundo?', 'fato': 0},
+            {'speaker': 1, 'text': 'Caramba, que descoberta sensacional!', 'reacao': True},
+            {'speaker': 0, 'text': 'O Webb detectou 25 novos exoplanetas e também 277 asteroides.', 'fato': 1},
+            {'speaker': 1, 'text': 'Nunca imaginei tantos exoplanetas novos pelo universo!', 'fato': 1},
+            {'speaker': 0, 'text': 'O projeto envolveu vinte países parceiros ao redor do mundo.', 'fato': 2},
+            {'speaker': 1, 'text': 'Esse projeto envolveu muitos parceiros internacionais!', 'fato': 2},
+            {'speaker': 0, 'text': 'O telescópio espacial fez grandes descobertas pelo espaço profundo.', 'fato': 0},
+            {'speaker': 1, 'text': 'Acho loucura como esse telescópio espacial fez grandes descobertas astronômicas no espaço profundo!', 'fato': 0},
+        ]}
+        with self.assertRaisesRegex(ValueError, r'A última fala repete dados já ditos no roteiro'):
+            news_auto.validate_lines(script_repeat_fecho, story, budget=80, facts=facts)
+
+        # 5. Roteiro válido com 8 falas, média >= 6 palavras e fecho com opinião aceito
+        script_valid = {'lines': [
+            {'speaker': 0, 'text': 'Você viu as descobertas do James Webb no espaço profundo?', 'fato': 0},
+            {'speaker': 1, 'text': 'Caramba, que descoberta sensacional!', 'reacao': True},
+            {'speaker': 0, 'text': 'O Webb detectou 25 novos exoplanetas e também 277 asteroides.', 'fato': 1},
+            {'speaker': 1, 'text': 'Nunca imaginei tantos exoplanetas novos pelo universo!', 'fato': 1},
+            {'speaker': 0, 'text': 'O projeto envolveu vinte países parceiros ao redor do mundo.', 'fato': 2},
+            {'speaker': 1, 'text': 'Esse projeto envolveu muitos parceiros internacionais!', 'fato': 2},
+            {'speaker': 0, 'text': 'O telescópio espacial fez grandes descobertas pelo espaço profundo.', 'fato': 0},
+            {'speaker': 1, 'text': 'Pra mim, esse projeto gastou bilhões de dólares e é loucura total.', 'fato': 2},
+        ]}
+        res, prob = news_auto.validate_lines(script_valid, story, budget=80, facts=facts)
+        self.assertEqual(prob, '')
+        self.assertEqual(len(res), 8)
+
+        # 6. Exemplo concreto atualizado para erro de fecho
+        ex = news_auto._add_concrete_example("Problema no fecho da história")
+        self.assertIn('Exemplo de fecho válido com opinião: "Pra mim, investir bilhões nisso sem testar antes é loucura total."', ex)
 
 
 if __name__ == '__main__':

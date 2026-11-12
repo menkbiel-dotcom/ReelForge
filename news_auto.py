@@ -1221,7 +1221,7 @@ def repair_reactions(raw_or_lines, log=print):
     return raw_or_lines
 
 
-def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12, facts=None, log=print, repair_reactions_enabled=False):
+def validate_lines(raw, story, budget, loop=False, min_lines=8, max_lines=12, facts=None, log=print, repair_reactions_enabled=False):
     """Valida o roteiro contra o corpo e título da matéria (nunca contra manchetes relacionadas)."""
     if not story.get('body') and len(source_text(story).split()) < MIN_SOURCE_WORDS:
         # Se não tem corpo nem atinge a fonte mínima, só permite se for teste explícito de manchete com >= 6 palavras,
@@ -1266,6 +1266,9 @@ def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12, fa
     total = sum(len(t.split()) for t in texts)
     if total > budget:
         raise ValueError(f'O roteiro tem {total} palavras; o máximo é {budget}.')
+    avg_words = total / len(texts) if texts else 0
+    if min_lines >= 8 and avg_words < 6.0:
+        raise ValueError(f'Média de palavras por fala ({avg_words:.1f}) abaixo do mínimo de 6 palavras.')
     source = source_text(story)
     allowed_nums = _allowed_numbers(source)
     script_vocab = set(_tokens(' '.join(texts))) | _numbers(' '.join(texts))
@@ -1526,6 +1529,66 @@ def validate_lines(raw, story, budget, loop=False, min_lines=4, max_lines=12, fa
     else:
         if tail in {'porque', 'que', 'pois', 'como', 'quando', 'onde'} and not texts[-1].rstrip().endswith('?'):
             raise ValueError('A última fala não pode terminar cortada em uma ponte incompleta; feche com uma frase completa ou pergunta aberta.')
+    
+    # Item 17: Média mínima de 6 palavras por fala e validação do fecho
+    if min_lines >= 8:
+        avg_words = sum(len(t.split()) for t in texts) / len(texts) if texts else 0
+        if avg_words < 6.0:
+            raise ValueError(f'Média de palavras por fala ({avg_words:.1f}) abaixo do mínimo de 6 palavras.')
+
+        last_text = texts[-1]
+        if re.search(r'^\s*será\s+que\b', last_text, re.I):
+            opinion_terms = {
+                'acho', 'achei', 'duvido', 'certeza', 'loucura', 'exagero', 'vale',
+                'compensa', 'justifica', 'arriscado', 'furada', 'besteira',
+                'revolucao', 'revolução', 'futuro', 'tendencia', 'tendência',
+                'perigo', 'bizarro', 'absurdo', 'sensato', 'burrice', 'piada',
+                'ilusao', 'ilusão', 'coragem', 'otimismo', 'pessimismo'
+            }
+            last_words = {w.casefold() for w in re.findall(r'[a-zA-ZÀ-ú]+', last_text)}
+            if not (last_words & opinion_terms):
+                raise ValueError('A última fala não pode ser um "Será que ...?" genérico: traga uma opinião ou um ângulo novo no fecho.')
+
+        last_content = _content_words(last_text)
+        for prev_idx, prev_t in enumerate(texts[:-1]):
+            prev_content = _content_words(prev_t)
+            shared_count = sum(1 for lw in last_content if any(_word_matches_keyword(lw, pw) for pw in prev_content))
+            if shared_count >= 3:
+                raise ValueError(
+                    f'A última fala repete dados já ditos no roteiro (compartilha {shared_count} palavras de conteúdo com a fala {prev_idx + 1}). '
+                    'Traga um fecho com ângulo novo ou opinião sem repetir os fatos.'
+                )
+
+    
+    # Item 17: Média mínima de 6 palavras por fala e validação do fecho
+    if min_lines >= 8:
+        avg_words = sum(len(t.split()) for t in texts) / len(texts) if texts else 0
+        if avg_words < 6.0:
+            raise ValueError(f'Média de palavras por fala ({avg_words:.1f}) abaixo do mínimo de 6 palavras.')
+
+        last_text = texts[-1]
+        if re.search(r'^\s*será\s+que\b', last_text, re.I):
+            opinion_terms = {
+                'acho', 'achei', 'duvido', 'certeza', 'loucura', 'exagero', 'vale',
+                'compensa', 'justifica', 'arriscado', 'furada', 'besteira',
+                'revolucao', 'revolução', 'futuro', 'tendencia', 'tendência',
+                'perigo', 'bizarro', 'absurdo', 'sensato', 'burrice', 'piada',
+                'ilusao', 'ilusão', 'coragem', 'otimismo', 'pessimismo'
+            }
+            last_words = {w.casefold() for w in re.findall(r'[a-zA-ZÀ-ú]+', last_text)}
+            if not (last_words & opinion_terms):
+                raise ValueError('A última fala não pode ser um "Será que ...?" genérico: traga uma opinião ou um ângulo novo no fecho.')
+
+        last_content = _content_words(last_text)
+        for prev_idx, prev_t in enumerate(texts[:-1]):
+            prev_content = _content_words(prev_t)
+            shared_count = sum(1 for lw in last_content if any(_word_matches_keyword(lw, pw) for pw in prev_content))
+            if shared_count >= 3:
+                raise ValueError(
+                    f'A última fala repete dados já ditos no roteiro (compartilha {shared_count} palavras de conteúdo com a fala {prev_idx + 1}). '
+                    'Traga um fecho com ângulo novo ou opinião sem repetir os fatos.'
+                )
+
     return result, problem
 
 
@@ -1926,7 +1989,7 @@ def _add_concrete_example(error_msg):
     elif 'primeira fala' in err_lower and ('palavras' in err_lower or 'começar com' in err_lower or 'gancho' in err_lower):
         return err + ' Exemplo de gancho válido: "Você viu quanto café o Brasil exportou?" (máximo 10 palavras).'
     elif 'fecho' in err_lower or 'última fala' in err_lower:
-        return err + ' Exemplo de fecho válido: "Será que esse ritmo se mantém até o fim do ano?"'
+        return err + ' Exemplo de fecho válido com opinião: "Pra mim, investir bilhões nisso sem testar antes é loucura total." (nunca use "Será que ...?" genérico e não repita fatos já ditos).'
     elif 'números ausentes' in err_lower or 'número' in err_lower:
         return err + ' Exemplo: cite apenas números exatos que constam no fato indicado.'
     elif 'vocativo' in err_lower:

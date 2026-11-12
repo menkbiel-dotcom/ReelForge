@@ -29,6 +29,8 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
      - Valida números usando `_allowed_numbers(source)` (`WORD_TO_NUM` sem numerais ambíguos como `"um"`, `"primeiro"`, `"segundo"`), inteiros de decimais e algarismos romanos, calculado exclusivamente sobre título e corpo da matéria, nunca sobre manchetes relacionadas (`enrich()`).
      - Restringe unidades temporais (`TEMPORAL_UNITS`: `trimestre`, `semestre`, `década`, etc.): se ausentes da matéria, rejeita tanto em `extract_facts` (com retry) quanto em `validate_lines`.
      - Validação de quantidades e magnitudes com qualificadores (`_quantity_pairs`): compara pares numéricos e magnitudes (`mil`, `milhões`, `bilhões`, `trilhões`, `%`, `sacas...`), aceitando `"mais de X"` se `floor(fonte) == X`, `"quase X"` se `ceil(fonte) == X`, `"cerca de X"` se `round(fonte) == X`, ou valor exato sem qualificador.
+     - Tamanho mínimo e média de palavras: exige no mínimo 8 falas (`min_lines=8` padrão, ≈ 25 a 40 s) e média mínima de 6 palavras por fala (`avg_words >= 6.0`).
+     - Fecho / última fala: deve ser fecho/provocação que não seja `"Será que ...?"` genérico (exige termo de opinião ou ângulo novo) e não pode repetir dados já ditos no roteiro (rejeita se compartilhar $\ge 3$ palavras de conteúdo com qualquer fala anterior), com mensagem de correção contendo exemplo fictício de fecho bom com opinião.
      - Exige que a última fala termine com uma frase completa (pergunta aberta ou fecho), sem ponte truncada (`script_loop: false` por padrão).
    - **Checagem Factual e Filtro de Qualidade Fechado (`verificar_fatos()` + `evaluate_script()` + `deterministic_check()`):**
      - `verificar_fatos()` (Checagem de fatos fechada): o modelo juiz avalia se cada fala é suportada pelos fatos da matéria (`{"falas":[{"i":0,"suportada":true,"motivo":""}]}`). Se a chamada falhar após 2 tentativas, retorna `{"indisponivel": true, "motivo": <causa_real>}` capturando status HTTP (ex: 404 modelo não instalado), timeout, JSON inválido (primeiros 300 caracteres) ou ausência da chave `falas`. O sistema loga a indisponibilidade com o motivo concreto, grava `motivo_checagem`, `source` e `modelos` no arquivo de rejeição e trata o roteiro como REPROVADO após 2 regenerações salvando no máximo 1 arquivo `rejected_*.json` por pauta, a menos que `"permitir_sem_checagem_de_fatos": true` em `settings.json` ou `REELFORGE_ALLOW_NO_FACT_CHECK=1` esteja ativo. Falas não suportadas forçam regeneração com correção contendo `{i, text, motivo}`.
@@ -61,9 +63,9 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
 - O script `publicar_github.py` cria/atualiza o repositório como **privado por padrão** (use `--publico` para público), lê o token exclusivamente de `GITHUB_TOKEN` ou `getpass` (sem argumento `--token` e sem eco no terminal) e faz push sem `force`.
 - Testes que utilizam áudios de demonstração sintetizam automaticamente um WAV silencioso via módulo padrão `wave` quando o arquivo local não existir.
 
-## Suíte de Testes (79 Testes)
+## Suíte de Testes (80 Testes)
 
-- `tests/test_news_auto.py` (49 testes) e `tests/test_integration.py` (30 testes) — totalizando **79 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
+- `tests/test_news_auto.py` (50 testes) e `tests/test_integration.py` (30 testes) — totalizando **80 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'
