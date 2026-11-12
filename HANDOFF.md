@@ -141,3 +141,16 @@
   - **Commit:** `92e989942cc55bd9abd060a540a916113b815f69` — *"Adiciona selecao de modelos Ollama e aceite de nota baixa na interface grafica"*
   - **Arquivos tocados:** `gui.py`, `news_auto.py`, `tests/test_integration.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 68 testes passando (incluindo `test_list_ollama_models_fallback_when_offline`, `test_list_ollama_models_success_from_api` e `test_gui_model_fields_and_accept_low_score_persistence`)
+
+---
+
+# Rodada 3 — Otimização de Performance, Resiliência de Feeds RSS e Fixtures
+
+- [x] **Fixtures de testes (`tests/fixtures/rejected_*.json`)**: feito
+  - **Commit:** `39ebffcae080a5e8d4d0c4545d1381976bac4887` — *"Adiciona fixtures de roteiros rejeitados usadas nos testes"*
+  - **Arquivos tocados:** `tests/fixtures/rejected_20261111_181036_244323.json`, `tests/fixtures/rejected_20261111_192441_627729.json`
+- [x] **Substituição de `strip_glued_headlines` por programação dinâmica (`news_auto.py`)**: feito
+  - **Commit:** pendente de envio
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 70 testes passando (incluindo `test_strip_glued_headlines_dp_performance_and_clean` e `test_strip_glued_headlines_random_inputs_match_legacy`)
+- [ ] **Reforço em `gather_candidates` (limite 60s, shutdown sem espera e logs de feed)**: pendente

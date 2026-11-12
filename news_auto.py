@@ -562,69 +562,81 @@ class _NewsHTMLCleaner(HTMLParser):
 
 
 def strip_glued_headlines(text):
-    """Remove sequências de 2 ou mais manchetes/chamadas curtas coladas sem pontuação final."""
+    """Remove sequências de 2 ou mais manchetes/chamadas curtas coladas sem pontuação final.
+
+    Programação dinâmica (linear em n x 15): a versão recursiva anterior testava todas as
+    combinações de recortes e travava (tempo exponencial) em textos longos sem pontuação."""
     words = text.split()
     n = len(words)
     if n < 12:
         return text
 
-    def has_any_punct(w):
-        return any(w.endswith(p) for p in ('.', '!', '?', ';', ':', ','))
-
-    def has_term_punct(w):
-        return any(w.endswith(p) for p in ('.', '!', '?'))
+    TERM = ('.', '!', '?')
+    ANY = ('.', '!', '?', ';', ':', ',')
+    has_term = [w.endswith(TERM) for w in words]
+    has_any = [w.endswith(ANY) for w in words]
 
     def is_upper_start(w):
         clean = w.lstrip('"\'“‘([')
         return bool(clean and clean[0].isupper() and not clean.startswith(','))
 
-    def is_snippet(start_idx, end_idx):
-        if not (6 <= end_idx - start_idx <= 20):
-            return False
-        if not is_upper_start(words[start_idx]):
-            return False
-        slice_words = words[start_idx:end_idx]
-        if any(has_term_punct(w) for w in slice_words):
-            return False
-        if has_any_punct(slice_words[-1]):
-            return False
-        return True
+    upper = [is_upper_start(w) for w in words]
 
-    def can_transition_to_sentence_or_end(idx):
+    # term_after[k] = existe pontuação terminal em alguma palavra de k em diante
+    term_after = [False] * (n + 1)
+    for k in range(n - 1, -1, -1):
+        term_after[k] = has_term[k] or term_after[k + 1]
+
+    def is_snippet(a, b):
+        if not (6 <= b - a <= 20) or not upper[a]:
+            return False
+        if any(has_term[a:b]):
+            return False
+        return not has_any[b - 1]
+
+    def can_end(idx):
         if idx >= n:
             return True
-        if not is_upper_start(words[idx]) or has_any_punct(words[idx]):
-            return False
-        for k in range(idx, n):
-            if has_term_punct(words[k]):
-                return True
-        return False
+        return upper[idx] and not has_any[idx] and term_after[idx]
+
+    memo = {}
+
+    def best(pos):
+        """Melhor cadeia a partir de pos: (nº de recortes, posição final) ou None."""
+        if pos in memo:
+            return memo[pos]
+        result = None
+        for nxt in range(pos + 6, min(n + 1, pos + 21)):
+            if not is_snippet(pos, nxt):
+                continue
+            cands = []
+            if nxt == n or can_end(nxt):
+                cands.append((1, nxt))
+            if nxt < n:
+                sub = best(nxt)
+                if sub:
+                    cands.append((1 + sub[0], sub[1]))
+            for c in cands:
+                if result is None or c > result:
+                    result = c
+        memo[pos] = result
+        return result
+
+    # best() é recursiva com profundidade até n/6: preenche de trás para frente para não estourar a pilha
+    for pos in range(n - 1, -1, -1):
+        if upper[pos]:
+            best(pos)
 
     chains = []
     i = 0
     while i < n:
-        if not is_upper_start(words[i]):
+        if not upper[i]:
             i += 1
             continue
-
-        def find_chains(curr_idx):
-            res = []
-            for next_idx in range(curr_idx + 6, min(n + 1, curr_idx + 21)):
-                if is_snippet(curr_idx, next_idx):
-                    if next_idx == n or can_transition_to_sentence_or_end(next_idx):
-                        res.append([curr_idx, next_idx])
-                    if next_idx < n:
-                        sub = find_chains(next_idx)
-                        for s in sub:
-                            res.append([curr_idx] + s)
-            return res
-
-        all_chains = find_chains(i)
-        valid = [c for c in all_chains if len(c) >= 3 and can_transition_to_sentence_or_end(c[-1])]
-        if valid:
-            best_chain = max(valid, key=lambda c: (len(c), c[-1] - c[0]))
-            chains.append((best_chain[0], best_chain[-1]))
-            i = best_chain[-1]
+        b = memo.get(i)
+        if b and b[0] >= 2:  # >= 2 recortes (equivale a len(cadeia) >= 3 na versão antiga)
+            chains.append((i, b[1]))
+            i = b[1]
         else:
             i += 1
 

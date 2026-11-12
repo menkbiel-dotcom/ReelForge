@@ -6,7 +6,7 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
 
 1. **Coleta RSS (`news_auto.py`):**
    - Lê feeds RSS de veículos brasileiros que trazem o texto completo da matéria (`content:encoded` de g1, CNN Brasil, Agência Brasil, Poder360, InfoMoney, Tecnoblog, Canaltech, Olhar Digital, ge) + Google News RSS.
-   - `article_text()`: Limpa o corpo da matéria (`content:encoded` / `summary`), parseando HTML para remover tags `<ul>/<ol>/<li>`, `<figure>`, `<aside>`, elementos cuja classe/id contenha `related`, `relacionad`, `leia`, `veja`, `saiba`, e links `<a>` isolados. Em fallback para texto plano, remove sequências de 2 ou mais trechos curtos (6 a 20 palavras) sem pontuação final iniciados em maiúscula entre frases normais (`strip_glued_headlines`).
+   - `article_text()`: Limpa o corpo da matéria (`content:encoded` / `summary`), parseando HTML para remover tags `<ul>/<ol>/<li>`, `<figure>`, `<aside>`, elementos cuja classe/id contenha `related`, `relacionad`, `leia`, `veja`, `saiba`, e links `<a>` isolados. Em fallback para texto plano, remove sequências de 2 ou mais trechos curtos (6 a 20 palavras) sem pontuação final iniciados em maiúscula entre frases normais (`strip_glued_headlines`, implementado via programação dinâmica em tempo linear $O(n \times 15)$ com memoização para evitar tempo exponencial em textos longos).
    - Em `parse_entry()`, itens do Google News (`feed_name=None`) **nunca** recebem `body` (seu resumo HTML é apenas lista de manchetes `<li>`), sendo barrados por `require_minimum_source()`.
    - Ranqueia as pautas por densidade informativa (`complexity_score`: números, entidades, tamanho do texto e frescor).
    - Em `automatic()`, se a pauta escolhida falhar em `require_minimum_source()`, o sistema tenta automaticamente a próxima candidata (até 3 tentativas) antes de falhar.
@@ -58,9 +58,9 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
 - O script `publicar_github.py` cria/atualiza o repositório como **privado por padrão** (use `--publico` para público), lê o token exclusivamente de `GITHUB_TOKEN` ou `getpass` (sem argumento `--token` e sem eco no terminal) e faz push sem `force`.
 - Testes que utilizam áudios de demonstração sintetizam automaticamente um WAV silencioso via módulo padrão `wave` quando o arquivo local não existir.
 
-## Suíte de Testes (68 Testes)
+## Suíte de Testes (70 Testes)
 
-- `tests/test_news_auto.py` (38 testes) e `tests/test_integration.py` (30 testes) — totalizando **68 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
+- `tests/test_news_auto.py` (40 testes) e `tests/test_integration.py` (30 testes) — totalizando **70 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'

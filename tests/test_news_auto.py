@@ -1560,6 +1560,132 @@ class NewsAutoTests(unittest.TestCase):
             self.assertEqual(meta_res['lines'][0].get('fato'), 0)
             self.assertTrue(meta_res['lines'][1].get('reacao'))
 
+    def test_strip_glued_headlines_dp_performance_and_clean(self):
+        import time
+        # (1) 5000 palavras capitalizadas sem pontuação terminam em menos de 1 s
+        words_5000 = ' '.join(['Palavra' for _ in range(5000)])
+        t0 = time.perf_counter()
+        res_5000 = news_auto.strip_glued_headlines(words_5000)
+        elapsed = time.perf_counter() - t0
+        self.assertLess(elapsed, 1.0)
+        self.assertIsInstance(res_5000, str)
+
+        # (2) o caso de "leia também" do café continua sendo limpo
+        coffee_flat = (
+            'O resultado deste ano ficou 2,9% acima daquele patamar. '
+            'Exportação de café cresce 31% e tem melhor agosto da história '
+            'Exportação de café verde do Brasil atinge maior nível em 20 meses '
+            'Exportações de café solúvel sobem 20% em julho '
+            'Segundo o presidente do Cecafé, Márcio Ferreira, o desempenho reflete a entrada mais intensa '
+            'dos cafés da nova safra a partir de setembro , após chuvas atrasarem a colheita nas regiões produtoras.'
+        )
+        res_coffee = news_auto.strip_glued_headlines(coffee_flat)
+        self.assertNotIn('31%', res_coffee)
+        self.assertNotIn('melhor agosto da história', res_coffee)
+        self.assertNotIn('20 meses', res_coffee)
+        self.assertNotIn('20% em julho', res_coffee)
+        self.assertIn('O resultado deste ano ficou 2,9% acima daquele patamar.', res_coffee)
+        self.assertIn('Segundo o presidente do Cecafé', res_coffee)
+
+    def test_strip_glued_headlines_random_inputs_match_legacy(self):
+        # (3) um conjunto de entradas aleatórias pequenas dá o mesmo resultado que o comportamento atual
+        def legacy(text):
+            words = text.split()
+            n = len(words)
+            if n < 12:
+                return text
+
+            def has_any_punct(w):
+                return any(w.endswith(p) for p in ('.', '!', '?', ';', ':', ','))
+
+            def has_term_punct(w):
+                return any(w.endswith(p) for p in ('.', '!', '?'))
+
+            def is_upper_start(w):
+                clean = w.lstrip('"\'“‘([')
+                return bool(clean and clean[0].isupper() and not clean.startswith(','))
+
+            def is_snippet(start_idx, end_idx):
+                if not (6 <= end_idx - start_idx <= 20):
+                    return False
+                if not is_upper_start(words[start_idx]):
+                    return False
+                slice_words = words[start_idx:end_idx]
+                if any(has_term_punct(w) for w in slice_words):
+                    return False
+                if has_any_punct(slice_words[-1]):
+                    return False
+                return True
+
+            def can_transition_to_sentence_or_end(idx):
+                if idx >= n:
+                    return True
+                if not is_upper_start(words[idx]) or has_any_punct(words[idx]):
+                    return False
+                for k in range(idx, n):
+                    if has_term_punct(words[k]):
+                        return True
+                return False
+
+            chains = []
+            i = 0
+            while i < n:
+                if not is_upper_start(words[i]):
+                    i += 1
+                    continue
+
+                def find_chains(curr_idx):
+                    res = []
+                    for next_idx in range(curr_idx + 6, min(n + 1, curr_idx + 21)):
+                        if is_snippet(curr_idx, next_idx):
+                            if next_idx == n or can_transition_to_sentence_or_end(next_idx):
+                                res.append([curr_idx, next_idx])
+                            if next_idx < n:
+                                sub = find_chains(next_idx)
+                                for s in sub:
+                                    res.append([curr_idx] + s)
+                    return res
+
+                all_chains = find_chains(i)
+                valid = [c for c in all_chains if len(c) >= 3 and can_transition_to_sentence_or_end(c[-1])]
+                if valid:
+                    best_chain = max(valid, key=lambda c: (len(c), c[-1] - c[0]))
+                    chains.append((best_chain[0], best_chain[-1]))
+                    i = best_chain[-1]
+                else:
+                    i += 1
+
+            if not chains:
+                return text
+
+            res_words = []
+            last_idx = 0
+            for start_idx, end_idx in chains:
+                res_words.extend(words[last_idx:start_idx])
+                last_idx = end_idx
+            res_words.extend(words[last_idx:])
+            return ' '.join(res_words)
+
+        import random
+        rng = random.Random(42)
+        word_pool_upper = ['Brasil', 'Mercado', 'Economia', 'Notícia', 'Preço', 'Governo', 'Safra', 'Exportação']
+        word_pool_lower = ['de', 'da', 'do', 'em', 'com', 'para', 'alta', 'queda', 'nacional', 'milhões']
+        puncts = ['', '', '', '.', '!', '?', ',']
+
+        for test_idx in range(40):
+            length = rng.randint(5, 30)
+            sample_words = []
+            for _ in range(length):
+                w = rng.choice(word_pool_upper if rng.random() < 0.4 else word_pool_lower)
+                p = rng.choice(puncts)
+                sample_words.append(w + p)
+            sample_text = ' '.join(sample_words)
+            self.assertEqual(
+                news_auto.strip_glued_headlines(sample_text),
+                legacy(sample_text),
+                f'Divergência na iteração {test_idx}'
+            )
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
