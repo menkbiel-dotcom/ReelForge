@@ -171,7 +171,10 @@
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 74 testes passando (incluindo `test_item11_feedback_useful_between_retries_and_attempt_logging`)
 - [x] **ITEM 12 — Registro de falha (`news_auto.py`)**: feito
-  - **Commit:** `pending` — *"Registra diagnostico completo de falha em JSON quando esgotar 8 tentativas"*
+  - **Commit:** `5aa3f05032eff8cae4975bd6377a25bfd4ebb853` — *"Registra diagnostico completo de falha em JSON quando esgotar 8 tentativas"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 75 testes passando (incluindo `test_item12_failure_log_file_and_runtime_error`)
-- [ ] **ITEM 13 — Tentar outra pauta antes de desistir (`news_auto.py`)**: a fazer
+- [x] **ITEM 13 — Tentar outra pauta antes de desistir (`news_auto.py`)**: feito
+  - **Commit:** `pending` — *"Tenta pautas candidatas alternativas quando a geracao do roteiro esgotar tentativas"*
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 76 testes passando (incluindo `test_item13_automatic_retries_next_candidate_on_script_failure`)

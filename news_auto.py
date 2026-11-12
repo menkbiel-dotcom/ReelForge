@@ -2010,30 +2010,45 @@ def automatic(topic, kind='Notícia', max_seconds=45, allow_repeat=False, log=pr
     full = sum(1 for c in candidates if c['body'])
     log(f'{len(candidates)} pautas analisadas ({full} com matéria completa). Ollama escolhendo...')
     remaining = list(candidates)
-    story = None
-    last_err = None
-    for _ in range(min(3, len(remaining))):
-        picked = pick_story(remaining, kind, ask)
-        try:
-            require_minimum_source(picked)
-            story = picked
-            break
-        except ValueError as exc:
-            last_err = exc
-            log(f'Pauta descartada por falta de corpo ("{picked.get("title", "")}"); tentando próxima candidata...')
-            remaining = [c for c in remaining if c.get('id') != picked.get('id') and c.get('title') != picked.get('title')]
-            if not remaining:
+    extra_attempts = 2
+    last_script_err = None
+    while True:
+        story = None
+        last_err = None
+        for _ in range(min(3, len(remaining))):
+            picked = pick_story(remaining, kind, ask)
+            try:
+                require_minimum_source(picked)
+                story = picked
                 break
-    if story is None:
-        raise last_err or ValueError('Matéria sem corpo suficiente.')
-    log('Pauta escolhida: ' + story['title'] + (' — ' + story['source'] if story['source'] else '') +
-        ('\nMotivo: ' + story['selection_reason'] if story.get('selection_reason') else ''))
-    story['related_context'] = enrich(story, limit=4)
-    log(f'Passo 1: Extraindo de 5 a 6 fatos verificados da matéria ({len(story["body"].split())} palavras)...')
-    facts = extract_facts(story, ask=ask)
-    story['extracted_facts'] = facts
-    log(f'Passo 2: Escrevendo diálogo informal a partir de {len(facts)} fatos...')
-    story.update(kind=kind, source_type='rss', summary=source_text(story))
-    lines = write_script(story, kind, engine.word_budget(max_seconds), ask=ask, facts=facts)
-    log(f'Filtro de qualidade: nota {story.get("quality_score", "-")}/10.')
-    return story, lines
+            except ValueError as exc:
+                last_err = exc
+                log(f'Pauta descartada por falta de corpo ("{picked.get("title", "")}"); tentando próxima candidata...')
+                remaining = [c for c in remaining if c.get('id') != picked.get('id') and c.get('title') != picked.get('title')]
+                if not remaining:
+                    break
+        if story is None:
+            if last_script_err:
+                raise last_script_err
+            raise last_err or ValueError('Matéria sem corpo suficiente.')
+        log('Pauta escolhida: ' + story['title'] + (' — ' + story['source'] if story['source'] else '') +
+            ('\nMotivo: ' + story['selection_reason'] if story.get('selection_reason') else ''))
+        story['related_context'] = enrich(story, limit=4)
+        log(f'Passo 1: Extraindo de 5 a 6 fatos verificados da matéria ({len(story["body"].split())} palavras)...')
+        facts = extract_facts(story, ask=ask)
+        story['extracted_facts'] = facts
+        log(f'Passo 2: Escrevendo diálogo informal a partir de {len(facts)} fatos...')
+        story.update(kind=kind, source_type='rss', summary=source_text(story))
+        try:
+            lines = write_script(story, kind, engine.word_budget(max_seconds), ask=ask, facts=facts, log=log)
+            log(f'Filtro de qualidade: nota {story.get("quality_score", "-")}/10.')
+            return story, lines
+        except RuntimeError as exc:
+            last_script_err = exc
+            if ('tentativas' in str(exc).lower() or 'não foi possível gerar' in str(exc).lower()) and extra_attempts > 0:
+                log('Pauta falhou na geração; tentando outra')
+                remaining = [c for c in remaining if c.get('id') != story.get('id') and c.get('title') != story.get('title')]
+                extra_attempts -= 1
+                if remaining:
+                    continue
+            raise

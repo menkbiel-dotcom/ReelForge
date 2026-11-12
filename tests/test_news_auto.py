@@ -1928,6 +1928,55 @@ class NewsAutoTests(unittest.TestCase):
         finally:
             db.close()
 
+    def test_item13_automatic_retries_next_candidate_on_script_failure(self):
+        cands = [
+            {
+                'id': f'cand_{i}',
+                'title': f'Pauta {i} sobre Tecnologia',
+                'body': f'Corpo da matéria {i} sobre inovação tecnológica no Brasil com detalhes científicos relevantes. ' * 10,
+                'source': 'G1',
+                'source_type': 'rss',
+                'summary': 'Resumo da matéria',
+                'selection_reason': 'Muito relevante',
+            }
+            for i in range(1, 4)
+        ]
+
+        # Caso 1: Primeira pauta falha em write_script, segunda pauta sucede
+        logs = []
+        def mock_write(story, *args, **kwargs):
+            if story['id'] == 'cand_1':
+                raise RuntimeError("Não foi possível gerar um roteiro válido em 8 tentativas. Detalhes em out/falha.json")
+            return [
+                {'speaker': 0, 'text': 'O que aconteceu na pauta dois?', 'fato': 0},
+                {'speaker': 1, 'text': 'Inovação avançou com sucesso!', 'fato': 1},
+                {'speaker': 0, 'text': 'A tecnologia cresceu no Brasil.', 'fato': 0},
+                {'speaker': 1, 'text': 'Será que o avanço continua?', 'fato': 1},
+            ]
+
+        with patch('news_auto.gather_candidates', return_value=list(cands)), \
+             patch('news_auto.pick_story', side_effect=lambda c, *a, **k: dict(c[0])), \
+             patch('news_auto.extract_facts', return_value=['Fato 1', 'Fato 2']), \
+             patch('news_auto.enrich', return_value=[]), \
+             patch('news_auto.write_script', side_effect=mock_write):
+            story_res, lines_res = news_auto.automatic('tecnologia', log=logs.append)
+
+        self.assertEqual(story_res['id'], 'cand_2')
+        self.assertEqual(len(lines_res), 4)
+        self.assertIn('Pauta falhou na geração; tentando outra', logs)
+
+        # Caso 2: Todas as pautas falham em write_script (até 2 extras, total 3) -> lança erro final
+        logs_all_fail = []
+        with patch('news_auto.gather_candidates', return_value=list(cands)), \
+             patch('news_auto.pick_story', side_effect=lambda c, *a, **k: dict(c[0])), \
+             patch('news_auto.extract_facts', return_value=['Fato 1', 'Fato 2']), \
+             patch('news_auto.enrich', return_value=[]), \
+             patch('news_auto.write_script', side_effect=RuntimeError("Não foi possível gerar um roteiro válido em 8 tentativas. Detalhes em out/falha.json")):
+            with self.assertRaisesRegex(RuntimeError, 'Não foi possível gerar um roteiro válido em 8 tentativas'):
+                news_auto.automatic('tecnologia', log=logs_all_fail.append)
+
+        self.assertEqual(logs_all_fail.count('Pauta falhou na geração; tentando outra'), 2)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

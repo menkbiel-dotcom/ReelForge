@@ -10,7 +10,7 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
    - `article_text()`: Limpa o corpo da matéria (`content:encoded` / `summary`), parseando HTML para remover tags `<ul>/<ol>/<li>`, `<figure>`, `<aside>`, elementos cuja classe/id contenha `related`, `relacionad`, `leia`, `veja`, `saiba`, e links `<a>` isolados. Em fallback para texto plano, remove sequências de 2 ou mais trechos curtos (6 a 20 palavras) sem pontuação final iniciados em maiúscula entre frases normais (`strip_glued_headlines`, implementado via programação dinâmica em tempo linear $O(n \times 15)$ com memoização para evitar tempo exponencial em textos longos).
    - Em `parse_entry()`, itens do Google News (`feed_name=None`) **nunca** recebem `body` (seu resumo HTML é apenas lista de manchetes `<li>`), sendo barrados por `require_minimum_source()`.
    - Ranqueia as pautas por densidade informativa (`complexity_score`: números, entidades, tamanho do texto e frescor).
-   - Em `automatic()`, se a pauta escolhida falhar em `require_minimum_source()`, o sistema tenta automaticamente a próxima candidata (até 3 tentativas) antes de falhar.
+   - Em `automatic()`, se a pauta escolhida falhar em `require_minimum_source()` ou se `write_script()` falhar por tentativas esgotadas, descarta a pauta e tenta a próxima candidata da lista (até 2 pautas extras), logando `"Pauta falhou na geração; tentando outra"` antes de lançar o erro se todas falharem.
 2. **Seleção e Roteiro em 2 Passos + Filtro de Qualidade Fechado (`news_auto.py` + Ollama local `qwen3.5:4b` e juiz `qwen3:8b`):**
    - `pick_story()`: O Ollama escolhe a melhor pauta com corpo completo.
    - **Passo 1 (`extract_facts()`):** O Ollama extrai de **5 a 6 fatos curtos**, identifica `"contradicao"` e gera `"gancho"` em JSON `{"fatos":[...],"contradicao":"...","gancho":"..."}` exclusivamente do título e corpo da matéria (`source_text`), validando números contra `_allowed_numbers(source)` e rejeitando unidades temporais inventadas (`TEMPORAL_UNITS`, com retry). Valida o gancho (`validate_hook`: até 10 palavras, sem números inventados e sem repetir a manchete) e grava `"contradicao"` e `"gancho"` no story e no JSON de saída do reel.
@@ -60,9 +60,9 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
 - O script `publicar_github.py` cria/atualiza o repositório como **privado por padrão** (use `--publico` para público), lê o token exclusivamente de `GITHUB_TOKEN` ou `getpass` (sem argumento `--token` e sem eco no terminal) e faz push sem `force`.
 - Testes que utilizam áudios de demonstração sintetizam automaticamente um WAV silencioso via módulo padrão `wave` quando o arquivo local não existir.
 
-## Suíte de Testes (75 Testes)
+## Suíte de Testes (76 Testes)
 
-- `tests/test_news_auto.py` (45 testes) e `tests/test_integration.py` (30 testes) — totalizando **75 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
+- `tests/test_news_auto.py` (46 testes) e `tests/test_integration.py` (30 testes) — totalizando **76 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes).
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'
