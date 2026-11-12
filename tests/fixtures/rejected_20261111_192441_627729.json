@@ -1,0 +1,61 @@
+{
+  "title": "Brasil precisa de R$ 460 bilhões para fertilizantes em 20 anos",
+  "source": "Poder360",
+  "nota": 4,
+  "problemas": [
+    "A primeira fala de Sasuke é uma pergunta longa e técnica ('Quanto dinheiro o Brasil gasta importando comida hoje?'), violando o critério do gancho curto (até 10 palavras) e soando como um telejornal.",
+    "O tom geral é excessivamente formal e educado para a dinâmica de amigos/rivais brasileiros, carecendo de gírias ou expressões informais típicas da internet.",
+    "Muitas frases são completas demais e repetitivas (ex: 'Exatamente', 'Qual é a previsão...'), perdendo o ritmo dinâmico necessário para um Reel.",
+    "A última fala de Naruto ('Será que o país consegue transformar esses bilhões em segurança alimentar?') soa mais como uma conclusão fechada do que uma pergunta aberta ou provocativa que fecha bem o loop emocional."
+  ],
+  "lines": [
+    {
+      "speaker": 0,
+      "text": "Quanto dinheiro o Brasil gasta importando comida hoje?"
+    },
+    {
+      "speaker": 1,
+      "text": "Parece um número absurdo, Sasuke."
+    },
+    {
+      "speaker": 0,
+      "text": "Exatamente, e esse valor vai explodir nos próximos 20 anos."
+    },
+    {
+      "speaker": 1,
+      "text": "Qual é a previsão de investimento para manter a produção local?"
+    },
+    {
+      "speaker": 0,
+      "text": "Entre R$ 220 bilhões e R$ 460 bilhões, mano."
+    },
+    {
+      "speaker": 1,
+      "text": "Cara, isso é um valor gigantesco demais!"
+    },
+    {
+      "speaker": 0,
+      "text": "Se considerarmos R$ 400 bilhões, seria R$ 20 bilhões por ano."
+    },
+    {
+      "speaker": 1,
+      "text": "Mas o que impede as empresas de investirem agora?"
+    },
+    {
+      "speaker": 0,
+      "text": "Juros altos e falta de crédito são os maiores bloqueios."
+    },
+    {
+      "speaker": 1,
+      "text": "E a meta final é chegar a qual porcentagem do consumo até 2050?"
+    },
+    {
+      "speaker": 0,
+      "text": "O objetivo é ter 40% a 50% da produção nacional."
+    },
+    {
+      "speaker": 1,
+      "text": "Será que o país consegue transformar esses bilhões em segurança alimentar?"
+    }
+  ]
+}

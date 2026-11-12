@@ -1,0 +1,40 @@
+{
+  "title": "Anthropic fecha acordo de US$ 3,4 bilhões em geradores no Texas",
+  "source": "",
+  "nota": 5,
+  "problemas": [
+    "Diálogo pouco natural"
+  ],
+  "lines": [
+    {
+      "speaker": 0,
+      "text": "Por que gastar 3,4 bilhões só em gerador?",
+      "fato": 0
+    },
+    {
+      "speaker": 1,
+      "text": "Cara, a Anthropic comprou tudo da Caterpillar!",
+      "fato": 1
+    },
+    {
+      "speaker": 0,
+      "text": "É que a rede elétrica do Texas não aguenta mais.",
+      "fato": 2
+    },
+    {
+      "speaker": 1,
+      "text": "Eles garantiram energia até 2045 pros data centers.",
+      "fato": 3
+    },
+    {
+      "speaker": 0,
+      "text": "Mano, é muita energia!",
+      "reacao": true
+    },
+    {
+      "speaker": 1,
+      "text": "Será que vai faltar luz pro resto do estado?",
+      "fato": 2
+    }
+  ]
+}
