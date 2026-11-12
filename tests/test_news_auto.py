@@ -2376,6 +2376,91 @@ class NewsAutoTests(unittest.TestCase):
         self.assertIsNone(res_c['gancho'])
         self.assertIn('sem contradição/gancho', logs_c)
 
+    def test_item19_writer_prompt_reinforcement_and_fictional_examples(self):
+        # 1. Verifica termos fictícios de todos os 3 exemplos rastreados em FICTIONAL_EXAMPLE_TERMS
+        expected_terms = {
+            'zorbax', 'valoria', 'neoquimera', 'luminopolis', '742', '819', '2089', 'hoverboards', 'hoverboard',
+            'kryptonix', 'zyphoria', 'mecazoids', 'mecazoid', '412', '953',
+        }
+        for term in expected_terms:
+            self.assertIn(term, news_auto.FICTIONAL_EXAMPLE_TERMS)
+
+        # 2. Termos do Exemplo 3 vazados no roteiro são rejeitados se ausentes na matéria
+        story = {
+            'title': 'Brasil avança em pesquisas de inteligência artificial',
+            'body': 'Pesquisadores brasileiros anunciaram novos avanços no desenvolvimento de sistemas neurais no país. ' * 4,
+        }
+        leaked_ex3 = {'lines': [
+            {'speaker': 0, 'text': 'Viu a nova tecnologia da Kryptonix em Zyphoria?', 'fato': 0},
+            {'speaker': 1, 'text': 'Mano, isso é loucura pura!', 'reacao': True},
+            {'speaker': 0, 'text': 'Eles colocaram 412 mecazoids para vigiar tudo.', 'fato': 0},
+            {'speaker': 1, 'text': 'Pra mim, encher a cidade de robôs é uma furada total.', 'fato': 0},
+        ]}
+        with self.assertRaisesRegex(ValueError, 'exemplos fictícios'):
+            news_auto.validate_lines(leaked_ex3, story, 80, min_lines=4)
+
+        # 3. Prompt de write_script inclui reforço de estilo falado, qualificadores e os 3 exemplos
+        prompts = []
+        story_coffee = {
+            'title': 'Exportação de café bate recorde e gera US$ 1,786 bilhão no Brasil',
+            'body': (
+                'O Brasil exportou 34,478 milhões de sacas de café e faturou US$ 1,786 bilhão no período histórico. '
+                'Os Estados Unidos foram os maiores compradores do café brasileiro no mercado exterior. '
+            ) * 4,
+        }
+        facts_resp = {
+            'fatos': [
+                'O Brasil exportou mais de 34 milhões de sacas de café.',
+                'O faturamento bateu US$ 1,786 bilhão no período histórico.',
+                'Os Estados Unidos foram os maiores compradores no exterior.',
+                'A safra bateu recorde histórico no comércio exterior.',
+                'O setor de café comemorou o faturamento no país.',
+            ],
+            'contradicao': 'Volume alto de sacas mas cotação média em queda.',
+            'gancho': 'Quem vai pagar caro pelo café brasileiro?',
+        }
+        good_script = {'lines': [
+            {'speaker': 0, 'text': 'Quem vai pagar caro pelo café brasileiro?', 'fato': 0},
+            {'speaker': 1, 'text': 'O Brasil exportou mais de 34 milhões de sacas de café.', 'fato': 0},
+            {'speaker': 0, 'text': 'O faturamento bateu US$ 1,786 bilhão no período histórico.', 'fato': 1},
+            {'speaker': 1, 'text': 'Os Estados Unidos foram os maiores compradores no exterior.', 'fato': 2},
+            {'speaker': 0, 'text': 'Caramba, que volume gigantesco!', 'reacao': True},
+            {'speaker': 1, 'text': 'A safra bateu recorde histórico no comércio exterior.', 'fato': 3},
+            {'speaker': 0, 'text': 'O comércio exterior celebrou bastante todo esse faturamento.', 'fato': 3},
+            {'speaker': 1, 'text': 'Pra mim, esse setor comemorar faturamento assim é loucura total.', 'fato': 4},
+        ]}
+
+        seq = iter([facts_resp, good_script, {'nota': 9, 'problemas': []}])
+        def capture_ask(inst, payload, **kwargs):
+            prompts.append(inst)
+            return next(seq)
+
+        news_auto.write_script(story_coffee, max_words=100, ask=capture_ask, loop=False)
+        self.assertGreaterEqual(len(prompts), 2)
+        step2_inst = prompts[1]
+
+        # Checa presença dos 3 exemplos fictícios
+        self.assertIn('Exemplo 1:', step2_inst)
+        self.assertIn('Exemplo 2:', step2_inst)
+        self.assertIn('Exemplo 3:', step2_inst)
+        self.assertIn('Kryptonix', step2_inst)
+        self.assertIn('Zyphoria', step2_inst)
+        self.assertIn('mecazoids', step2_inst)
+
+        # Checa reforço de estilo falado e informal
+        self.assertIn('Estilo falado e informal', step2_inst)
+        self.assertIn('O Brasil mandou mais de 34 milhões de sacas pra fora', step2_inst)
+        self.assertIn('faturou quase 1,8 bilhão de dólares', step2_inst)
+
+        # Checa regra de arredondamento e qualificadores
+        self.assertIn('Arredonde números com naturalidade', step2_inst)
+        self.assertIn('mais de X', step2_inst)
+        self.assertIn('quase X', step2_inst)
+        self.assertIn('cerca de X', step2_inst)
+
+        # Checa moderação de vocativos
+        self.assertIn('vocativos (mano, cara) com moderação', step2_inst)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

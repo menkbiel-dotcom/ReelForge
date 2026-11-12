@@ -298,7 +298,10 @@ HOOK_BAD_START_RE = re.compile(r'^\s*(mas|e|porque|pois|ent[aã]o|por\s+isso)\b'
 HOOK_PROVOCATION_RE = re.compile(
     r'(\?|!|\b(por\s+que|como\s+assim|sabia|imagina|j[aá]\s+pensou|voc[eê]|ser[aá]|quem|qual|quanto|'
     r'acredita|faz\s+sentido|tem\s+no[cç][aã]o|olha|pera[ií]|cara|mano|mentira|poss[ií]vel|absurdo|bizarro)\b)', re.I)
-FICTIONAL_EXAMPLE_TERMS = ('zorbax', 'valoria', 'neoquimera', 'luminopolis', '742', '819', '2089', 'hoverboards', 'hoverboard')
+FICTIONAL_EXAMPLE_TERMS = (
+    'zorbax', 'valoria', 'neoquimera', 'luminopolis', '742', '819', '2089', 'hoverboards', 'hoverboard',
+    'kryptonix', 'zyphoria', 'mecazoids', 'mecazoid', '412', '953',
+)
 FILLER_CLOSE = re.compile(
     r'\b(que\s+(legal|bom|show|demais|maravilha|bacana)|incr[ií]vel|uau|show|demais)\b',
     re.I
@@ -2076,6 +2079,15 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
         '{"speaker":1,"text":"Caramba, não sabia dessa loucura!","reacao":true},'
         '{"speaker":0,"text":"A NeoQuimera colocou 819 milhões em Luminopolis.","fato":0},'
         '{"speaker":1,"text":"Eles ainda vão abastecer 2089 torres em Luminopolis.","fato":1}]\n'
+        'Exemplo 3:\n'
+        '[{"speaker":0,"text":"Colocar 412 mecazoids para patrulhar faz sentido?","fato":0},'
+        '{"speaker":1,"text":"Mano, isso é loucura pura!","reacao":true},'
+        '{"speaker":0,"text":"A Kryptonix espalhou mais de 400 mecazoids em Zyphoria.","fato":0},'
+        '{"speaker":1,"text":"Os caras vão vigiar a cidade inteira agora!","fato":0},'
+        '{"speaker":0,"text":"Eles gastaram cerca de 953 barras de ouro nisso.","fato":1},'
+        '{"speaker":1,"text":"Caramba, gastaram tudo isso mesmo?","reacao":true},'
+        '{"speaker":0,"text":"O objetivo oficial é monitorar todas as ruas.","fato":1},'
+        '{"speaker":1,"text":"Pra mim, encher a cidade de robôs é uma furada total.","fato":1}]\n'
     )
     hook_instruction = (
         f'- PRIMEIRA FALA OBRIGATÓRIA: a primeira fala (speaker 0) DEVE ser exatamente este gancho: "{valid_hook}". Não altere essa pergunta.\n'
@@ -2090,12 +2102,15 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
         '- Cada fala DEVE ter "fato": N (índice 0 a 5 do fato da matéria correspondente) OU "reacao": true.\n'
         '- Falas com "reacao": true devem ter no máximo 6 palavras, NUNCA conter números e no máximo 2 no roteiro todo (nunca consecutivas e nunca na última fala).\n'
         '- Falas com "fato": N só podem citar números e nomes próprios presentes no fato N (ou no título da matéria).\n'
+        '- Estilo falado e informal: evite tom de matéria lida ou telejornal (ex.: em vez de "O Brasil exportou 34,478 milhões de sacas", use "O Brasil mandou mais de 34 milhões de sacas pra fora"; em vez de "arrecadou US$ 1,786 bilhão", prefira "faturou quase 1,8 bilhão de dólares").\n'
+        '- Arredonde números com naturalidade: use qualificadores conforme a regra: "mais de X" se o valor real for maior que X (ex.: 34,478 vira "mais de 34 milhões"); "quase X" se for logo abaixo de X (ex.: 1,786 vira "quase 1,8 bilhão"); ou "cerca de X" para valores aproximados. Nunca invente números fora da matéria.\n'
+        '- Use vocativos (mano, cara) com moderação: no máximo 3 no roteiro todo e NUNCA em falas que carregam números ou dados.\n'
         '- Perguntas feitas por um personagem DEVEM ser respondidas pelo outro personagem usando um dos fatos da matéria.\n'
         + hook_instruction +
         '- PROIBIDO citar o nome do veículo (ex.: g1, UOL, CNN, CPG) ou frases de telejornal ("confirmado por", "segundo o", "nesta segunda-feira").\n'
-        '- PROIBIDO fechos de enchimento ("que legal", "que bom", "incrível", "show", "demais"). Termine com pergunta reflexiva ou fecho forte.\n'
-        f'- Use entre {min_lines} e {max_lines} falas curtas e naturais, com total máximo de {target} palavras.\n'
-        '- A última fala deve terminar com uma frase completa (uma pergunta aberta pro público pensar ou um fecho forte), nunca cortada no meio e nunca ser reação.\n'
+        '- PROIBIDO fechos de enchimento ("que legal", "que bom", "incrível", "show", "demais"). Termine com pergunta reflexiva ou fecho forte opinativo.\n'
+        f'- Use entre {min_lines} e {max_lines} falas curtas e naturais, com total máximo de {target} palavras (média de pelo menos 6 palavras por fala).\n'
+        '- A última fala deve terminar com uma frase completa (uma pergunta reflexiva ou fecho forte com opinião), nunca cortada no meio, nunca repetir dados já ditos e nunca ser reação.\n'
         'Responda APENAS JSON: {"lines":[{"speaker":0,"text":"...","fato":0},{"speaker":1,"text":"...","reacao":true}]}'
     )
     payload = {

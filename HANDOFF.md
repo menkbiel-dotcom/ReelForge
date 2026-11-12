@@ -222,7 +222,7 @@
     - Rejeita fecho que repete dados já ditos no roteiro ($\ge 3$ palavras de conteúdo compartilhadas com qualquer fala anterior).
   - `_add_concrete_example`: atualizado para fecho com: `Exemplo de fecho válido com opinião: "Pra mim, investir bilhões nisso sem testar antes é loucura total." (nunca use "Será que ...?" genérico e não repita fatos já ditos).`
 - [x] **ITEM 18 — Robustez do Passo 1 (`news_auto.py`)**: feito
-  - **Commit:** a preencher após commit — *"Adiciona retry especifico para contradicao e gancho no passo 1 e fallback gracioso"*
+  - **Commit:** `0da75814b33eb68ccd90ada2ddd7a0b22e139982` — *"Adiciona retry especifico para contradicao e gancho no passo 1 e fallback gracioso"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 81 testes passando (incluindo `test_item18_step1_hook_retry_and_graceful_fallback`)
 
@@ -232,4 +232,19 @@
   - Se após o retry a contradição ou gancho continuarem nulos, vazios ou inválidos (gancho reprovado por `validate_hook`), segue sem falhar a pauta, logando `"sem contradição/gancho"` e retornando o `FactsResult` sem gancho forçado.
   - Mantidas todas as validações de números permitidos (`_allowed_numbers`), unidades temporais (`TEMPORAL_UNITS`) e tamanho do gancho (`validate_hook`).
   - Atualizadas fixtures mock em testes legados (`test_low_score...`, `test_fictional_few_shot...`, `test_automatic_retries...`) para fornecer contradição/gancho em seus mocks de fatos.
-- [ ] **ITEM 19 — Estilo das falas (`news_auto.py`)**: a fazer
+- [x] **ITEM 19 — Estilo das falas (`news_auto.py`)**: feito
+  - **Commit:** a preencher após commit — *"Reforca estilo falado e informal no prompt do redator com novo exemplo ficticio"*
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 82 testes passando (incluindo `test_item19_writer_prompt_reinforcement_and_fictional_examples`)
+
+### Detalhes do ITEM 19
+- `few_shot`:
+  - Adicionado Exemplo 3 completo com 8 falas alternadas entre Sasuke e Naruto sobre assunto fictício absurdo (Kryptonix em Zyphoria com 412 mecazoids): gancho curto de Sasuke (<= 10 palavras), Naruto exagerando, Sasuke irônico com dados e qualificadores de arredondamento ("mais de 400", "cerca de 953"), reações curtas e fecho opinativo forte ("furada total").
+- `instruction`:
+  - Reforçado estilo falado e informal: instrução explícita para evitar tom de matéria lida ou telejornal (exemplos no prompt: em vez de "O Brasil exportou 34,478 milhões de sacas", usar "O Brasil mandou mais de 34 milhões de sacas pra fora"; em vez de "arrecadou US$ 1,786 bilhão", usar "faturou quase 1,8 bilhão de dólares").
+  - Instrução explícita para arredondamento com qualificadores conforme `_quantity_pairs` ("mais de X", "quase X", "cerca de X").
+  - Instrução explícita para uso moderado de vocativos (máx. 3 no roteiro todo, nunca em falas com números).
+- `FICTIONAL_EXAMPLE_TERMS`:
+  - Adicionados termos distintivos do Exemplo 3 (`'kryptonix'`, `'zyphoria'`, `'mecazoids'`, `'mecazoid'`, `'412'`, `'953'`) para garantir que sejam barrados por `validate_lines` caso vazem no roteiro sem constar na matéria real.
+- Testes:
+  - Adicionado `test_item19_writer_prompt_reinforcement_and_fictional_examples` em `tests/test_news_auto.py` validando todos os 15 termos em `FICTIONAL_EXAMPLE_TERMS`, rejeição de vazamentos do Exemplo 3 e inspeção do prompt gerado por `write_script`.
