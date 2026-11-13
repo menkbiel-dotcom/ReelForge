@@ -311,6 +311,22 @@ CRUTCH_STARTERS_RE = re.compile(
     re.I
 )
 VOCATIVES_RE = re.compile(r'\b(mano|cara|sasuke|naruto)s?\b', re.I)
+PROFANITY_WORDS = {
+    'puta', 'putaria', 'puto', 'porra', 'caralho', 'merda', 'foda', 'foder', 'fodase', 'fdp',
+    'buceta', 'cu', 'viado', 'bicha', 'arrombado', 'arrombada', 'desgraca', 'desgracado',
+    'desgracada', 'cacete', 'bosta', 'cuzao', 'piranha', 'vagabundo', 'vagabunda', 'corno',
+}
+
+
+def _contains_profanity(text):
+    """Retorna o primeiro palavrão encontrado como palavra inteira (case/acento-insensível), ou None."""
+    norm = unicodedata.normalize('NFKD', str(text)).casefold()
+    norm = ''.join(c for c in norm if not unicodedata.combining(c))
+    norm_joined = re.sub(r'\bfoda\s*-\s*se\b', 'fodase', norm)
+    for word in re.findall(r'[a-z0-9]+', norm_joined):
+        if word in PROFANITY_WORDS:
+            return word
+    return None
 MIN_BODY = 80
 MIN_SOURCE_WORDS = 25
 MAX_BODY = 750
@@ -379,6 +395,56 @@ TITLE_STOPWORDS = {
     'r', 'us', 'usd', 'brl', 'reais', 'dolar', 'dolares',
     'mil', 'milhao', 'milhoes', 'bilhao', 'bilhoes', 'trilhao', 'trilhoes', 'cento', 'porcento',
 } | QUERY_STOPWORDS
+
+COMMON_WORDS = {
+    'hora', 'horas', 'brasil', 'brasileiro', 'brasileira', 'brasileiros', 'brasileiras',
+    'pais', 'paises', 'mundo', 'mundial', 'governo', 'governos', 'estado', 'estados',
+    'dia', 'dias', 'ano', 'anos', 'mes', 'meses', 'semana', 'semanas',
+    'agora', 'hoje', 'ontem', 'amanha', 'tempo', 'tempos', 'vez', 'vezes',
+    'gente', 'pessoa', 'pessoas', 'povo', 'vida', 'coisa', 'coisas',
+    'forma', 'formas', 'parte', 'partes', 'caso', 'casos', 'lugar', 'lugares',
+    'cidade', 'cidades', 'casa', 'casas', 'trabalho', 'empresa', 'empresas',
+    'mercado', 'economia', 'sistema', 'sistemas', 'projeto', 'projetos',
+    'publico', 'publica', 'nacional', 'internacional', 'social', 'geral',
+    'conta', 'contas', 'valor', 'valores', 'preco', 'precos', 'numero', 'numeros',
+    'alta', 'baixa', 'queda', 'aumento', 'crescimento', 'taxa', 'taxas',
+    'tudo', 'nada', 'todos', 'todas', 'outro', 'outra', 'outros', 'outras',
+} | TITLE_STOPWORDS
+
+_EXAMPLE_LEAK_PHRASES = (
+    'Gastar 742 barras num hoverboard solar faz sentido?',
+    'A Zorbax produziu 742 hoverboards solares em Valoria.',
+    'Será que alguém compra esse hoverboard em Valoria?',
+    'Quem investe 819 milhões em reatores em Luminopolis?',
+    'A NeoQuimera colocou 819 milhões em Luminopolis.',
+    'Eles ainda vão abastecer 2089 torres em Luminopolis.',
+    'Colocar 412 mecazoids para patrulhar faz sentido?',
+    'A Kryptonix espalhou mais de 400 mecazoids em Zyphoria.',
+    'Os caras vão vigiar a cidade inteira agora!',
+    'Eles gastaram cerca de 953 barras de ouro nisso.',
+    'O objetivo oficial é monitorar todas as ruas.',
+    'Encher a cidade de robôs desse jeito é arriscado demais.',
+    'Pra mim, encher a cidade de robôs é uma furada total.',
+    'Pra mim, investir bilhões nisso sem testar antes é loucura total.',
+    'Esse gasto alto sem garantia nenhuma é um risco grande.',
+    'Você viu quanto café o Brasil exportou?',
+    'O Brasil mandou mais de 34 milhões de sacas pra fora',
+)
+
+
+def _word_ngrams(text, n=5):
+    """Extrai conjunto de n-grams de palavras normalizadas (sem acento/pontuação)."""
+    norm = unicodedata.normalize('NFKD', str(text)).casefold()
+    norm = ''.join(c for c in norm if not unicodedata.combining(c))
+    words = re.findall(r'[a-z0-9]+', norm)
+    if len(words) < n:
+        return set()
+    return {tuple(words[i:i + n]) for i in range(len(words) - n + 1)}
+
+
+_PROMPT_EXAMPLE_5GRAMS = set()
+for _phrase in _EXAMPLE_LEAK_PHRASES:
+    _PROMPT_EXAMPLE_5GRAMS |= _word_ngrams(_phrase, 5)
 
 
 def _clean_plain_word(w):
@@ -1566,6 +1632,11 @@ def validate_lines(raw, story, budget, loop=False, min_lines=6, max_lines=12, fa
             raise ValueError('Proibido citar o nome do veículo ou expressões como "confirmado por" / "segundo o" nas falas.')
         texts.append(text)
 
+    for i, t in enumerate(texts):
+        bad_word = _contains_profanity(t)
+        if bad_word:
+            raise ValueError(f'Fala {i + 1} ("{t}"): linguagem imprópria detectada ("{bad_word}").')
+
     # 1. Validação global do texto (vocabulário, termos proibidos, veículos e tamanho)
     hook_words = len(texts[0].split())
     if hook_words > 10:
@@ -1588,6 +1659,12 @@ def validate_lines(raw, story, budget, loop=False, min_lines=6, max_lines=12, fa
     if leaked_examples:
         raise ValueError('O roteiro copiou termos ou números dos exemplos fictícios do prompt: ' +
                          ', '.join(sorted(leaked_examples)))
+    allowed_example_grams = _word_ngrams(f'{story.get("title", "")} {facts_joined} {source}', 5)
+    for i, t in enumerate(texts):
+        leaked_grams = (_word_ngrams(t, 5) & _PROMPT_EXAMPLE_5GRAMS) - allowed_example_grams
+        if leaked_grams:
+            sample_gram = ' '.join(sorted(leaked_grams)[0])
+            raise ValueError(f'Fala {i + 1} ("{t}"): trecho copiado dos exemplos ("{sample_gram}"). Use apenas os fatos da matéria.')
     invented = _numbers(' '.join(texts)) - allowed_nums
     if invented:
         inv_lines = []
@@ -1605,13 +1682,23 @@ def validate_lines(raw, story, budget, loop=False, min_lines=6, max_lines=12, fa
     if temporal_diff:
         raise ValueError('Unidades temporais ausentes na matéria: ' + ', '.join(sorted(temporal_diff)))
 
-    # Rejeita nomes próprios vindos das manchetes relacionadas que não existem no corpo/título da matéria.
+    # Rejeita tokens/nomes vindos das manchetes relacionadas que não existem no corpo/título nem nos fatos da matéria.
     related_text = '\n'.join(story.get('related', []) + story.get('related_context', []))
     if related_text:
-        source_tokens = set(_tokens(source))
-        related_only_entities = {e.casefold() for e in _entities(related_text) if _tokens(e) and _tokens(e)[0] not in source_tokens}
-        script_tokens = set(_tokens(' '.join(texts)))
-        leaked = related_only_entities & script_tokens
+        union_tokens = set(_tokens(source)) | set(_tokens(facts_joined))
+        rel_entities = {_clean_plain_word(e) for e in _entities(related_text) if _clean_plain_word(e)}
+        script_joined = ' '.join(texts)
+        script_entities = {_clean_plain_word(e) for e in _entities(script_joined) if _clean_plain_word(e)}
+        leaked = set()
+        for tok in set(_tokens(related_text)) & set(_tokens(script_joined)):
+            norm_tok = _clean_plain_word(tok)
+            if not norm_tok or tok in union_tokens or norm_tok in union_tokens:
+                continue
+            if norm_tok in COMMON_WORDS:
+                continue
+            is_proper = (norm_tok in rel_entities) or (norm_tok in script_entities)
+            if len(norm_tok) >= 6 or is_proper:
+                leaked.add(tok)
         if leaked:
             raise ValueError('Contaminação de manchete relacionada detectada: ' + ', '.join(sorted(leaked)) +
                              '. Use apenas fatos do corpo da matéria principal.')
@@ -1731,12 +1818,17 @@ def validate_lines(raw, story, budget, loop=False, min_lines=6, max_lines=12, fa
     if not sasuke_has_provocation:
         raise ValueError('O Sasuke deve fazer pelo menos 1 pergunta ou provocação no roteiro.')
 
+    seen_reactions = set()
     for i, entry in enumerate(annotated):
         if entry['tipo'] == 'reacao':
             if i > 0 and annotated[i - 1]['tipo'] == 'reacao':
                 raise ValueError('Falas de reação não podem ser consecutivas.')
             if i == len(annotated) - 1:
                 raise ValueError('A última fala NÃO pode ser reação.')
+            norm_r = re.sub(r'[^a-z0-9 ]+', '', _normalize_plain(entry['text'])).strip()
+            if norm_r in seen_reactions:
+                raise ValueError(f'Reação repetida no roteiro: "{entry["text"]}". Não repita a mesma reação.')
+            seen_reactions.add(norm_r)
 
     if reacoes_count > 2:
         raise ValueError(f'O roteiro tem {reacoes_count} falas de reação; o limite é no máximo 2 por roteiro.')
@@ -2194,7 +2286,7 @@ def _add_concrete_example(error_msg):
     elif 'primeira fala' in err_lower and ('palavras' in err_lower or 'começar com' in err_lower or 'gancho' in err_lower):
         return err + ' Exemplo de gancho válido: "Você viu quanto café o Brasil exportou?" (máximo 10 palavras).'
     elif 'fecho' in err_lower or 'última fala' in err_lower:
-        return err + ' Exemplo de fecho válido com opinião: "Pra mim, investir bilhões nisso sem testar antes é loucura total." (nunca use "Será que ...?" genérico e não repita fatos já ditos).'
+        return err + ' Exemplo de fecho válido com opinião: "Esse gasto alto sem garantia nenhuma é um risco grande." (nunca use "Será que ...?" genérico e não repita fatos já ditos).'
     elif 'números ausentes' in err_lower or 'número' in err_lower:
         return err + ' Exemplo: cite apenas números exatos que constam no fato indicado.'
     elif 'vocativo' in err_lower:
@@ -2276,7 +2368,7 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
         '{"speaker":0,"text":"Eles gastaram cerca de 953 barras de ouro nisso."},'
         '{"speaker":1,"text":"Caramba, gastaram tudo isso mesmo?"},'
         '{"speaker":0,"text":"O objetivo oficial é monitorar todas as ruas."},'
-        '{"speaker":1,"text":"Pra mim, encher a cidade de robôs é uma furada total."}]\n'
+        '{"speaker":1,"text":"Encher a cidade de robôs desse jeito é arriscado demais."}]\n'
     )
     hook_instruction = (
         f'- PRIMEIRA FALA OBRIGATÓRIA: a primeira fala (speaker 0) DEVE ser exatamente este gancho: "{valid_hook}". Não altere essa pergunta.\n'

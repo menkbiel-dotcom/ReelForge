@@ -330,6 +330,7 @@
 - `turn_range()` e `validate_lines()` ajustados para faixa **6 a 12 falas**; média de palavras calculada exclusivamente sobre falas não-reação (rejeita se `< 5.0` e avisa entre `5.0` e `6.0`).
 
 - [x] **ITEM 27 — Política de retries (`news_auto.py`)**: feito
+  - **Commit:** `9389042c079cc249114956c6e642a72d8edca30c` — *"Ajusta politica de retries com teto 0.7 e temperatura 0.4 apos JSON malformado"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 90 testes passando (incluindo `test_item27_retry_policy_cap_and_low_temp_on_malformed_json`)
 
@@ -337,4 +338,13 @@
 - Temperatura em `write_script`: escala suavemente de `0.55` aumentando `+0.05` por tentativa até o teto de `0.7` (`min(0.7, round(0.55 + (attempt - 1) * 0.05, 2))`), nunca subindo até `0.9`.
 - Se a resposta anterior vier com `JSONDecodeError` ou estrutura malformada (`_is_malformed_script_response`: falta `"lines"`, não é lista, itens não-objeto ou falta `"speaker"`/`"text"`), força temperatura `0.4` na tentativa seguinte e inclui o esquema JSON exato (`_EXACT_SCRIPT_SCHEMA`) na correção.
 - Mantido o aborto antecipado após 3 repetições consecutivas do mesmo erro curto.
-- **Próximo item:** ITEM 28 — Guardas de qualidade textual (`news_auto.py`).
+
+- [x] **ITEM 28 — Guardas de qualidade textual (`news_auto.py`)**: feito
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 91 testes passando (incluindo `test_item28_profanity_example_leak_duplicate_reaction_and_related_commons`)
+
+### Detalhes do ITEM 28
+- **Palavrões (`PROFANITY_WORDS` / `_contains_profanity`):** bloqueio por palavra inteira normalizada (case/acento-insensível) em todas as falas de `validate_lines()`, rejeitando com `"linguagem imprópria"`.
+- **Cópia de exemplos e reações repetidas (`_PROMPT_EXAMPLE_5GRAMS` / `_word_ngrams`):** detecta e rejeita fala que compartilhe qualquer 5-gram de palavras com as frases dos exemplos do prompt (`few_shot`, exemplos em `instruction` e `_add_concrete_example`, inclusive `"investir bilhões nisso sem testar antes"`) quando ausente de fatos+título (`"trecho copiado dos exemplos"`); removidos os usos de `"Pra mim,"` dos exemplos do prompt e da correção concreta; rejeita reações repetidas no mesmo roteiro.
+- **Refino de `"contaminação de manchete relacionada"` (`COMMON_WORDS`):** só acusa token presente nas manchetes relacionadas que não apareça na matéria nem nos fatos, tenha $\ge 6$ letras ou seja nome próprio (`_entities`), e não esteja em `COMMON_WORDS` (`hora`, `horas`, `brasil`, `brasileiro`, `brasileiros`, `pais`, `mundo`, `governo`, `dia`, `dias`, `ano`, `anos`, `agora`, `hoje`, `tempo`, `vez`, `gente`, `pessoas`, ...).
+- **Próximo item:** ITEM 29 — Filtro de pautas (`news_auto.py`).

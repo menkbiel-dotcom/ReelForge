@@ -2255,9 +2255,10 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
         self.assertEqual(prob, '')
         self.assertEqual(len(res), 8)
 
-        # 6. Exemplo concreto atualizado para erro de fecho
+        # 6. Exemplo concreto atualizado para erro de fecho (sem "Pra mim")
         ex = news_auto._add_concrete_example("Problema no fecho da história")
-        self.assertIn('Exemplo de fecho válido com opinião: "Pra mim, investir bilhões nisso sem testar antes é loucura total."', ex)
+        self.assertIn('Exemplo de fecho válido com opinião: "Esse gasto alto sem garantia nenhuma é um risco grande."', ex)
+        self.assertNotIn('Pra mim', ex)
 
     def test_item18_step1_hook_retry_and_graceful_fallback(self):
         story = {
@@ -2849,6 +2850,86 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
         self.assertEqual(len(res2), 6)
         self.assertEqual(temps_2, [0.55, 0.6, 0.65, 0.7, 0.7, 0.7, 0.7])
         self.assertTrue(all(t <= 0.7 for t in temps_2))
+
+    def test_item28_profanity_example_leak_duplicate_reaction_and_related_commons(self):
+        story = {
+            'title': 'Banco Central reduz juros para 10% após reunião em Brasília',
+            'body': (
+                'O Banco Central decidiu reduzir a taxa básica de juros para 10% ao ano em Brasília nesta quarta. '
+                'A diretoria apontou desaceleração da inflação no varejo e melhora nas expectativas do mercado financeiro. '
+                'Economistas preveem impacto gradual no crédito comercial e nos financiamentos imobiliários nos próximos meses. '
+            ) * 3,
+            'related': [
+                'Hora de trocar o investimento no Brasil pode mudar hoje',
+                'Deputado Carlos Maranhão apresenta novo projeto no Congresso',
+            ],
+        }
+        facts = [
+            'O Banco Central reduziu a taxa de juros para 10% ao ano em Brasília.',
+            'A diretoria apontou desaceleração da inflação no varejo.',
+            'Expectativas do mercado financeiro mostraram melhora recente.',
+            'Economistas preveem impacto gradual no crédito comercial e nos financiamentos.',
+        ]
+
+        # 1. Palavrão é bloqueado ("linguagem imprópria")
+        bad_profanity = {'lines': [
+            {'speaker': 0, 'text': 'Os juros em Brasília caíram para 10%?'},
+            {'speaker': 1, 'text': 'O Banco Central confirmou o corte para 10% ao ano.'},
+            {'speaker': 0, 'text': 'Puta que pariu, que mudança rápida!'},
+            {'speaker': 1, 'text': 'A diretoria notou desaceleração da inflação no varejo.'},
+            {'speaker': 0, 'text': 'O mercado financeiro mostrou melhora nas expectativas recentes.'},
+            {'speaker': 1, 'text': 'Economistas aguardam impacto gradual nos financiamentos futuros.'},
+        ]}
+        with self.assertRaisesRegex(ValueError, r'linguagem imprópria'):
+            news_auto.validate_lines(bad_profanity, story, budget=120, facts=facts)
+
+        # 2. Cópia de 5-gram dos exemplos do prompt é bloqueada ("trecho copiado dos exemplos")
+        bad_example_leak = {'lines': [
+            {'speaker': 0, 'text': 'Os juros em Brasília caíram para 10%?'},
+            {'speaker': 1, 'text': 'O Banco Central confirmou o corte para 10% ao ano.'},
+            {'speaker': 0, 'text': 'A diretoria notou desaceleração da inflação no varejo.'},
+            {'speaker': 1, 'text': 'O mercado financeiro mostrou melhora nas expectativas recentes.'},
+            {'speaker': 0, 'text': 'Economistas preveem impacto gradual no crédito comercial.'},
+            {'speaker': 1, 'text': 'Pra mim, investir bilhões nisso sem testar antes é loucura total.'},
+        ]}
+        with self.assertRaisesRegex(ValueError, r'trecho copiado dos exemplos'):
+            news_auto.validate_lines(bad_example_leak, story, budget=120, facts=facts)
+
+        # 3. Reação repetida no mesmo roteiro é rejeitada
+        bad_dup_react = {'lines': [
+            {'speaker': 0, 'text': 'Os juros em Brasília caíram para 10%?'},
+            {'speaker': 1, 'text': 'Caramba!'},
+            {'speaker': 0, 'text': 'O Banco Central reduziu a taxa para 10% ao ano em Brasília.'},
+            {'speaker': 1, 'text': 'A diretoria apontou desaceleração da inflação no varejo.'},
+            {'speaker': 0, 'text': 'Caramba!'},
+            {'speaker': 1, 'text': 'Economistas preveem impacto gradual nos financiamentos futuros.'},
+        ]}
+        with self.assertRaisesRegex(ValueError, r'Reação repetida'):
+            news_auto.validate_lines(bad_dup_react, story, budget=120, facts=facts)
+
+        # 4. Palavras comuns das relacionadas ("hora", "Brasil") não causam falso positivo
+        good_with_common = {'lines': [
+            {'speaker': 0, 'text': 'Os juros caíram para 10% na hora certa?'},
+            {'speaker': 1, 'text': 'O Banco Central reduziu a taxa de juros para 10% ao ano em Brasília.'},
+            {'speaker': 0, 'text': 'A diretoria apontou desaceleração da inflação no varejo.'},
+            {'speaker': 1, 'text': 'Expectativas do mercado financeiro mostraram melhora recente.'},
+            {'speaker': 0, 'text': 'Economistas preveem impacto gradual no crédito comercial.'},
+            {'speaker': 1, 'text': 'Brasil inteiro aguarda alívio real nos financiamentos imobiliários.'},
+        ]}
+        res_ok, _ = news_auto.validate_lines(good_with_common, story, budget=120, facts=facts)
+        self.assertEqual(len(res_ok), 6)
+
+        # 5. Nome próprio inventado das manchetes relacionadas continua reprovando
+        bad_rel_proper = {'lines': [
+            {'speaker': 0, 'text': 'Os juros em Brasília caíram para 10%?'},
+            {'speaker': 1, 'text': 'O Banco Central reduziu a taxa para 10% ao ano.'},
+            {'speaker': 0, 'text': 'A diretoria apontou desaceleração da inflação no varejo.'},
+            {'speaker': 1, 'text': 'Carlos Maranhão também acompanhou o mercado financeiro hoje.'},
+            {'speaker': 0, 'text': 'Expectativas do mercado mostraram melhora nos financiamentos.'},
+            {'speaker': 1, 'text': 'Corte gradual nos financiamentos deve movimentar o crédito este ano.'},
+        ]}
+        with self.assertRaisesRegex(ValueError, r'Contaminação de manchete relacionada'):
+            news_auto.validate_lines(bad_rel_proper, story, budget=120, facts=facts)
 
 
 if __name__ == '__main__':
