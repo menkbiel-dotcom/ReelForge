@@ -340,6 +340,7 @@
 - Mantido o aborto antecipado após 3 repetições consecutivas do mesmo erro curto.
 
 - [x] **ITEM 28 — Guardas de qualidade textual (`news_auto.py`)**: feito
+  - **Commit:** `53e4b1cebe4422d04f725a03d9e36caf9da089a2` — *"Adiciona guardas de qualidade textual (palavroes, copia de exemplos, reacao repetida e filtro de relacionadas)"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 91 testes passando (incluindo `test_item28_profanity_example_leak_duplicate_reaction_and_related_commons`)
 
@@ -347,4 +348,13 @@
 - **Palavrões (`PROFANITY_WORDS` / `_contains_profanity`):** bloqueio por palavra inteira normalizada (case/acento-insensível) em todas as falas de `validate_lines()`, rejeitando com `"linguagem imprópria"`.
 - **Cópia de exemplos e reações repetidas (`_PROMPT_EXAMPLE_5GRAMS` / `_word_ngrams`):** detecta e rejeita fala que compartilhe qualquer 5-gram de palavras com as frases dos exemplos do prompt (`few_shot`, exemplos em `instruction` e `_add_concrete_example`, inclusive `"investir bilhões nisso sem testar antes"`) quando ausente de fatos+título (`"trecho copiado dos exemplos"`); removidos os usos de `"Pra mim,"` dos exemplos do prompt e da correção concreta; rejeita reações repetidas no mesmo roteiro.
 - **Refino de `"contaminação de manchete relacionada"` (`COMMON_WORDS`):** só acusa token presente nas manchetes relacionadas que não apareça na matéria nem nos fatos, tenha $\ge 6$ letras ou seja nome próprio (`_entities`), e não esteja em `COMMON_WORDS` (`hora`, `horas`, `brasil`, `brasileiro`, `brasileiros`, `pais`, `mundo`, `governo`, `dia`, `dias`, `ano`, `anos`, `agora`, `hoje`, `tempo`, `vez`, `gente`, `pessoas`, ...).
-- **Próximo item:** ITEM 29 — Filtro de pautas (`news_auto.py`).
+
+- [x] **ITEM 29 — Filtro de pautas (`news_auto.py`)**: feito
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 92 testes passando (incluindo `test_item29_junk_lottery_filter_min_body_and_hard_topic_filter`)
+
+### Detalhes do ITEM 29
+- **Exclusão de loterias/apostas/serviços (`EXCLUDED_TITLE_RE` em `is_news()` e `pick_story()`):** rejeita títulos (case-insensitive) contendo `quina`, `mega-sena`, `lotofácil`, `lotomania`, `dia de sorte`, `timemania`, `loteria`, `sorteio`, `resultado do jogo`, `horóscopo`, `palpite`, `\bbet\b`, `bets`, `cotação do dia` e `previsão do tempo de hoje`.
+- **Corpo mínimo `>= 300` palavras:** `MIN_BODY` elevado para `300` (em `parse_entry` e `gather_candidates`) e priorização de pautas com $\ge 300$ palavras em `pick_story()`.
+- **Filtro DURO de tema (`_topic_keywords` / `_matches_topic` / `CATEGORY_EXTRA_KEYWORDS`):** quando houver $\ge 3$ pautas compatíveis com o tema especificado em `gather_candidates()` ou `pick_story(..., topic=...)`, descarta pautas fora do tema e loga `"tema 'X': N pautas compatíveis; usando as M melhores"`.
+- **Próximo item:** ITEM 30 — Estilo do redator (`news_auto.py`).

@@ -281,6 +281,12 @@ SOCIAL = ('instagram', 'facebook', 'youtube', 'tiktok', 'twitter', 'threads', 'l
 JUNK = re.compile(r'[\U0001F000-\U0001FFFF\u2600-\u27BF\u2060-\u206F\u200B-\u200F\uFE0F]')
 ADS = re.compile(r'\b(ofertas?|cupom|cupons|descontos?|black friday|promo[cç](ao|ão|oes|ões)|achadinhos|'
                  r'compre|mais vendidos|vale a pena comprar|inscrever gratuitamente|aproveite agora)\b', re.I)
+EXCLUDED_TITLE_RE = re.compile(
+    r'\b(quina|mega[\s-]?sena|lotof[aá]cil|lotomania|dia\s+de\s+sorte|timemania|'
+    r'loteria|sorteio|resultado\s+do\s+jogo|hor[oó]scopo|palpite|bet|bets|'
+    r'cota[cç][aã]o\s+do\s+dia|previs[aã]o\s+do\s+tempo\s+de\s+hoje)\b',
+    re.I,
+)
 BOILERPLATE = re.compile(r'^(leia (também|mais)|veja (também|mais)|assista|siga o|inscreva-se|clique aqui|'
                          r'foto:|imagem:|reprodução|the post .* appeared first|o post .* apareceu primeiro|'
                          r'resumo$|publicidade|newsletter)', re.I)
@@ -327,7 +333,7 @@ def _contains_profanity(text):
         if word in PROFANITY_WORDS:
             return word
     return None
-MIN_BODY = 80
+MIN_BODY = 300
 MIN_SOURCE_WORDS = 25
 MAX_BODY = 750
 _feed_cache = {}
@@ -818,9 +824,75 @@ def parse_entry(entry, feed_name=None):
 
 def is_news(item):
     source = item['source'].casefold()
-    words = len(item['title'].split())
-    return (not any(s in source for s in SOCIAL) and 4 <= words <= 30 and not JUNK.search(item['title'])
-            and not item['title'].isupper() and not ADS.search(item['title']))
+    title = item['title']
+    words = len(title.split())
+    return (not any(s in source for s in SOCIAL) and 4 <= words <= 30 and not JUNK.search(title)
+            and not title.isupper() and not ADS.search(title) and not EXCLUDED_TITLE_RE.search(title))
+
+
+CATEGORY_EXTRA_KEYWORDS = {
+    'ciencia': {
+        'pesquisa', 'pesquisador', 'pesquisadores', 'estudo', 'estudos', 'cientista', 'cientistas',
+        'cientifico', 'cientifica', 'cientificos', 'cientificas', 'nasa', 'telescopio', 'espacial',
+        'planeta', 'planetas', 'galaxia', 'biologia', 'fisica', 'quimica', 'genetica', 'descoberta',
+        'atmosfera', 'oceano', 'carbono', 'solar', 'laboratorio', 'vacina', 'vacinas', 'virus',
+        'aquecimento', 'nino', 'meteorologia', 'astronomia', 'satelite', 'foguete', 'especie',
+    },
+    'tecnologia': {
+        'digital', 'aplicativo', 'aplicativos', 'app', 'robo', 'robos', 'sistema', 'sistemas',
+        'dados', 'nuvem', 'algoritmo', 'computador', 'computadores', 'processador', 'smartphone',
+        'redes', 'ciberseguranca', 'codigo', 'startup', 'modelo',
+    },
+    'economia': {
+        'pib', 'selic', 'dolar', 'bolsa', 'ibovespa', 'banco', 'bancos', 'credito', 'imposto',
+        'impostos', 'orcamento', 'fiscal', 'receita', 'exportacao', 'importacao', 'comercio',
+        'tarifa', 'tarifas', 'safra', 'industria', 'varejo', 'investimento', 'investimentos',
+    },
+    'politica': {
+        'senado', 'camara', 'deputado', 'senador', 'presidente', 'ministro', 'ministerio',
+        'eleicao', 'eleicoes', 'partido', 'lei', 'projeto', 'pec', 'plenario', 'stf',
+    },
+    'educacao': {
+        'aluno', 'alunos', 'professor', 'professores', 'ensino', 'nota', 'notas', 'gabarito',
+        'prova', 'provas', 'vestibular', 'bolsa', 'bolsas', 'mec', 'inep',
+    },
+    'cultura': {
+        'filme', 'filmes', 'ator', 'atriz', 'diretor', 'show', 'album', 'manga', 'teatro',
+        'festival', 'oscar', 'episodio', 'temporada',
+    },
+    'mundo': {
+        'eua', 'estados', 'china', 'europa', 'russia', 'ucrania', 'onu', 'tratado', 'diplomacia',
+        'acordo', 'fronteira', 'sancoes', 'conflito',
+    },
+    'esporte': {
+        'campeonato', 'selecao', 'gol', 'gols', 'tecnico', 'jogador', 'jogadores', 'torneio',
+        'copa', 'brasileirao', 'libertadores', 'olimpiada', 'atleta', 'partida',
+    },
+}
+
+
+def _topic_keywords(topic):
+    keys = _query_keys(topic)
+    kw = set(keys)
+    for k in keys:
+        kw |= KEY_ALIASES.get(k, set())
+        cat = SYNONYMS.get(k)
+        if cat:
+            kw.add(cat)
+            kw |= {sk for sk, sv in SYNONYMS.items() if sv == cat}
+            kw |= CATEGORY_EXTRA_KEYWORDS.get(cat, set())
+    return kw
+
+
+def _matches_topic(item, topic):
+    topic_str = str(topic or '').strip()
+    if not topic_str:
+        return True
+    kw = _topic_keywords(topic_str)
+    if not kw:
+        return True
+    item_tokens = set(_tokens(item.get('title', ''))) | set(_tokens(item.get('body', '')))
+    return bool(kw & item_tokens)
 
 
 def _relevant(item, keys):
@@ -979,7 +1051,7 @@ def gather_candidates(topic, kind='Notícia', limit=15, allow_repeat=False, max_
     fresh = lambda item: not item['timestamp'] or now - item['timestamp'] <= max_age_hours * 3600
     scored_rich = []
     for item, keys in rich:
-        if item['body'] and fresh(item) and _relevant(item, keys):
+        if len(item.get('body', '').split()) >= MIN_BODY and fresh(item) and _relevant(item, keys):
             item['complexity'] = complexity_score(item, keys)
             scored_rich.append(item)
     scored_rich.sort(key=lambda i: (-(i.get('complexity') or 0), -(i['timestamp'] or 0)))
@@ -989,21 +1061,29 @@ def gather_candidates(topic, kind='Notícia', limit=15, allow_repeat=False, max_
     fresh_headlines = [i for i, _ in headlines if fresh(i) and _relevant(i, specific_keys)]
     pool_items = scored_rich if scored_rich else fresh_headlines
     db = engine.conn()
-    candidates = []
+    all_valid = []
     try:
         for item in pool_items:
             if not item['title'] or not item['url'] or not is_news(item):
                 continue
-            if any(_similar(item['title'], c['title']) > 0.6 for c in candidates):
+            if any(_similar(item['title'], c['title']) > 0.6 for c in all_valid):
                 continue
             if not allow_repeat and db.execute('SELECT 1 FROM used WHERE id=? OR title=?',
                                                (item['id'], item['title'])).fetchone():
                 continue
-            candidates.append(item)
-            if len(candidates) >= limit:
-                break
+            all_valid.append(item)
     finally:
         db.close()
+    topic_label = str(topic or '').strip()
+    if topic_label:
+        topic_matched = [item for item in all_valid if _matches_topic(item, topic_label)]
+        if len(topic_matched) >= 3:
+            candidates = topic_matched[:limit]
+            log(f"tema '{topic_label}': {len(topic_matched)} pautas compatíveis; usando as {len(candidates)} melhores")
+        else:
+            candidates = all_valid[:limit]
+    else:
+        candidates = all_valid[:limit]
     if not candidates:
         raise RuntimeError('O RSS não trouxe notícias novas para "' + (query or 'destaques') +
                            '". Troque o assunto ou marque "Permitir conteúdo repetido".')
@@ -1055,7 +1135,7 @@ def _candidate_rank_score(item):
     return float(complexity_score(item, _query_keys(item.get('title', ''))))
 
 
-def pick_story(candidates, kind='Notícia', ask=None, allow_repeat=False, log=print):
+def pick_story(candidates, kind='Notícia', ask=None, allow_repeat=False, log=print, topic=None):
     """Escolhe a pauta pelo maior complexity_score (determinístico por padrão) ou via LLM se configurado."""
     import engine
     if not candidates:
@@ -1064,6 +1144,15 @@ def pick_story(candidates, kind='Notícia', ask=None, allow_repeat=False, log=pr
     if not pool:
         raise RuntimeError('Todas as pautas candidatas já foram usadas.')
 
+    clean_pool = [
+        c for c in pool
+        if not EXCLUDED_TITLE_RE.search(c.get('title', '')) and not ADS.search(c.get('title', ''))
+    ]
+    if clean_pool:
+        pool = clean_pool
+    else:
+        raise RuntimeError('Nenhuma pauta jornalística válida após remover loterias, jogos e anúncios.')
+
     valid = []
     for c in pool:
         try:
@@ -1071,7 +1160,14 @@ def pick_story(candidates, kind='Notícia', ask=None, allow_repeat=False, log=pr
             valid.append(c)
         except ValueError:
             pass
-    ranked_base = valid if valid else pool
+    long_valid = [c for c in valid if len(str(c.get('body', '') or '').split()) >= MIN_BODY]
+    ranked_base = long_valid if long_valid else (valid if valid else pool)
+    topic_label = str(topic or '').strip()
+    if topic_label:
+        topic_matched = [c for c in ranked_base if _matches_topic(c, topic_label)]
+        if len(topic_matched) >= 3 and len(topic_matched) < len(ranked_base):
+            log(f"tema '{topic_label}': {len(topic_matched)} pautas compatíveis; usando as {min(len(topic_matched), 12)} melhores")
+            ranked_base = topic_matched
     ranked = sorted(
         ranked_base,
         key=lambda item: (-_candidate_rank_score(item), -(item.get('timestamp') or 0)),
@@ -2648,7 +2744,7 @@ def automatic(topic, kind='Notícia', max_seconds=45, allow_repeat=False, log=pr
         story = None
         last_err = None
         for _ in range(min(3, len(remaining))):
-            picked = pick_story(remaining, kind, ask, allow_repeat=allow_repeat, log=log)
+            picked = pick_story(remaining, kind, ask, allow_repeat=allow_repeat, log=log, **({'topic': topic} if topic else {}))
             try:
                 require_minimum_source(picked)
                 story = picked

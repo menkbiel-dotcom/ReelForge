@@ -1672,7 +1672,7 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
                 'source': {'title': source},
                 'link': link,
                 'published': 'Sun, 08 Nov 2026 02:00:00 GMT',
-                'summary': 'Tecnologia avança com internet e novos sistemas no Brasil. ' * 20
+                'summary': 'Tecnologia avança com internet e novos sistemas no Brasil. ' * 35
             }
 
         def slow_read_feed(url):
@@ -2930,6 +2930,126 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
         ]}
         with self.assertRaisesRegex(ValueError, r'Contaminação de manchete relacionada'):
             news_auto.validate_lines(bad_rel_proper, story, budget=120, facts=facts)
+
+    def test_item29_junk_lottery_filter_min_body_and_hard_topic_filter(self):
+        # 1. Títulos de loteria, apostas, horóscopo e previsão do tempo são bloqueados em is_news e pick_story
+        bad_titles = [
+            'Resultado da Quina 6580 sorteia R$ 9,8 milhões hoje',
+            'Mega-Sena acumula e pode pagar R$ 100 milhões no sábado',
+            'Lotofácil concurso 3100 tem dois ganhadores no país',
+            'Horóscopo de hoje aponta mudanças para três signos',
+            'Casa de bet oferece palpite especial para final',
+            'Cotação do dia mostra dólar em leve alta hoje',
+            'Previsão do tempo de hoje alerta para chuva forte',
+        ]
+        for bt in bad_titles:
+            self.assertFalse(news_auto.is_news({'title': bt, 'source': 'G1'}), f'Deveria rejeitar: {bt}')
+        self.assertTrue(news_auto.is_news({'title': 'Governo lança pacote de alfabetização digital nas escolas', 'source': 'G1'}))
+
+        long_sci_body = (
+            'Pesquisadores de astronomia e ciência anunciaram descoberta espacial com telescópio avançado na atmosfera. ' * 30
+        )
+        short_body = 'Notícia curta sem profundidade suficiente para o roteiro completo. ' * 15  # ~150 palavras (< 300)
+        self.assertGreaterEqual(len(long_sci_body.split()), 300)
+        self.assertLess(len(short_body.split()), 300)
+
+        # 2. Corpo >= 300 palavras exigido no parse_entry e preferido no pick_story
+        parsed_short = news_auto.parse_entry({
+            'title': 'Estudo científico sobre exoplanetas distantes',
+            'link': 'https://a/short-sci',
+            'published': 'Sun, 08 Nov 2026 02:00:00 GMT',
+            'summary': short_body,
+        }, feed_name='g1_ciencia')
+        self.assertEqual(parsed_short['body'], '')
+        parsed_long = news_auto.parse_entry({
+            'title': 'Estudo científico sobre exoplanetas distantes com dados novos',
+            'link': 'https://a/long-sci',
+            'published': 'Sun, 08 Nov 2026 02:00:00 GMT',
+            'summary': long_sci_body,
+        }, feed_name='g1_ciencia')
+        self.assertGreaterEqual(len(parsed_long['body'].split()), 300)
+
+        # 3. Quina nunca é escolhida e tema "ciência" com >= 3 pautas compatíveis aplica filtro DURO
+        quina_cand = {
+            'id': 'q1',
+            'title': 'Resultado da Quina sorteia prêmio milionário hoje',
+            'source': 'G1',
+            'url': 'https://a/quina',
+            'body': long_sci_body,
+            'complexity': 999.0,
+        }
+        soccer_cand = {
+            'id': 'f1',
+            'title': 'Time vence campeonato nacional de futebol após goleada histórica',
+            'source': 'GE',
+            'url': 'https://a/fut',
+            'body': 'Campeonato brasileiro teve goleada no estádio lotado nesta rodada final do torneio nacional. ' * 35,
+            'complexity': 95.0,
+        }
+        short_cand = {
+            'id': 's1',
+            'title': 'Pesquisa espacial descobre nova estrela brilhante na ciência',
+            'source': 'G1',
+            'url': 'https://a/short',
+            'body': short_body,
+            'complexity': 90.0,
+        }
+        sci_cands = [
+            {
+                'id': f'sci{i}',
+                'title': f'Estudo científico #{i} revela descoberta sobre clima e espaço',
+                'source': 'G1',
+                'url': f'https://a/sci{i}',
+                'body': long_sci_body,
+                'complexity': 20.0 + i,
+            }
+            for i in range(3)
+        ]
+        pick_logs = []
+        chosen = news_auto.pick_story(
+            [quina_cand, soccer_cand, short_cand] + sci_cands,
+            topic='ciência',
+            log=pick_logs.append,
+        )
+        self.assertEqual(chosen['id'], 'sci2')
+        self.assertTrue(any("tema 'ciência': 3 pautas compatíveis" in l for l in pick_logs), pick_logs)
+
+        # 4. gather_candidates com tema "ciência" filtra duro >= 3 compatíveis, ignora Quina e corpo < 300 palavras
+        sci_titles = [
+            'Telescópio espacial encontra exoplaneta com atmosfera densa',
+            'Pesquisadores brasileiros testam vacina genética contra vírus raro',
+            'Estudo climático mede aquecimento oceânico na região polar',
+        ]
+        mock_entries = [
+            {'title': 'Resultado da Quina concurso 6000 sorteia R$ 9 milhões', 'link': 'https://a/rq',
+             'published': 'Sun, 08 Nov 2026 02:00:00 GMT', 'summary': long_sci_body},
+            {'title': 'Campeonato de futebol marca 5 gols na rodada', 'link': 'https://a/rf',
+             'published': 'Sun, 08 Nov 2026 02:00:00 GMT',
+             'summary': 'Seleção e campeonato de futebol com 5 gols no torneio internacional hoje. ' * 40},
+            {'title': 'Nota curta de ciência com poucos detalhes no texto', 'link': 'https://a/rs',
+             'published': 'Sun, 08 Nov 2026 02:00:00 GMT', 'summary': short_body},
+        ] + [
+            {'title': st, 'link': f'https://a/rsci{idx}',
+             'published': 'Sun, 08 Nov 2026 02:00:00 GMT', 'summary': long_sci_body}
+            for idx, st in enumerate(sci_titles)
+        ]
+
+        def fake_feed(url):
+            if 'google' in url:
+                return []
+            if 'ciencia' in url or 'meio-ambiente' in url or 'olhardigital' in url:
+                return mock_entries
+            return [mock_entries[1]]
+
+        gather_logs = []
+        with patch('news_auto.read_feed', side_effect=fake_feed):
+            cands = news_auto.gather_candidates('ciência', limit=10, log=gather_logs.append)
+        titles = [c['title'] for c in cands]
+        self.assertEqual(len(cands), 3)
+        self.assertEqual(set(titles), set(sci_titles))
+        self.assertFalse(any('Quina' in t for t in titles))
+        self.assertFalse(any('futebol' in t for t in titles))
+        self.assertTrue(any("tema 'ciência': 3 pautas compatíveis; usando as 3 melhores" in l for l in gather_logs), gather_logs)
 
 
 if __name__ == '__main__':
