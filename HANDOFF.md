@@ -311,6 +311,7 @@
 ## Rodada 7 (Itens 25 a 30 + Regressão Real)
 
 - [x] **ITEM 25 — Inferir fato/reação no código (`news_auto.py`)**: feito
+  - **Commit:** `f664a2e8f9714b9323808347678de976fe46cdd4` — *"Infere classificacao fato/reacao/opiniao no codigo e valida contra a uniao da materia"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 88 testes passando (incluindo `test_item25_infer_facts_reactions_and_opinions`)
 
@@ -318,4 +319,12 @@
 - `write_script`: o prompt agora pede ao modelo apenas `{"lines":[{"speaker":0,"text":"..."}]}` (removidos os campos `"fato"` e `"reacao"` das instruções e dos exemplos *few-shot*; mantidos os `fatos_da_materia` numerados no payload).
 - `annotate_lines(lines, facts, title='', log=print)`: classifica cada fala deterministicamente em `fato` ($\ge 2$ palavras de conteúdo ou $\ge 1$ número em comum com algum fato, registrando `matched_facts` para permitir combinação de fatos), `reacao` (até 6 palavras e nenhum dígito), ou `opiniao` (sem dígitos, sem entidades ausentes de fatos+título, máx. 14 palavras, máx. 3 por roteiro), logando `fala X: inferida como fato N` / `reação` / `opinião`.
 - `validate_lines`: valida números, quantidades (`_quantity_pairs`), entidades (`_missing_entities`) e `TEMPORAL_UNITS` contra a **união** de fatos + título + corpo da matéria (sem rejeições artificiais por índice de fato trocado ou fusão de fatos); exige pelo menos 4 fatos distintos usados (em 6+ falas) e verifica gancho respondido pela combinação das falas 2–3 (`texts[1:3]`).
-- **Próximo item:** ITEM 26 — Normalizar/reparar antes de rejeitar (`news_auto.py`).
+
+- [x] **ITEM 26 — Normalizar/reparar antes de rejeitar (`news_auto.py`)**: feito
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 89 testes passando (incluindo `test_item26_normalize_repair_and_line_bounds`)
+
+### Detalhes do ITEM 26
+- `normalize_lines(raw_or_lines, facts=None, title='', log=print, max_lines=12)`: converte `speaker` string (`"0"`/`"1"`) para `int`, descarta chaves estranhas deixando só `speaker`/`text`, remove reações no fim repetidamente, remove reações excedentes quando $> 3$ (mantendo até 2), une falas consecutivas do mesmo `speaker` quando $\le 22$ palavras (rejeitando se $> 22$) e remove reações/opiniões do meio quando $> 12$ falas, logando cada reparo (`"reparo: ..."`).
+- `turn_range()` e `validate_lines()` ajustados para faixa **6 a 12 falas**; média de palavras calculada exclusivamente sobre falas não-reação (rejeita se `< 5.0` e avisa entre `5.0` e `6.0`).
+- **Próximo item:** ITEM 27 — Política de retries (`news_auto.py`).

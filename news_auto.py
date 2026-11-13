@@ -1255,16 +1255,16 @@ def extract_facts(story, ask=None, log=print):
 
 
 def turn_range(story, max_words, previous=None):
-    """Define a faixa de falas (até 12) conforme o tamanho da matéria e o orçamento de palavras."""
+    """Define a faixa de falas (6 a 12) conforme o tamanho da matéria e o orçamento de palavras."""
     body_words = len(story.get('body', '').split())
-    cap = min(12, max(4, (max_words // 7) * 2))
+    cap = min(12, max(6, (max_words // 7) * 2))
     if previous is not None:
-        return 4, cap
+        return 6, cap
     if body_words >= 220 and max_words >= 85:
-        return min(8, cap), cap
+        return 6, cap
     if body_words >= 80 and max_words >= 60:
-        return min(6, cap), min(10, cap)
-    return 4, min(8, cap)
+        return 6, min(10, cap)
+    return 6, min(8, cap)
 
 
 FIXED_REACTIONS = [
@@ -1406,25 +1406,153 @@ def annotate_lines(lines, facts, title='', log=print):
     return annotated
 
 
-def validate_lines(raw, story, budget, loop=False, min_lines=8, max_lines=12, facts=None, log=print, repair_reactions_enabled=False):
+def normalize_lines(raw_or_lines, facts=None, title='', log=print, max_lines=12):
+    """Normaliza e repara falas antes da validação estrita.
+
+    - Converte speaker string ("0"/"1") para int e mantém apenas as chaves "speaker" e "text".
+    - Remove reação no fim repetidamente (while last is reaction: pop).
+    - Se houver mais de 3 reações, remove as excedentes mantendo até 2.
+    - Junta falas consecutivas do mesmo speaker se a junção tiver <= 22 palavras (senão rejeita).
+    - Se passar de max_lines (12), remove reações ou opiniões do meio em excesso.
+    """
+    is_dict = isinstance(raw_or_lines, dict)
+    if is_dict:
+        lines_in = raw_or_lines.get('lines')
+    elif isinstance(raw_or_lines, list):
+        lines_in = raw_or_lines
+    else:
+        return raw_or_lines
+
+    if not isinstance(lines_in, list):
+        return raw_or_lines
+
+    fact_list = [str(f) for f in (facts or []) if str(f).strip()]
+    fact_nums_list = [_allowed_numbers(f) for f in fact_list]
+
+    def _classify_kind(line, allow_reaction=True):
+        if not isinstance(line, dict) or not isinstance(line.get('text'), str):
+            return 'desconhecido'
+        cleaned = _clean_line_text(line['text'])
+        if not cleaned:
+            return 'vazio'
+        words = cleaned.split()
+        l_nums = _numbers(cleaned)
+        for f_txt, f_nums in zip(fact_list, fact_nums_list):
+            if _shared_content_count(cleaned, f_txt) >= 2 or (l_nums and (l_nums & f_nums)):
+                return 'fato'
+        if allow_reaction and len(words) <= 6 and not re.search(r'\d', cleaned):
+            return 'reacao'
+        return 'opiniao'
+
+    norm = []
+    for idx, item in enumerate(lines_in):
+        if not isinstance(item, dict):
+            norm.append(item)
+            continue
+        clean_item = {}
+        if 'speaker' in item:
+            sp = item['speaker']
+            if isinstance(sp, str) and sp.strip() in ('0', '1'):
+                sp = int(sp.strip())
+                log(f'reparo: speaker da fala {idx + 1} convertido para inteiro ({sp})')
+            clean_item['speaker'] = sp
+        if 'text' in item:
+            clean_item['text'] = item['text']
+        extra_keys = [k for k in item.keys() if k not in ('speaker', 'text')]
+        weird_keys = [k for k in extra_keys if k not in ('fato', 'reacao', 'opiniao')]
+        if weird_keys:
+            log(f'reparo: removidas chaves extras ({", ".join(sorted(weird_keys))})')
+        norm.append(clean_item)
+
+    # Remove reações no fim repetidamente
+    while len(norm) > 1 and _classify_kind(norm[-1], allow_reaction=True) == 'reacao':
+        norm.pop()
+        log('reparo: removida reação final')
+
+    # Se > 3 reações, remover reações em excesso (mantendo até 2)
+    reaction_indices = [i for i, l in enumerate(norm) if i > 0 and _classify_kind(l, allow_reaction=True) == 'reacao']
+    if len(reaction_indices) > 3:
+        to_drop = set(reaction_indices[2:])
+        for idx in sorted(to_drop, reverse=True):
+            norm.pop(idx)
+            log(f'reparo: removida reação em excesso (fala {idx + 1})')
+
+    # Só então, se falas consecutivas tiverem o mesmo speaker, unir se <= 22 palavras (senão rejeitar)
+    merged = []
+    for line in norm:
+        if (
+            merged
+            and isinstance(line, dict)
+            and isinstance(merged[-1], dict)
+            and isinstance(line.get('speaker'), int)
+            and not isinstance(line.get('speaker'), bool)
+            and line.get('speaker') in (0, 1)
+            and merged[-1].get('speaker') == line.get('speaker')
+            and isinstance(line.get('text'), str)
+            and isinstance(merged[-1].get('text'), str)
+        ):
+            t1 = _clean_line_text(merged[-1]['text']) or merged[-1]['text'].strip()
+            t2 = _clean_line_text(line['text']) or line['text'].strip()
+            combined = f'{t1} {t2}'.strip()
+            wc = len(combined.split())
+            if wc > 22:
+                raise ValueError(
+                    f'Falas consecutivas do mesmo speaker ({line["speaker"]}) excedem 22 palavras após tentativa de junção ({wc} palavras).'
+                )
+            merged[-1] = {'speaker': merged[-1]['speaker'], 'text': combined}
+            log(f'reparo: falas consecutivas do mesmo speaker ({merged[-1]["speaker"]}) unidas')
+        else:
+            merged.append(line)
+    norm = merged
+
+    # Se > max_lines (12), remover reações do meio (e depois opiniões do meio) até max_lines
+    while isinstance(max_lines, int) and len(norm) > max_lines and len(norm) > 2:
+        removed_idx = None
+        for kind in ('reacao', 'opiniao'):
+            cands = [i for i in range(1, len(norm) - 1) if _classify_kind(norm[i], allow_reaction=True) == kind]
+            if not cands:
+                continue
+            # Prefere índice cuja remoção não crie speakers consecutivos iguais
+            clean_cands = [
+                i for i in cands
+                if norm[i - 1].get('speaker') != norm[i + 1].get('speaker')
+            ]
+            removed_idx = clean_cands[-1] if clean_cands else cands[-1]
+            label = 'reação' if kind == 'reacao' else 'opinião'
+            norm.pop(removed_idx)
+            log(f'reparo: removida {label} do meio em excesso (total={len(norm)})')
+            break
+        if removed_idx is None:
+            break
+
+    if is_dict:
+        out = dict(raw_or_lines)
+        out['lines'] = norm
+        return out
+    return norm
+
+
+def validate_lines(raw, story, budget, loop=False, min_lines=6, max_lines=12, facts=None, log=print, repair_reactions_enabled=False, normalize=False):
     """Valida o roteiro contra a união de fatos, título e corpo da matéria (nunca contra manchetes relacionadas)."""
     if not story.get('body') and len(source_text(story).split()) < MIN_SOURCE_WORDS:
         # Se não tem corpo nem atinge a fonte mínima, só permite se for teste explícito de manchete com >= 6 palavras,
         # mas em pautas com source_type=='rss' exige corpo.
         if story.get('source_type') == 'rss' or len(source_text(story).split()) < 5:
             raise ValueError('Matéria sem corpo suficiente para validação.')
-    lines = raw.get('lines') if isinstance(raw, dict) else None
-    if repair_reactions_enabled and isinstance(lines, list):
-        repair_reactions(lines, log=log)
-    if not isinstance(lines, list) or not min_lines <= len(lines) <= max_lines:
-        raise ValueError(f'Entregue entre {min_lines} e {max_lines} falas em "lines" '
-                         f'(vieram {len(lines) if isinstance(lines, list) else 0}).')
     if facts is None:
         facts = story.get('extracted_facts') or story.get('fatos')
     if not facts:
         source_t = source_text(story)
         sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', source_t) if len(s.split()) >= 4]
         facts = sentences[:6] or [source_t or story.get('title', '')]
+    lines = raw.get('lines') if isinstance(raw, dict) else None
+    if repair_reactions_enabled and isinstance(lines, list):
+        repair_reactions(lines, log=log)
+    if normalize and isinstance(lines, list):
+        lines = normalize_lines(lines, facts=facts, title=story.get('title', ''), log=log, max_lines=max_lines)
+    if not isinstance(lines, list) or not min_lines <= len(lines) <= max_lines:
+        raise ValueError(f'Entregue entre {min_lines} e {max_lines} falas em "lines" '
+                         f'(vieram {len(lines) if isinstance(lines, list) else 0}).')
 
     texts = []
     for line in lines:
@@ -1449,9 +1577,6 @@ def validate_lines(raw, story, budget, loop=False, min_lines=8, max_lines=12, fa
     total = sum(len(t.split()) for t in texts)
     if total > budget:
         raise ValueError(f'O roteiro tem {total} palavras; o máximo é {budget}.')
-    avg_words = total / len(texts) if texts else 0
-    if min_lines >= 8 and avg_words < 6.0:
-        raise ValueError(f'Média de palavras por fala ({avg_words:.1f}) abaixo do mínimo de 6 palavras.')
     source = source_text(story)
     facts_joined = ' '.join(str(f) for f in facts)
     allowed_nums = _allowed_numbers(source)
@@ -1519,6 +1644,14 @@ def validate_lines(raw, story, budget, loop=False, min_lines=8, max_lines=12, fa
                 valid, msg = _match_quantity_rule(lq, union_quantities)
                 if not valid:
                     raise ValueError(f'Quantidade na fala {i + 1} não condiz com a matéria: {msg}')
+
+    if min_lines >= 6:
+        non_reaction_texts = [e['text'] for e in annotated if e['tipo'] != 'reacao']
+        avg_words = (sum(len(t.split()) for t in non_reaction_texts) / len(non_reaction_texts)) if non_reaction_texts else 0.0
+        if avg_words < 5.0:
+            raise ValueError(f'Média de palavras por fala ({avg_words:.1f}) abaixo do mínimo de 5 palavras.')
+        if avg_words < 6.0:
+            log(f'aviso: média de palavras por fala não-reação ({avg_words:.1f}) entre 5.0 e 6.0.')
 
     if FILLER_CLOSE.search(texts[-1]):
         raise ValueError(f'A última fala não pode ter fecho de enchimento ({FILLER_CLOSE.search(texts[-1]).group(0)}).')
@@ -1636,12 +1769,8 @@ def validate_lines(raw, story, budget, loop=False, min_lines=8, max_lines=12, fa
         if tail in {'porque', 'que', 'pois', 'como', 'quando', 'onde'} and not texts[-1].rstrip().endswith('?'):
             raise ValueError('A última fala não pode terminar cortada em uma ponte incompleta; feche com uma frase completa ou pergunta aberta.')
 
-    # Média mínima de 6 palavras por fala e validação do fecho
-    if min_lines >= 8:
-        avg_words = sum(len(t.split()) for t in texts) / len(texts) if texts else 0
-        if avg_words < 6.0:
-            raise ValueError(f'Média de palavras por fala ({avg_words:.1f}) abaixo do mínimo de 6 palavras.')
-
+    # Validação do fecho para roteiros completos (8+ falas)
+    if min_lines >= 8 or len(annotated) >= 8:
         last_text = texts[-1]
         if re.search(r'^\s*será\s+que\b', last_text, re.I):
             opinion_terms = {
@@ -2184,7 +2313,8 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
         repair_reactions(raw, log=log)
         raw_str = json.dumps(raw, ensure_ascii=False) if isinstance(raw, (dict, list)) else str(raw)
         try:
-            lines, problem = validate_lines(raw, story, max_words, loop, min_lines, max_lines, facts=facts, log=log)
+            raw_norm = normalize_lines(raw, facts=facts if facts else [source_text(story)], title=story.get('title', ''), log=log, max_lines=max_lines)
+            lines, problem = validate_lines(raw_norm, story, max_words, loop, min_lines, max_lines, facts=facts, log=log, normalize=False)
         except ValueError as exc:
             error = str(exc)
             motivo = _short_reason(error)

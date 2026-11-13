@@ -67,8 +67,8 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
                                 'O foco desse modelo é áudio de estúdio.', 'O modelo chega este mês.', 'É voltado a profissionais.']}
         bad = {'lines': [{'speaker': 0, 'text': 'Pagaria 50 mil reais num Walkman?', 'fato': 1}] + [{'speaker': 0, 'text': 'O aparelho custa 32 mil.', 'fato': 1}] * 5}
         good = {'lines': [{'speaker': 1, 'text': 'Naruto: Pagaria 32 mil reais num Walkman hoje?'},
-                          {'speaker': 1, 'text': 'R$ 32 mil é preço de carro!'},
-                          {'speaker': 0, 'text': 'A Sony lançou esse modelo focado em estúdio.'},
+                          {'speaker': 0, 'text': 'R$ 32 mil é preço de carro!'},
+                          {'speaker': 1, 'text': 'A Sony lançou esse modelo focado em estúdio.'},
                           {'speaker': 0, 'text': 'Ele chega este mês voltado a profissionais.'},
                           {'speaker': 1, 'text': 'Caramba, só colecionador!'},
                           {'speaker': 0, 'text': 'Você compraria o Walkman da Sony no Brasil?'}]}
@@ -191,20 +191,20 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
         ]}
         script_v1 = {'lines': [
             {'speaker': 0, 'text': 'Por que gastar 3,4 bilhões em geradores?', 'fato': 0},
-            {'speaker': 0, 'text': 'A Anthropic comprou tudo da Caterpillar.', 'fato': 1},
+            {'speaker': 1, 'text': 'A Anthropic comprou tudo da Caterpillar.', 'fato': 1},
             {'speaker': 0, 'text': 'A rede elétrica fica no Texas.', 'fato': 2},
-            {'speaker': 0, 'text': 'A energia vai até 2045 nos data centers.', 'fato': 3},
+            {'speaker': 1, 'text': 'A energia vai até 2045 nos data centers.', 'fato': 3},
             {'speaker': 0, 'text': 'O objetivo é abastecer data centers de IA.', 'fato': 4},
-            {'speaker': 0, 'text': 'Será que a Anthropic gastou 3,4 bilhões mesmo?', 'fato': 0}
+            {'speaker': 1, 'text': 'Será que a Anthropic gastou 3,4 bilhões mesmo?', 'fato': 0}
         ]}
         eval_low = {'nota': 5, 'problemas': ['Falas finais pouco espontâneas']}
         script_v2 = {'lines': [
             {'speaker': 0, 'text': 'Por que gastar 3,4 bilhões só em gerador?', 'fato': 0},
-            {'speaker': 0, 'text': 'Cara, a Anthropic comprou tudo da Caterpillar!', 'fato': 1},
+            {'speaker': 1, 'text': 'Cara, a Anthropic comprou tudo da Caterpillar!', 'fato': 1},
             {'speaker': 0, 'text': 'É que a rede elétrica do Texas não aguenta mais.', 'fato': 2},
-            {'speaker': 0, 'text': 'Eles garantiram energia até 2045 pros data centers.', 'fato': 3},
+            {'speaker': 1, 'text': 'Eles garantiram energia até 2045 pros data centers.', 'fato': 3},
             {'speaker': 0, 'text': 'Mano, é muita energia!', 'reacao': True},
-            {'speaker': 0, 'text': 'Será que vai faltar luz pro resto do estado?', 'fato': 2}
+            {'speaker': 1, 'text': 'Será que vai faltar luz pro resto do estado?', 'fato': 2}
         ]}
         eval_high = {'nota': 9, 'problemas': []}
         responses = iter([step1_facts, script_v1, eval_low, script_v2, eval_high])
@@ -271,9 +271,9 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
         self.assertAlmostEqual(line['words'][-1]['end'], 2.68, places=2)
 
     def test_turn_range_scales_with_article_context_up_to_12(self):
-        self.assertEqual(news_auto.turn_range({'title': 'Curta', 'body': ''}, 120), (4, 8))
+        self.assertEqual(news_auto.turn_range({'title': 'Curta', 'body': ''}, 120), (6, 8))
         self.assertEqual(news_auto.turn_range({'title': 'Média', 'body': 'palavra ' * 120}, 120), (6, 10))
-        self.assertEqual(news_auto.turn_range({'title': 'Rica', 'body': 'palavra ' * 350}, 140), (8, 12))
+        self.assertEqual(news_auto.turn_range({'title': 'Rica', 'body': 'palavra ' * 350}, 140), (6, 12))
 
     def test_voicestudio_reference_reuses_memory_cache_within_ttl(self):
         voice_studio._ref_cache.clear()
@@ -404,11 +404,11 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
         ], 'contradicao': 'Investimento recorde mas risco de falta de luz.', 'gancho': 'Por que gastar 3,4 bilhões só em gerador?'}
         script = {'lines': [
             {'speaker': 0, 'text': 'Por que gastar 3,4 bilhões só em gerador?', 'fato': 0},
-            {'speaker': 0, 'text': 'Cara, a Anthropic comprou tudo da Caterpillar!', 'fato': 1},
+            {'speaker': 1, 'text': 'Cara, a Anthropic comprou tudo da Caterpillar!', 'fato': 1},
             {'speaker': 0, 'text': 'É que a rede elétrica do Texas não aguenta mais.', 'fato': 2},
-            {'speaker': 0, 'text': 'Eles garantiram energia até 2045 pros data centers.', 'fato': 3},
+            {'speaker': 1, 'text': 'Eles garantiram energia até 2045 pros data centers.', 'fato': 3},
             {'speaker': 0, 'text': 'Mano, é muita energia!', 'reacao': True},
-            {'speaker': 0, 'text': 'Será que vai faltar luz pro resto do estado?', 'fato': 2}
+            {'speaker': 1, 'text': 'Será que vai faltar luz pro resto do estado?', 'fato': 2}
         ]}
         low_eval = {'nota': 5, 'problemas': [{'i': 1, 'trecho': 'comprou tudo da Caterpillar', 'tipo': 'informalidade', 'motivo': 'Diálogo pouco natural'}]}
         out_dir = Path(self.temp.name) / 'out_rej'
@@ -494,6 +494,8 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
             {'speaker': 0, 'text': 'Pagaria R$ 32 mil num Walkman novo?', 'fato': 1},
             {'speaker': 1, 'text': 'O preço oficial é de R$ 32 mil no Brasil.', 'fato': 1},
             {'speaker': 0, 'text': 'O modelo é focado em áudio de estúdio.', 'fato': 2},
+            {'speaker': 1, 'text': 'O público-alvo são profissionais de som.', 'fato': 3},
+            {'speaker': 0, 'text': 'O aparelho chegou ao mercado nacional.', 'fato': 4},
             {'speaker': 1, 'text': 'Vale pagar 32 mil pelo preço oficial?', 'fato': 1}
         ]}
         seq = iter([facts_resp, good, {'nota': 9, 'problemas': []}])
@@ -546,11 +548,11 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
         ], 'contradicao': 'Aparelho caro voltado a audiófilos.', 'gancho': 'Pagaria R$ 32 mil num Walkman novo?'}
         script_resp = {'lines': [
             {'speaker': 0, 'text': 'Pagaria R$ 32 mil num Walkman novo?'},
-            {'speaker': 0, 'text': 'O preço oficial é de R$ 32 mil no Brasil.'},
+            {'speaker': 1, 'text': 'O preço oficial é de R$ 32 mil no Brasil.'},
             {'speaker': 0, 'text': 'O foco é áudio de estúdio profissional.'},
-            {'speaker': 0, 'text': 'A venda no mercado nacional mira audiófilos!'},
+            {'speaker': 1, 'text': 'A venda no mercado nacional mira audiófilos!'},
             {'speaker': 0, 'text': 'Caramba, só colecionador!'},
-            {'speaker': 0, 'text': 'Vale pagar 32 mil nesse aparelho no Brasil?'}
+            {'speaker': 1, 'text': 'Vale pagar 32 mil nesse aparelho no Brasil?'}
         ]}
         seq = iter([
             facts_resp,
@@ -1457,10 +1459,12 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
     def test_item7_round2_writer_prompt_and_transparency(self):
         story = {
             'title': 'Brasil bate recorde e exporta 5,3 milhões de sacas de café em outubro',
-            'body': 'O Brasil exportou 5,3 milhões de sacas de café em outubro por US$ 1,786 bilhão. ' * 3,
+            'body': 'O Brasil exportou 5,3 milhões de sacas de café em outubro por US$ 1,786 bilhão, enquanto o preço médio caiu 9,5% e o conilon avançou no período. ' * 3,
             'extracted_facts': [
                 'O Brasil exportou 5,3 milhões de sacas de café em outubro.',
                 'A receita atingiu US$ 1,786 bilhão.',
+                'O preço médio caiu 9,5% no ano.',
+                'O conilon teve forte alta no período.',
             ]
         }
         lines = [
@@ -1468,6 +1472,8 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
             {'speaker': 1, 'text': 'Cara, isso tudo é impressionante!', 'reacao': True},
             {'speaker': 0, 'text': 'O Brasil exportou 5,3 milhões de sacas.', 'fato': 0},
             {'speaker': 1, 'text': 'A receita somou US$ 1,786 bilhão.', 'fato': 1},
+            {'speaker': 0, 'text': 'Mas o preço médio caiu 9,5% no ano.', 'fato': 2},
+            {'speaker': 1, 'text': 'E o conilon teve forte alta no período!', 'fato': 3},
         ]
 
         captured_instructions = []
@@ -1476,7 +1482,7 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
             return {'lines': lines}
 
         mock_judge = lambda i, p, m=None: (
-            {'falas': [{'i': idx, 'suportada': True, 'motivo': ''} for idx in range(4)]}
+            {'falas': [{'i': idx, 'suportada': True, 'motivo': ''} for idx in range(6)]}
             if 'checador de fatos' in i.lower() else
             {'nota': 8, 'problemas': []}
         )
@@ -1759,18 +1765,22 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
                     {'speaker': 1, 'text': 'O Webb detectou 25 novos exoplanetas e 277 asteroides!'},
                     {'speaker': 0, 'text': 'A Nasa observou galáxias e a missão durou três anos.'},
                     {'speaker': 1, 'text': 'Os cientistas analisaram amostras de poeira cósmica.'},
+                    {'speaker': 0, 'text': 'Vinte países parceiros integraram o projeto espacial.'},
+                    {'speaker': 1, 'text': 'E a temperatura no vácuo atingiu extremos.'},
                 ]}
             return {'lines': [
                 {'speaker': 0, 'text': 'O que o telescópio Webb detectou no espaço?'},
                 {'speaker': 1, 'text': 'O telescópio analisou dados durante 99 dias seguidos!'},
                 {'speaker': 0, 'text': 'A missão do James durou três anos no vácuo.'},
+                {'speaker': 1, 'text': 'Os cientistas analisaram amostras de poeira cósmica.'},
+                {'speaker': 0, 'text': 'O projeto envolveu vinte países parceiros.'},
                 {'speaker': 1, 'text': 'Será que acham vida nesses novos exoplanetas?'},
             ]}
 
-        mock_judge = lambda i, p, model=None: {'falas': [{'i': idx, 'suportada': True, 'motivo': ''} for idx in range(4)]} if 'checador de fatos' in i.lower() else {'nota': 8, 'responde_perguntas': True, 'contradiz_materia': False, 'problemas': []}
+        mock_judge = lambda i, p, model=None: {'falas': [{'i': idx, 'suportada': True, 'motivo': ''} for idx in range(6)]} if 'checador de fatos' in i.lower() else {'nota': 8, 'responde_perguntas': True, 'contradiz_materia': False, 'problemas': []}
 
         res2 = news_auto.write_script(story, max_words=80, ask=mock_writer_no_fact, judge_ask=mock_judge, facts=facts, log=logs_none.append)
-        self.assertEqual(len(res2), 4)
+        self.assertEqual(len(res2), 6)
         self.assertEqual(len(corrections_none), 1)
         corr2 = corrections_none[0]
         self.assertIn('Fala 2', corr2)
@@ -1813,7 +1823,7 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
             attempts_called.append(payload_str)
             num_lines = [1, 2, 3, 9, 10, 11, 12, 13][att_idx % 8]
             return {
-                'lines': [{'speaker': 0, 'text': f'Linha {i}', 'fato': 0} for i in range(num_lines)],
+                'lines': [{'speaker': i % 2, 'text': 'O telescópio Webb observou galáxias distantes na região.', 'fato': 0} for i in range(num_lines)],
                 'extra_debug_payload': 'x' * 5000,
             }
 
@@ -1966,12 +1976,14 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
                     {'speaker': 1, 'text': 'Caramba, eu não esperava por essa agora!', 'reacao': True},
                     {'speaker': 0, 'text': 'O Webb detectou 25 novos exoplanetas e 277 asteroides.', 'fato': 2},
                     {'speaker': 1, 'text': 'A Nasa fez a missão espacial por três anos!', 'fato': 1},
+                    {'speaker': 0, 'text': 'Os cientistas analisaram amostras de poeira cósmica.', 'fato': 3},
+                    {'speaker': 1, 'text': 'A Nasa observou galáxias distantes com detalhes!', 'fato': 0},
                 ]
             }
 
-        mock_judge = lambda i, p, model=None: {'falas': [{'i': idx, 'suportada': True, 'motivo': ''} for idx in range(4)]} if 'checador de fatos' in i.lower() else {'nota': 8, 'responde_perguntas': True, 'contradiz_materia': False, 'problemas': []}
+        mock_judge = lambda i, p, model=None: {'falas': [{'i': idx, 'suportada': True, 'motivo': ''} for idx in range(6)]} if 'checador de fatos' in i.lower() else {'nota': 8, 'responde_perguntas': True, 'contradiz_materia': False, 'problemas': []}
         out_lines = news_auto.write_script(story, max_words=80, ask=mock_writer_long_reaction, judge_ask=mock_judge, facts=story['extracted_facts'], log=logs_ws.append)
-        self.assertEqual(len(out_lines), 4)
+        self.assertEqual(len(out_lines), 6)
         self.assertIn('fala 2: reação reparada', logs_ws)
         self.assertEqual(out_lines[1]['text'], 'Caramba!')
 
@@ -2008,15 +2020,19 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
                     {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
                     {'speaker': 0, 'text': 'O Webb detectou 25 novos exoplanetas e 277 asteroides.', 'fato': 2},
                     {'speaker': 1, 'text': 'A missão espacial fez descobertas por três anos!', 'fato': 1},
+                    {'speaker': 0, 'text': 'Os cientistas analisaram amostras de poeira cósmica.', 'fato': 3},
+                    {'speaker': 1, 'text': 'A Nasa observou galáxias distantes.', 'fato': 0},
                 ]}
             return {'lines': [
                 {'speaker': 0, 'text': 'Quais exoplanetas o telescópio James Webb detectou?', 'fato': 0},
                 {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
                 {'speaker': 0, 'text': 'O Webb detectou 25 novos exoplanetas e 277 asteroides.', 'fato': 2},
                 {'speaker': 1, 'text': 'A missão espacial fez descobertas por três anos!', 'fato': 1},
+                {'speaker': 0, 'text': 'Os cientistas analisaram amostras de poeira cósmica.', 'fato': 3},
+                {'speaker': 1, 'text': 'A Nasa observou galáxias distantes.', 'fato': 0},
             ]}
 
-        mock_judge = lambda i, p, model=None: {'falas': [{'i': idx, 'suportada': True, 'motivo': ''} for idx in range(4)]} if 'checador de fatos' in i.lower() else {'nota': 8, 'responde_perguntas': True, 'contradiz_materia': False, 'problemas': []}
+        mock_judge = lambda i, p, model=None: {'falas': [{'i': idx, 'suportada': True, 'motivo': ''} for idx in range(6)]} if 'checador de fatos' in i.lower() else {'nota': 8, 'responde_perguntas': True, 'contradiz_materia': False, 'problemas': []}
 
         news_auto.write_script(story, max_words=80, ask=mock_writer_temp, judge_ask=mock_judge, facts=story['extracted_facts'])
         self.assertEqual(len(temperatures_received), 4)
@@ -2054,6 +2070,8 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
             {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
             {'speaker': 0, 'text': 'O Webb detectou 25 novos exoplanetas e 277 asteroides.', 'fato': 2},
             {'speaker': 1, 'text': 'A missão espacial fez descobertas por três anos!', 'fato': 1},
+            {'speaker': 0, 'text': 'Os cientistas analisaram amostras de poeira cósmica.', 'fato': 3},
+            {'speaker': 1, 'text': 'A Nasa observou galáxias distantes.', 'fato': 0},
         ]
         facts = [
             'O telescópio espacial James Webb da Nasa observou galáxias distantes.',
@@ -2076,10 +2094,7 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
         def ask_404_fallback(inst, payload, model=None):
             if model == 'qwen3:8b':
                 raise RuntimeError("Ollama local respondeu HTTP 404: modelo 'qwen3:8b' não instalado.")
-            return {'falas': [{'i': 0, 'suportada': True, 'motivo': ''},
-                              {'i': 1, 'suportada': True, 'motivo': ''},
-                              {'i': 2, 'suportada': True, 'motivo': ''},
-                              {'i': 3, 'suportada': True, 'motivo': ''}]}
+            return {'falas': [{'i': idx, 'suportada': True, 'motivo': ''} for idx in range(6)]}
 
         with patch.dict('os.environ', {'OLLAMA_MODEL': 'qwen3.5:4b', 'OLLAMA_JUDGE_MODEL': 'qwen3:8b'}):
             res_fb = news_auto.verificar_fatos(lines, facts, ask=ask_404_fallback, story=story_fallback, log=logs_404.append)
@@ -2160,20 +2175,30 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
             'O projeto custou bilhões de dólares e envolveu vinte países parceiros.',
         ]
 
-        # 1. Roteiro com menos de 8 falas (7 falas) é rejeitado pelo padrão min_lines=8
+        # 1. Roteiro com menos de 6 falas (5 falas) é rejeitado pelo padrão min_lines=6; 7 falas passa
+        script_5 = {'lines': [
+            {'speaker': 0, 'text': 'Você viu as descobertas do James Webb no espaço profundo?', 'fato': 0},
+            {'speaker': 1, 'text': 'Caramba, notícia sensacional!', 'reacao': True},
+            {'speaker': 0, 'text': 'O telescópio detectou 25 novos exoplanetas e 277 asteroides.', 'fato': 1},
+            {'speaker': 1, 'text': 'O telescópio James Webb teve apoio de vinte países parceiros.', 'fato': 2},
+            {'speaker': 0, 'text': 'Pra mim, esse projeto espacial é o futuro da ciência.', 'fato': 0},
+        ]}
+        with self.assertRaisesRegex(ValueError, r'Entregue entre 6 e 12 falas em "lines" \(vieram 5\)'):
+            news_auto.validate_lines(script_5, story, budget=80, facts=facts)
+
         script_7 = {'lines': [
             {'speaker': 0, 'text': 'Você viu as descobertas do James Webb no espaço profundo?', 'fato': 0},
             {'speaker': 1, 'text': 'Caramba, notícia sensacional!', 'reacao': True},
             {'speaker': 0, 'text': 'O telescópio detectou 25 novos exoplanetas e 277 asteroides.', 'fato': 1},
             {'speaker': 1, 'text': 'Sério mesmo?', 'reacao': True},
             {'speaker': 0, 'text': 'O telescópio James Webb teve apoio de vinte países parceiros.', 'fato': 2},
-            {'speaker': 1, 'text': 'Esse telescópio espacial é muito impressionante.', 'fato': 0},
+            {'speaker': 1, 'text': 'O telescópio James Webb fez grandes descobertas astronômicas!', 'fato': 0},
             {'speaker': 0, 'text': 'Pra mim, esse projeto espacial é o futuro da ciência.', 'fato': 0},
         ]}
-        with self.assertRaisesRegex(ValueError, r'Entregue entre 8 e 12 falas em "lines" \(vieram 7\)'):
-            news_auto.validate_lines(script_7, story, budget=80, facts=facts)
+        res7, _ = news_auto.validate_lines(script_7, story, budget=80, facts=facts)
+        self.assertEqual(len(res7), 7)
 
-        # 2. Roteiro com 8 falas mas média < 6 palavras por fala é rejeitado
+        # 2. Roteiro com 8 falas mas média < 5 palavras sobre falas não-reação é rejeitado
         script_short_words = {'lines': [
             {'speaker': 0, 'text': 'Viu o Webb no espaço?', 'fato': 0},
             {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
@@ -2184,7 +2209,7 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
             {'speaker': 0, 'text': 'Sim, vinte países ajudaram.', 'fato': 2},
             {'speaker': 1, 'text': 'Achei esse futuro muito bizarro.', 'fato': 0},
         ]}
-        with self.assertRaisesRegex(ValueError, r'Média de palavras por fala .* abaixo do mínimo de 6 palavras'):
+        with self.assertRaisesRegex(ValueError, r'Média de palavras por fala .* abaixo do mínimo de 5 palavras'):
             news_auto.validate_lines(script_short_words, story, budget=80, facts=facts)
 
         # 3. Fecho com "Será que ...?" genérico sem opinião é rejeitado
@@ -2651,6 +2676,113 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
         self.assertNotIn('"fato":', w_inst)
         self.assertNotIn('"reacao":', w_inst)
         self.assertTrue(all(f.startswith(f'{idx + 1}. ') for idx, f in enumerate(w_pay['fatos_da_materia'])))
+
+    def test_item26_normalize_repair_and_line_bounds(self):
+        facts = [
+            'A empresa Alpha construiu 12 usinas solares no Ceará.',
+            'O investimento total chegou a R$ 4,5 bilhões neste ano.',
+            'As novas usinas solares abastecem 800 mil casas na região.',
+            'O projeto elétrico gerou 3 mil empregos diretos locais.',
+            'O governo estadual acompanhou todas as obras das usinas.',
+        ]
+        story = {
+            'title': 'Ceará inaugura 12 usinas solares de R$ 4,5 bilhões',
+            'body': ' '.join(facts * 3),
+            'source_type': 'rss',
+            'extracted_facts': facts,
+        }
+
+        # 1. speaker string ("0"/"1"), chaves extras ("feito"), reação no fim, > 3 reações e junção <= 22 palavras
+        noisy = {
+            'lines': [
+                {'speaker': '0', 'text': 'Você viu as 12 usinas solares no Ceará?', 'feito': 1},
+                {'speaker': '1', 'text': 'Caramba!'},
+                {'speaker': '0', 'text': 'A Alpha construiu 12 usinas solares no Ceará.'},
+                {'speaker': '1', 'text': 'Sério mesmo?'},
+                {'speaker': '0', 'text': 'Investiram R$ 4,5 bilhões nas obras.'},
+                {'speaker': '0', 'text': 'Inacreditável!'},
+                {'speaker': '1', 'text': 'Elas abastecem 800 mil casas locais.'},
+                {'speaker': '0', 'text': 'Que loucura!'},
+                {'speaker': '0', 'text': 'Geraram 3 mil empregos diretos.'},
+                {'speaker': '0', 'text': 'E o governo acompanhou as obras.'},
+                {'speaker': '1', 'text': 'Não acredito.'},
+            ]
+        }
+        logs = []
+        norm = news_auto.normalize_lines(noisy, facts=facts, title=story['title'], log=logs.append)
+        norm_lines = norm['lines']
+        # Reação final removida, >3 reações podadas a 2, e falas consecutivas do speaker 0 unidas
+        self.assertTrue(all(set(l.keys()) == {'speaker', 'text'} for l in norm_lines))
+        self.assertTrue(all(isinstance(l['speaker'], int) for l in norm_lines))
+        self.assertTrue(any('reparo: removida reação final' in m for m in logs))
+        self.assertTrue(any('removida reação em excesso' in m for m in logs))
+        self.assertTrue(any('falas consecutivas do mesmo speaker (0) unidas' in m for m in logs))
+        self.assertTrue(any('removidas chaves extras (feito)' in m for m in logs))
+        res, prob = news_auto.validate_lines(norm, story, budget=140, facts=facts)
+        self.assertEqual(prob, '')
+        self.assertGreaterEqual(len(res), 6)
+
+        # 2. Falas consecutivas do mesmo speaker com > 22 palavras são rejeitadas
+        too_long_merge = {
+            'lines': [
+                {'speaker': 0, 'text': 'A empresa Alpha construiu exatamente doze grandes usinas solares importantes na região do Ceará inteiro neste ano.'},
+                {'speaker': 0, 'text': 'Além disso, todo o investimento total dessa empresa chegou a R$ 4,5 bilhões com foco em energia limpa regional.'},
+            ]
+        }
+        with self.assertRaisesRegex(ValueError, 'excedem 22 palavras'):
+            news_auto.normalize_lines(too_long_merge, facts=facts, title=story['title'])
+
+        # 3. > 12 falas remove reações/opiniões do meio até 12
+        over_12 = {
+            'lines': [
+                {'speaker': 0, 'text': 'Viu as 12 usinas solares no Ceará?', 'feito': 'x'},
+                {'speaker': 1, 'text': 'Caramba!'},
+                {'speaker': 0, 'text': 'A empresa Alpha construiu 12 usinas solares no Ceará.'},
+                {'speaker': 1, 'text': 'Isso parece uma iniciativa muito interessante para todos nós.'},
+                {'speaker': 0, 'text': 'O investimento total chegou a R$ 4,5 bilhões neste ano.'},
+                {'speaker': 1, 'text': 'Sério mesmo?'},
+                {'speaker': 0, 'text': 'As novas usinas solares abastecem 800 mil casas na região.'},
+                {'speaker': 1, 'text': 'Tomara que ajude bastante gente por lá agora.'},
+                {'speaker': 0, 'text': 'O projeto elétrico gerou 3 mil empregos diretos locais.'},
+                {'speaker': 1, 'text': 'Emprego faz toda diferença para qualquer cidade crescer bem.'},
+                {'speaker': 0, 'text': 'O governo estadual acompanhou todas as obras das usinas.'},
+                {'speaker': 1, 'text': 'As usinas solares mudam muito a matriz elétrica do Ceará.'},
+                {'speaker': 0, 'text': 'O investimento de 4,5 bilhões garante energia limpa.'},
+                {'speaker': 1, 'text': 'Sem apoio do governo seria difícil tirar isso do papel.'},
+            ]
+        }
+        norm12 = news_auto.normalize_lines(over_12, facts=facts, title=story['title'], log=lambda *a: None, max_lines=12)
+        self.assertLessEqual(len(norm12['lines']), 12)
+
+        # 4. Média sobre não-reação: 5.0–6.0 aceita com aviso; < 5.0 rejeitada
+        avg_54 = {
+            'lines': [
+                {'speaker': 0, 'text': 'Ceará ganhou 12 usinas solares?'},       # 5
+                {'speaker': 1, 'text': 'Caramba!'},                              # reacao (ignorada na média)
+                {'speaker': 0, 'text': 'Sim, 12 usinas por 4,5 bilhões.'},       # 6 (responde gancho!)
+                {'speaker': 1, 'text': 'Usinas abastecem 800 mil casas.'},       # 5
+                {'speaker': 0, 'text': 'Geraram 3 mil empregos diretos.'},       # 5
+                {'speaker': 1, 'text': 'Governo acompanhou obras das usinas.'},  # 5
+                {'speaker': 0, 'text': 'Usinas solares mudaram bastante coisa por lá.'},  # 7 -> 33/6 = 5.50 (opinião >6 palavras)
+            ]
+        }
+        warn_logs = []
+        res_54, _ = news_auto.validate_lines(avg_54, story, budget=120, facts=facts, log=warn_logs.append)
+        self.assertEqual(len(res_54), 7)
+        self.assertTrue(any('entre 5.0 e 6.0' in m for m in warn_logs))
+
+        avg_48 = {
+            'lines': [
+                {'speaker': 0, 'text': '12 usinas no Ceará?'},                   # 4
+                {'speaker': 1, 'text': 'Caramba!'},                              # reacao
+                {'speaker': 0, 'text': 'Alpha gastou 4,5 bilhões.'},             # 4
+                {'speaker': 1, 'text': 'Abastecem 800 mil casas.'},              # 4
+                {'speaker': 0, 'text': '3 mil empregos diretos.'},               # 4
+                {'speaker': 1, 'text': 'Governo acompanhou essas obras.'},        # 4
+            ]
+        }
+        with self.assertRaisesRegex(ValueError, 'abaixo do mínimo de 5 palavras'):
+            news_auto.validate_lines(avg_48, story, budget=120, facts=facts)
 
 
 if __name__ == '__main__':
