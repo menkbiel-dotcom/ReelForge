@@ -2037,9 +2037,9 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
         news_auto.write_script(story, max_words=80, ask=mock_writer_temp, judge_ask=mock_judge, facts=story['extracted_facts'])
         self.assertEqual(len(temperatures_received), 4)
         self.assertEqual(temperatures_received[0], 0.55)
-        self.assertEqual(temperatures_received[1], 0.55)
+        self.assertEqual(temperatures_received[1], 0.60)
         self.assertEqual(temperatures_received[2], 0.65)
-        self.assertEqual(temperatures_received[3], 0.75)
+        self.assertEqual(temperatures_received[3], 0.70)
         self.assertTrue(len(corrections_received) >= 1)
         self.assertIn('Exemplo', corrections_received[0])
 
@@ -2783,6 +2783,72 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
         }
         with self.assertRaisesRegex(ValueError, 'abaixo do mínimo de 5 palavras'):
             news_auto.validate_lines(avg_48, story, budget=120, facts=facts)
+
+    def test_item27_retry_policy_cap_and_low_temp_on_malformed_json(self):
+        facts = [
+            'A empresa Alpha construiu 12 usinas solares no Ceará.',
+            'O investimento total chegou a R$ 4,5 bilhões neste ano.',
+            'As novas usinas solares abastecem 800 mil casas na região.',
+            'O projeto elétrico gerou 3 mil empregos diretos locais.',
+        ]
+        story = {
+            'title': 'Ceará inaugura 12 usinas solares de R$ 4,5 bilhões',
+            'body': ' '.join(facts * 3),
+            'source_type': 'rss',
+            'extracted_facts': facts,
+        }
+        valid_lines = [
+            {'speaker': 0, 'text': 'Viu as 12 usinas solares no Ceará?'},
+            {'speaker': 1, 'text': 'A Alpha construiu 12 usinas por R$ 4,5 bilhões!'},
+            {'speaker': 0, 'text': 'O investimento total chegou a R$ 4,5 bilhões neste ano.'},
+            {'speaker': 1, 'text': 'Elas abastecem 800 mil casas lá na região.'},
+            {'speaker': 0, 'text': 'O projeto elétrico gerou 3 mil empregos diretos locais.'},
+            {'speaker': 1, 'text': 'Isso muda completamente a energia daquela região inteira!'},
+        ]
+        mock_judge = lambda i, p, m=None: (
+            {'falas': [{'i': idx, 'suportada': True, 'motivo': ''} for idx in range(6)]}
+            if 'checador de fatos' in i.lower() else {'nota': 9, 'problemas': []}
+        )
+
+        # 1. JSON quebrado (JSONDecodeError) e chaves estranhas acionam temp=0.4 e formato exato na correção
+        temps_1 = []
+        corrs_1 = []
+        def mock_ask_malformed(inst, payload_str, temperature=None):
+            temps_1.append(temperature)
+            payload = json.loads(payload_str)
+            if 'correcao' in payload:
+                corrs_1.append(payload['correcao'])
+            step = len(temps_1)
+            if step == 1:
+                raise json.JSONDecodeError('Expecting value', '{"lines": [', 10)
+            if step == 2:
+                return {'resultado': [{'speaker': 0, 'feito': 'Texto com chave errada'}]}
+            if step == 3:
+                return {'lines': [{'speaker': 0, 'text': f'Viu as 12 usinas solares{" extra" * 8}?'}] + valid_lines[1:]}
+            return {'lines': valid_lines}
+
+        res1 = news_auto.write_script(story, max_words=120, ask=mock_ask_malformed, judge_ask=mock_judge, facts=facts)
+        self.assertEqual(len(res1), 6)
+        # tentativa 1=0.55 (JSON quebrado), 2=0.4 (chaves estranhas), 3=0.4 (erro normal), 4=0.70 (ou <=0.7: min(0.7, 0.55 + 3*0.05) = 0.70)
+        self.assertEqual(temps_1, [0.55, 0.4, 0.4, 0.7])
+        self.assertIn('{"lines":[{"speaker":0,"text":"..."}]}', corrs_1[0])
+        self.assertIn('{"lines":[{"speaker":0,"text":"..."}]}', corrs_1[1])
+
+        # 2. Escalada de temperatura +0.05 por retry com teto máximo em 0.7
+        temps_2 = []
+        def mock_ask_cap(inst, payload_str, temperature=None):
+            temps_2.append(temperature)
+            step = len(temps_2)
+            if step < 7:
+                # Erros distintos de tamanho/número para não acionar erro repetido 3x
+                bad_num = 700 + step
+                return {'lines': [{'speaker': 0, 'text': f'Viu as {bad_num} usinas no Ceará?'}] + valid_lines[1:]}
+            return {'lines': valid_lines}
+
+        res2 = news_auto.write_script(story, max_words=120, ask=mock_ask_cap, judge_ask=mock_judge, facts=facts)
+        self.assertEqual(len(res2), 6)
+        self.assertEqual(temps_2, [0.55, 0.6, 0.65, 0.7, 0.7, 0.7, 0.7])
+        self.assertTrue(all(t <= 0.7 for t in temps_2))
 
 
 if __name__ == '__main__':

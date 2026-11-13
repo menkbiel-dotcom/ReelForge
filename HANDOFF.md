@@ -321,10 +321,20 @@
 - `validate_lines`: valida números, quantidades (`_quantity_pairs`), entidades (`_missing_entities`) e `TEMPORAL_UNITS` contra a **união** de fatos + título + corpo da matéria (sem rejeições artificiais por índice de fato trocado ou fusão de fatos); exige pelo menos 4 fatos distintos usados (em 6+ falas) e verifica gancho respondido pela combinação das falas 2–3 (`texts[1:3]`).
 
 - [x] **ITEM 26 — Normalizar/reparar antes de rejeitar (`news_auto.py`)**: feito
+  - **Commit:** `34df47c2372bc0c68e57a00b798ab359d3caecc1` — *"Normaliza e repara falas antes de validar (faixa 6-12 e media nao-reacao)"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 89 testes passando (incluindo `test_item26_normalize_repair_and_line_bounds`)
 
 ### Detalhes do ITEM 26
 - `normalize_lines(raw_or_lines, facts=None, title='', log=print, max_lines=12)`: converte `speaker` string (`"0"`/`"1"`) para `int`, descarta chaves estranhas deixando só `speaker`/`text`, remove reações no fim repetidamente, remove reações excedentes quando $> 3$ (mantendo até 2), une falas consecutivas do mesmo `speaker` quando $\le 22$ palavras (rejeitando se $> 22$) e remove reações/opiniões do meio quando $> 12$ falas, logando cada reparo (`"reparo: ..."`).
 - `turn_range()` e `validate_lines()` ajustados para faixa **6 a 12 falas**; média de palavras calculada exclusivamente sobre falas não-reação (rejeita se `< 5.0` e avisa entre `5.0` e `6.0`).
-- **Próximo item:** ITEM 27 — Política de retries (`news_auto.py`).
+
+- [x] **ITEM 27 — Política de retries (`news_auto.py`)**: feito
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 90 testes passando (incluindo `test_item27_retry_policy_cap_and_low_temp_on_malformed_json`)
+
+### Detalhes do ITEM 27
+- Temperatura em `write_script`: escala suavemente de `0.55` aumentando `+0.05` por tentativa até o teto de `0.7` (`min(0.7, round(0.55 + (attempt - 1) * 0.05, 2))`), nunca subindo até `0.9`.
+- Se a resposta anterior vier com `JSONDecodeError` ou estrutura malformada (`_is_malformed_script_response`: falta `"lines"`, não é lista, itens não-objeto ou falta `"speaker"`/`"text"`), força temperatura `0.4` na tentativa seguinte e inclui o esquema JSON exato (`_EXACT_SCRIPT_SCHEMA`) na correção.
+- Mantido o aborto antecipado após 3 repetições consecutivas do mesmo erro curto.
+- **Próximo item:** ITEM 28 — Guardas de qualidade textual (`news_auto.py`).

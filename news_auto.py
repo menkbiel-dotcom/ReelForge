@@ -2206,6 +2206,28 @@ def _add_concrete_example(error_msg):
     return err
 
 
+def _is_malformed_script_response(raw):
+    """Detecta resposta fora do esquema esperado (não-dict, sem 'lines' ou com chaves estranhas)."""
+    if not isinstance(raw, dict):
+        return True
+    if any(k != 'lines' for k in raw.keys()):
+        return True
+    lines = raw.get('lines')
+    if not isinstance(lines, list) or not lines:
+        return True
+    for item in lines:
+        if not isinstance(item, dict):
+            return True
+        if 'text' not in item or not isinstance(item.get('text'), str) or 'speaker' not in item:
+            return True
+        if any(k not in ('speaker', 'text', 'fato', 'reacao', 'opiniao') for k in item.keys()):
+            return True
+    return False
+
+
+_EXACT_SCRIPT_SCHEMA = '{"lines":[{"speaker":0,"text":"..."}]}'
+
+
 def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, loop=None,
                  facts=None, accept_low_score=None, log=print, judge_ask=None):
     """Passo 1 (extrai 5-6 fatos) -> Passo 2 (escreve diálogo usando só os fatos) -> Filtro de qualidade (nota >= 7)."""
@@ -2302,21 +2324,54 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
     attempts_history = []
     last_val_error = None
     repeat_count = 0
+    force_low_temp = False
     for attempt in range(1, max_attempts + 1):
         if error:
             payload['correcao'] = _add_concrete_example(error)
-        temp = 0.55 if attempt <= 2 else min(0.9, round(0.55 + (attempt - 2) * 0.1, 2))
+        temp = 0.4 if force_low_temp else min(0.7, round(0.55 + (attempt - 1) * 0.05, 2))
+        force_low_temp = False
+        raw = None
+        json_err = None
         try:
-            raw = ask(instruction, json.dumps(payload, ensure_ascii=False), temperature=temp)
-        except TypeError:
-            raw = ask(instruction, json.dumps(payload, ensure_ascii=False))
-        repair_reactions(raw, log=log)
+            try:
+                raw = ask(instruction, json.dumps(payload, ensure_ascii=False), temperature=temp)
+            except TypeError:
+                raw = ask(instruction, json.dumps(payload, ensure_ascii=False))
+        except json.JSONDecodeError as exc:
+            json_err = exc
+            raw = getattr(exc, 'doc', str(exc))
         raw_str = json.dumps(raw, ensure_ascii=False) if isinstance(raw, (dict, list)) else str(raw)
+        if json_err is not None:
+            force_low_temp = True
+            error = f'JSON inválido ou truncado ({str(json_err)[:120]}). Use exatamente o formato: {_EXACT_SCRIPT_SCHEMA}'
+            motivo = _short_reason(error)
+            if motivo == last_val_error:
+                repeat_count += 1
+            else:
+                last_val_error = motivo
+                repeat_count = 1
+            attempts_history.append({
+                'tentativa': attempt,
+                'resposta_bruta': raw_str[:4000],
+                'erro': error,
+                'erro_validacao': error,
+            })
+            log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
+            if repeat_count >= 3:
+                log(f'erro repetido 3x: {motivo}')
+                falha_path = _save_failure_log(story, facts, attempts_history)
+                raise RuntimeError(f'Não foi possível gerar um roteiro válido (erro repetido 3x: {motivo}). Detalhes em {falha_path}')
+            continue
+        repair_reactions(raw, log=log)
         try:
             raw_norm = normalize_lines(raw, facts=facts if facts else [source_text(story)], title=story.get('title', ''), log=log, max_lines=max_lines)
             lines, problem = validate_lines(raw_norm, story, max_words, loop, min_lines, max_lines, facts=facts, log=log, normalize=False)
         except ValueError as exc:
             error = str(exc)
+            if _is_malformed_script_response(raw):
+                force_low_temp = True
+                if _EXACT_SCRIPT_SCHEMA not in error:
+                    error = f'{error} Use exatamente o formato: {_EXACT_SCRIPT_SCHEMA}'
             motivo = _short_reason(error)
             if motivo == last_val_error:
                 repeat_count += 1
