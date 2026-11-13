@@ -360,10 +360,25 @@
 - **Filtro DURO de tema (`_topic_keywords` / `_matches_topic` / `CATEGORY_EXTRA_KEYWORDS`):** quando houver $\ge 3$ pautas compatíveis com o tema especificado em `gather_candidates()` ou `pick_story(..., topic=...)`, descarta pautas fora do tema e loga `"tema 'X': N pautas compatíveis; usando as M melhores"`.
 
 - [x] **ITEM 30 — Estilo do redator (`news_auto.py`)**: feito
+  - **Commit:** `9edf61c10e2f43b114de3a153d9a3846224591dd` — *"Reforca estilo de Sasuke/Naruto no prompt e substitui exemplos por roteiro completo de 10 falas"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 93 testes passando (incluindo `test_item30_writer_style_prompt_and_ten_line_example`)
 
 ### Detalhes do ITEM 30
 - **Prompt de persona e substância em `write_script()`:** define explicitamente **Sasuke (`0`)** como seco, irônico e direto ao ponto, e **Naruto (`1`)** como curioso, que faz perguntas e dá opinião curta apoiada em fato da matéria — reação curta é opcional (máximo 2, nunca enchimento do Naruto). Exige que toda fala traga informação factual nova, pergunta baseada em fato ou opinião curta apoiada em fato.
 - **Exemplos fictícios (`few_shot` e `_EXAMPLE_LEAK_PHRASES`):** limpos de reações vazias/chavões, incluindo um roteiro fictício completo de **10 falas** (`Exemplo 3:`) sem reações vazias nem bordões reutilizáveis, mantendo a cobertura de `FICTIONAL_EXAMPLE_TERMS` e `_PROMPT_EXAMPLE_5GRAMS`.
-- **Próximo item:** Teste de regressão com os 6 arquivos reais em `tests/fixtures/real_failures/` (`tests/test_news_auto.py`).
+
+- [x] **TESTE DE REGRESSÃO COM DADOS REAIS (`tests/fixtures/real_failures/`, `tests/test_news_auto.py`)**: feito
+  - **Arquivos tocados:** `tests/fixtures/real_failures/falha_roteiro_*.json` (6 arquivos, 46 tentativas), `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 94 testes passando (incluindo `test_real_failures_regression_six_logs_forty_six_attempts`)
+
+### Resultado do Reprocessamento das 46 Tentativas Reais
+- **Taxa no novo pipeline (`parse -> repair_reactions -> normalize_lines -> annotate_lines -> validate_lines`, sem Ollama):** **`0/46` aprovadas (0.0%)**, **`46/46` reprovadas (100.0%)**.
+- **Casos específicos garantidos reprovados:** `"34 milhões de sacas"` (`222338` #5 e #6), `"Puta que pariu"` (`222422` #5 -> `"linguagem imprópria"`), `"investir bilhões nisso sem testar antes"` (`222526` #8 -> falha na junção em `normalize_lines` e também em `"trecho copiado dos exemplos"` na `validate_lines`), `"2026-27"` (`215501` #3 -> rejeitada em `normalize_lines` e `Números ausentes na matéria: 27` em `validate_lines`), além de JSONs truncados/malformados.
+- **Investigação dos motivos dominantes (> 60% reprovados, sem afrouxar nenhuma regra):** nenhuma tentativa antiga falhou mais por contabilidade `"fato": N` nem média `[5.0, 6.0)`. Os motivos dominantes das 46 reprovações foram:
+  1. `Falas consecutivas do mesmo speaker (0) excedem 22 palavras` após junção: **10/46 (21,7%)** — modelo gerou turnos consecutivos longos pelo mesmo personagem (23–36 palavras somadas).
+  2. `o gancho não foi respondido`: **9/46 (19,6%)** — as falas 2–3 dos roteiros antigos não respondiam à pergunta da fala 1.
+  3. `Roteiro genérico. Inclua pelo menos 4 detalhes concretos`: **8/46 (17,4%)** — ausência de números/entidades suficientes da fonte.
+  4. `O roteiro tem 3 falas de reação; o limite é no máximo 2`: **7/46 (15,2%)** — `normalize_lines()` remove excedentes apenas quando `> 3` (mantendo exatamente 2), deixando o caso de 3 reações ser barrado na validação.
+  5. Outros motivos reais (**12/46**): `< 6` falas (`2`), magnitude ausente (`2`), número inventado (`1`), trecho copiado dos exemplos (`1`), linguagem imprópria (`1`), entidade ausente (`1`), telejornal (`1`), >50% perguntas (`1`), fecho repetido / `"Será que ...?"` (`2`).
+- **Status:** Rodada 7 concluída por completo (Itens 25 a 30 + regressão real + verificação dupla da suíte com isolamento do `output/`).

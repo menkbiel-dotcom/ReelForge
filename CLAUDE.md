@@ -65,9 +65,9 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
 - O script `publicar_github.py` cria/atualiza o repositório como **privado por padrão** (use `--publico` para público), lê o token exclusivamente de `GITHUB_TOKEN` ou `getpass` (sem argumento `--token` e sem eco no terminal) e faz push sem `force`.
 - Testes que utilizam áudios de demonstração sintetizam automaticamente um WAV silencioso via módulo padrão `wave` quando o arquivo local não existir.
 
-## Suíte de Testes (93 Testes)
+## Suíte de Testes (94 Testes)
 
-- `tests/test_news_auto.py` (61 testes) e `tests/test_integration.py` (32 testes) — totalizando **93 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes). Todas as classes de teste herdam `IsolatedOutputMixin` (`tests/_isolation.py`), que faz patch de `engine.OUTPUT` para diretório temporário em `setUp` e garante via `test_item20_isolated_output_guard` que nenhum arquivo seja gravado em `output/` real. Destrutor `App.destroy()` cancela `_poll_id` e testes GUI coletam objetos na thread principal.
+- `tests/test_news_auto.py` (62 testes) e `tests/test_integration.py` (32 testes) — totalizando **94 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes), além de `tests/fixtures/real_failures/` com os 6 arquivos reais (46 tentativas) validados em regressão offline. Todas as classes de teste herdam `IsolatedOutputMixin` (`tests/_isolation.py`), que faz patch de `engine.OUTPUT` para diretório temporário em `setUp` e garante via `test_item20_isolated_output_guard` que nenhum arquivo seja gravado em `output/` real. Destrutor `App.destroy()` cancela `_poll_id` e testes GUI coletam objetos na thread principal.
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'

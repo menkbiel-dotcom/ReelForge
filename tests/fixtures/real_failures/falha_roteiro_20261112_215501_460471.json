@@ -1,0 +1,69 @@
+{
+  "titulo": "‘Super El Niño’ existe? Entenda como a ciência mede a força do fenômeno e por que o termo divide especialistas",
+  "fatos": [
+    "O El Niño de 2026-2027 é chamado por pesquisadores de 'super El Niño'.",
+    "A intensidade do fenômeno é medida pela temperatura das águas da região central-leste do Pacífico equatorial (Niño 3.4).",
+    "Uma anomalia de +2 °C marca o último patamar da escala oficial usada pela agência NOAA.",
+    "Desde 1950, apenas quatro eventos chegaram a esse nível: 1982-83, 1997-98, 2015-16 e o atual.",
+    "O Índice Oceânico Niño Relativo (RONI) chegou a +2,0 °C no trimestre de agosto a outubro.",
+    "Medições semanais superiores a +3 °C foram registradas entre outubro e novembro."
+  ],
+  "fatos_extraidos": [
+    "O El Niño de 2026-2027 é chamado por pesquisadores de 'super El Niño'.",
+    "A intensidade do fenômeno é medida pela temperatura das águas da região central-leste do Pacífico equatorial (Niño 3.4).",
+    "Uma anomalia de +2 °C marca o último patamar da escala oficial usada pela agência NOAA.",
+    "Desde 1950, apenas quatro eventos chegaram a esse nível: 1982-83, 1997-98, 2015-16 e o atual.",
+    "O Índice Oceânico Niño Relativo (RONI) chegou a +2,0 °C no trimestre de agosto a outubro.",
+    "Medições semanais superiores a +3 °C foram registradas entre outubro e novembro."
+  ],
+  "tentativas": [
+    {
+      "tentativa": 1,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Por que 'super El Niño' não tem categoria oficial?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Mano, parece uma teoria da conspiração!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A NOAA usa +2 °C como o último patamar.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Mas a água já bateu em mais de três graus.\", \"fato\": 5}, {\"speaker\": 0, \"text\": \"Somente quatro eventos na história chegaram lá.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Eles só medem a força no Pacífico central.\", \"fato\": 1}, {\"speaker\": 0, \"text\": \"Medições semanais passaram de +3 °C agora.\", \"fato\": 5}, {\"speaker\": 1, \"text\": \"Cara!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A ciência precisa atualizar a escala rapidamente.\", \"fato\": 2}]}",
+      "erro": "o gancho não foi respondido",
+      "erro_validacao": "o gancho não foi respondido"
+    },
+    {
+      "tentativa": 2,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Por que 'super El Niño' não tem categoria oficial?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Mano, parece uma loucura científica!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A NOAA usa +2°C como o último patamar.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Desde 1950, só quatro eventos chegaram lá.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"O RONI bateu +2 no último trimestre.\", \"fato\": 4}, {\"speaker\": 0, \"text\": \"Eles medem a força pela temperatura do Pacífico.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Quatro vezes na história!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A ciência ainda debate o limite exato oficial.\", \"fato\": 5}]}",
+      "erro": "O roteiro tem 3 falas de reação; o limite é no máximo 2 por roteiro.",
+      "erro_validacao": "O roteiro tem 3 falas de reação; o limite é no máximo 2 por roteiro."
+    },
+    {
+      "tentativa": 3,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Por que 'super El Niño' não tem categoria oficial?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Mano, parece uma loucura científica!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O El Niño de 2026-27 já é chamado de super.\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Será que alguém mediu isso mesmo?\", \"fato\": 0}, {\"speaker\": 0, \"text\": \"A NOAA usa +2 graus como o último patamar.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Medições acima de +3 já foram registradas.\", \"fato\": 5}, {\"speaker\": 1, \"text\": \"Isso viola totalmente o limite oficial!\", \"fato\": 2}, {\"speaker\": 0, \"text\": \"Desde 1950, apenas quatro eventos chegaram lá.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Sério mesmo?\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A ciência precisa definir se esse é novo ou raro.\", \"fato\": 0}]}",
+      "erro": "Fala 3 (\"O El Niño de 2026-27 já é chamado de super.\"): Números ausentes na matéria: 27. nenhum fato contém estes números: não os use.",
+      "erro_validacao": "Fala 3 (\"O El Niño de 2026-27 já é chamado de super.\"): Números ausentes na matéria: 27. nenhum fato contém estes números: não os use."
+    },
+    {
+      "tentativa": 4,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Por que 'super El Niño' não tem categoria oficial?\", \"fato\": null}, {\"speaker\": 1, \"text\": \"Mano!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Pesquisadores já chamam o evento de super.\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Mas a NOAA não reconhece essa categoria?\", \"fato\": null}, {\"speaker\": 0, \"text\": \"O limite oficial usa +2 graus como teto.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O RONI bateu +2 no último trimestre.\", \"fato\": 5}, {\"speaker\": 1, \"text\": \"Desde 1950 só quatro eventos nesse nível!\", \"fato\": 3}, {\"speaker\": 0, \"text\": \"A anomalia supera o patamar padrão antigo.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Sério mesmo?\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Se o teto é +2, quem aceita +3 hoje?\", \"fato\": null}, {\"speaker\": 1, \"text\": \"O termo existe na prática mas não no papel.\", \"fato\": 0}]}",
+      "erro": "A fala 1 deve indicar \"fato\": N ou \"reacao\": true.",
+      "erro_validacao": "A fala 1 deve indicar \"fato\": N ou \"reacao\": true."
+    },
+    {
+      "tentativa": 5,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Por que 'super El Niño' não tem categoria oficial?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Mano!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A anomalia de dois graus marca o limite atual da NOAA.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Então como medem tanta temperatura lá no Pacífico?\", \"fato\": 1}, {\"speaker\": 0, \"text\": \"Medem a região central-leste equatorial do oceano.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Caramba, só quatro eventos na história superam isso.\", \"fato\": 3}, {\"speaker\": 0, \"text\": \"Mesmo com medições acima de três graus registradas.\", \"fato\": 5}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A ciência atual já aponta para um novo patamar térmico.\", \"fato\": 6}]}",
+      "erro": "Índice de fato fora da faixa (0..5): 6",
+      "erro_validacao": "Índice de fato fora da faixa (0..5): 6"
+    },
+    {
+      "tentativa": 6,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Por que 'super El Niño' não tem categoria oficial?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Mano, parece uma loucura!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Eles medem com a temperatura do mar no Pacífico.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Mas o que define o limite exato?\", \"fato\": 2}, {\"speaker\": 0, \"text\": \"Na verdade +2 graus marca o teto da norma.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Desde 1950 só vieram quatro vezes nesse nível.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Mas já mediram mais de três graus lá em cima?\", \"fato\": 5}]}",
+      "erro": "Fala 5 (\"Na verdade +2 graus marca o teto da norma.\"): A fala citou números ausentes no fato 3 (ou título): 2. o fato 2 contém estes números: \"Uma anomalia de +2 °C marca o último patamar da escala oficial usada pela agência NOAA.\".",
+      "erro_validacao": "Fala 5 (\"Na verdade +2 graus marca o teto da norma.\"): A fala citou números ausentes no fato 3 (ou título): 2. o fato 2 contém estes números: \"Uma anomalia de +2 °C marca o último patamar da escala oficial usada pela agência NOAA.\"."
+    },
+    {
+      "tentativa": 7,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Por que 'super El Niño' não tem categoria oficial?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Cara, parece uma loucura científica.\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A NOAA usa +2 graus como o último patamar da escala.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Mas se passamos disso!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Medições acima de três graus já foram registradas.\", \"fato\": 5}, {\"speaker\": 1, \"text\": \"Então tecnicamente estamos fora da norma oficial.\", \"reacao\": false}, {\"speaker\": 0, \"text\": \"Desde 1950, só quatro eventos chegaram a esse nível.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"A intensidade é medida pela água quente do Pacífico.\", \"fato\": 1}, {\"speaker\": 0, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 1, \"text\": \"Precisamos atualizar os manuais antes da neve derretendo.\", \"reacao\": false}]}",
+      "erro": "A fala 6 deve indicar \"fato\": N ou \"reacao\": true.",
+      "erro_validacao": "A fala 6 deve indicar \"fato\": N ou \"reacao\": true."
+    },
+    {
+      "tentativa": 8,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Por que 'super El Niño' não tem categoria oficial?\", \"fato\": 5}, {\"speaker\": 1, \"text\": \"Cara!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A NOAA diz que +2°C já marca o patamar máximo.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Mas se mediram acima de três graus, não está batendo?\"}, \" {\"], \"fatos\": [\"O El Niño de 2026-2027 é chamado por pesquisadores de 'super El Niño'.\", \"A intensidade do fenômeno é medida pela temperatura das águas da região central-leste do Pacífico equatorial (Niño 3.4).\", \"Uma anomalia de +2 °C marca o último patamar da escala oficial usada pela agência NOAA.\", \"Desde 1950, apenas quatro eventos chegaram a esse nível: 1982-83, 1997-98, 2015-16 e o atual.\", \"O Índice Oceânico Niño Relativo (RONI) chegou a +2,0 °C no trimestre de agosto a outubro.\", \"Medições semanais superiores a +3 °C foram registradas entre outubro e novembro.\"], \"contradicao\": \"Se o limite oficial é +2°C, medições em >+3°C já superam esse teto.\", \"gancho\": \"Por que 'super El Niño' não tem categoria oficial?\"}",
+      "erro": "Entregue entre 8 e 12 falas em \"lines\" (vieram 5).",
+      "erro_validacao": "Entregue entre 8 e 12 falas em \"lines\" (vieram 5)."
+    }
+  ]
+}

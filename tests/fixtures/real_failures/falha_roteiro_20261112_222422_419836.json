@@ -1,0 +1,55 @@
+{
+  "titulo": "‘Super El Niño’ existe? Entenda como a ciência mede a força do fenômeno e por que o termo divide especialistas",
+  "fatos": [
+    "El Niño de 2026-2027 ganhou o apelido de ‘super El Niño’.",
+    "A intensidade é medida pela anomalia de temperatura na região Niño 3.4 do Pacífico.",
+    "A anomalia de +2 °C marca a última faixa da escala da NOAA.",
+    "Desde 1950, apenas quatro eventos atingiram a marca de +2 °C: 1982-83, 1997-98, 2015-16 e o atual.",
+    "O Índice Oceânico Niño Relativo (RONI) chegou a +2,0 °C no trimestre de agosto a outubro."
+  ],
+  "fatos_extraidos": [
+    "El Niño de 2026-2027 ganhou o apelido de ‘super El Niño’.",
+    "A intensidade é medida pela anomalia de temperatura na região Niño 3.4 do Pacífico.",
+    "A anomalia de +2 °C marca a última faixa da escala da NOAA.",
+    "Desde 1950, apenas quatro eventos atingiram a marca de +2 °C: 1982-83, 1997-98, 2015-16 e o atual.",
+    "O Índice Oceânico Niño Relativo (RONI) chegou a +2,0 °C no trimestre de agosto a outubro."
+  ],
+  "tentativas": [
+    {
+      "tentativa": 1,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Quantos El Niño atingiram +2°C?\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Caramba, só quatro?\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O atual é o quarto, entre 1982-83, 1997-98 e 2015-16.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"E o RONI chegou a +2,0 °C?\", \"fato\": 4}, {\"speaker\": 0, \"text\": \"Sim, no trimestre de agosto a outubro.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Isso é um recorde, mano?\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A anomalia de +2°C marca a última faixa da escala da NOAA.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Então o ‘super El Niño’ é só um apelido?\", \"fato\": 4}, {\"speaker\": 0, \"text\": \"É uma descrição, não uma categoria científica.\", \"fato\": 4}]}",
+      "erro": "A fala 8 não apresenta sobreposição com o fato 4 (exige pelo menos 2 palavras de conteúdo ou 1 número).",
+      "erro_validacao": "A fala 8 não apresenta sobreposição com o fato 4 (exige pelo menos 2 palavras de conteúdo ou 1 número)."
+    },
+    {
+      "tentativa": 2,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Quantos El Niño atingiram +2°C?\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Mano, essa é pesada!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Apenas quatro eventos atingiram a marca de +2 °C.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"E o atual é o quarto?\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O atual é o quarto, mas já passou dos limites.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Caramba, essa temperatura é absurda!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A anomalia chegou a +2,0 °C no trimestre de agosto a outubro.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Então o ‘super El Niño’ é só um apelido?\", \"fato\": 1}]}",
+      "erro": "O roteiro tem 3 falas de reação; o limite é no máximo 2 por roteiro.",
+      "erro_validacao": "O roteiro tem 3 falas de reação; o limite é no máximo 2 por roteiro."
+    },
+    {
+      "tentativa": 3,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Quantos El Niño atingiram +2°C?\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Mano, isso é loucura!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Desde 1950, só quatro atingiram essa marca.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O RONI chegou a +2,0 °C no trimestre de agosto a outubro.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Sério mesmo?\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A expressão não é científica, mas é usada pra descrever eventos excepcionais.\", \"fato\": 5}, {\"speaker\": 1, \"text\": \"Pra mim, é só um termo pra vender notícias.\"}]}",
+      "erro": "Índice de fato fora da faixa (0..4): 5",
+      "erro_validacao": "Índice de fato fora da faixa (0..4): 5"
+    },
+    {
+      "tentativa": 4,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Quantos El Niño atingiram +2°C?\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Caramba, só quatro?\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O último foi o de 2026-2027, chamado de ‘super El Niño’.\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"E aí, é mesmo tão forte?\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A anomalia chegou a +2°C na região Niño 3.4.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A NOAA diz que isso é a última faixa da escala.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Então!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Sim, é usado pra eventos excepcionais, mas não é científico.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Então!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Pode gerar chuvas, secas e até temperaturas extremas.\"}, {\"speaker\": 1, \"text\": \"Então, o ‘super El Niño’ é um alerta pra todos?\"}]}",
+      "erro": "Fala 5 (\"A anomalia chegou a +2°C na região Niño 3.4.\"): A fala citou números ausentes no fato 2 (ou título): 34. o fato 1 contém estes números: \"A intensidade é medida pela anomalia de temperatura na região Niño 3.4 do Pacífico.\".",
+      "erro_validacao": "Fala 5 (\"A anomalia chegou a +2°C na região Niño 3.4.\"): A fala citou números ausentes no fato 2 (ou título): 34. o fato 1 contém estes números: \"A intensidade é medida pela anomalia de temperatura na região Niño 3.4 do Pacífico.\"."
+    },
+    {
+      "tentativa": 5,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Quantos El Niño atingiram +2°C?\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Puta que pariu, isso é sério!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Desde 1950, quatro eventos atingiram +2°C.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"E o atual é o quinto?\", \"fato\": 4}, {\"speaker\": 0, \"text\": \"A anomalia chegou a +2°C na região Niño 3.4.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O RONI chegou a +2,0 °C no trimestre de agosto a outubro.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Então esse El Niño é mesmo um super evento.\", \"fato\": 1}, {\"speaker\": 0, \"text\": \"A expressão ‘super El Niño’ não é científica, mas é usada para eventos assim.\", \"fato\": 5}, {\"speaker\": 1, \"text\": \"Sério mesmo?\", \"reacao\": true}]}",
+      "erro": "Fala 5 (\"A anomalia chegou a +2°C na região Niño 3.4.\"): A fala citou números ausentes no fato 2 (ou título): 34. o fato 1 contém estes números: \"A intensidade é medida pela anomalia de temperatura na região Niño 3.4 do Pacífico.\".",
+      "erro_validacao": "Fala 5 (\"A anomalia chegou a +2°C na região Niño 3.4.\"): A fala citou números ausentes no fato 2 (ou título): 34. o fato 1 contém estes números: \"A intensidade é medida pela anomalia de temperatura na região Niño 3.4 do Pacífico.\"."
+    },
+    {
+      "tentativa": 6,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Quantos El Niño atingiram +2°C?\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Caramba, são poucos mesmo!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A anomalia chegou a +2°C na região Niño 3.4.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Eles já fizeram isso quatro vezes.\", \"fato\": 4}, {\"speaker\": 0, \"text\": \"O RONI atingiu +2,0 °C no trimestre agosto-outubro.\", \"fato\": 5}, {\"speaker\": 1, \"text\": \"Pra mim!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A ciência não usa o termo, mas é usado pra descrever eventos fortes.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Então, o que define um El Niño verdadeiro?\", \"fato\": 1}]}",
+      "erro": "Fala 3 (\"A anomalia chegou a +2°C na região Niño 3.4.\"): A fala citou números ausentes no fato 2 (ou título): 34. o fato 1 contém estes números: \"A intensidade é medida pela anomalia de temperatura na região Niño 3.4 do Pacífico.\".",
+      "erro_validacao": "Fala 3 (\"A anomalia chegou a +2°C na região Niño 3.4.\"): A fala citou números ausentes no fato 2 (ou título): 34. o fato 1 contém estes números: \"A intensidade é medida pela anomalia de temperatura na região Niño 3.4 do Pacífico.\"."
+    }
+  ]
+}

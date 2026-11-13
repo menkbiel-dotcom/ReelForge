@@ -1,0 +1,67 @@
+{
+  "titulo": "El Niño ganha força e pode ter intensidade 'muito forte' até março, diz agência climática dos EUA",
+  "fatos": [
+    "O El Niño deve continuar se fortalecendo até o fim do ano com chances superiores a 79% de manter intensidade forte ou muito forte até janeiro-março de 2027.",
+    "A região Niño 3.4 registrou temperatura 2,5°C acima da média em outubro e +2,1°C em setembro.",
+    "Um El Niño é considerado muito forte quando o índice atinge pelo menos +2°C na média de três meses.",
+    "O Oceano Pacífico equatorial apresenta um dos maiores níveis de aquecimento das últimas décadas.",
+    "Em anos de El Niño mais intenso, o planeta costuma registrar calor acima da média somando-se ao aquecimento global."
+  ],
+  "fatos_extraidos": [
+    "O El Niño deve continuar se fortalecendo até o fim do ano com chances superiores a 79% de manter intensidade forte ou muito forte até janeiro-março de 2027.",
+    "A região Niño 3.4 registrou temperatura 2,5°C acima da média em outubro e +2,1°C em setembro.",
+    "Um El Niño é considerado muito forte quando o índice atinge pelo menos +2°C na média de três meses.",
+    "O Oceano Pacífico equatorial apresenta um dos maiores níveis de aquecimento das últimas décadas.",
+    "Em anos de El Niño mais intenso, o planeta costuma registrar calor acima da média somando-se ao aquecimento global."
+  ],
+  "tentativas": [
+    {
+      "tentativa": 1,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"O mundo já é um mundo diferente?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Cara!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A região Niño 3.4 está super quente.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Temperatura acima da média em outubro.\", \"reacao\": false}, {\"speaker\": 0, \"text\": \"O oceano tá aquecendo mais que antes.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"É loucura, o planeta esquenta demais.\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Anos intensos somam calor com o global.\", \"fato\": 5}, {\"speaker\": 1, \"text\": \"Mano, isso vai mudar tudo na hora.\", \"reacao\": false}, {\"speaker\": 0, \"text\": \"O El Niño pode ficar muito forte até março.\", \"fato\": 0}]}",
+      "erro": "A fala 4 deve indicar \"fato\": N ou \"reacao\": true.",
+      "erro_validacao": "A fala 4 deve indicar \"fato\": N ou \"reacao\": true."
+    },
+    {
+      "tentativa": 2,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"O mundo já é um mundo diferente?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Cara!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A temperatura subiu 2,5 graus em outubro.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O oceano aqueceu mais que nas últimas décadas.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Mano!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Chances de ficar muito forte chegam a 80%.\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Sério mesmo?\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O planeta sente o calor somado ao global.\", \"fato\": 4}]}",
+      "erro": "Média de palavras por fala (4.8) abaixo do mínimo de 6 palavras.",
+      "erro_validacao": "Média de palavras por fala (4.8) abaixo do mínimo de 6 palavras."
+    },
+    {
+      "tentativa": 3,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"O mundo já é um mundo diferente?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Cara, o calor aqui está insuportável!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A região Niño 3.4 registrou temperatura alta.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Isso explica a seca que estamos sofrendo.\", \"fato\": 2}, {\"speaker\": 0, \"text\": \"Um El Niño muito forte exige média de dois graus.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Parece que o oceano está superaquecendo.\", \"fato\": 4}, {\"speaker\": 0, \"text\": \"Nos anos passados, o calor somou com o global.\", \"fato\": 5}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A chance é maior de manter a intensidade forte.\", \"fato\": 0}]}",
+      "erro": "Índice de fato fora da faixa (0..4): 5",
+      "erro_validacao": "Índice de fato fora da faixa (0..4): 5"
+    },
+    {
+      "tentativa": 4,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": \"0\", \"text\": \"O mundo já é um mundo diferente?\", \"fato\": 0}, {\"speaker\": \"1\", \"text\": \"Cara, o clima tá realmente quebrado.\", \"reacao\": true}, {\"speaker\": \"0\", \"text\": \"A região Niño 3.4 já está super aquecida.\", \"fato\": 1}, {\"speaker\": \"1\", \"text\": \"Mais de dois graus acima da média mesmo.\", \"reacao\": false}, {\"speaker\": \"0\", \"text\": \"Se chegar em +2°C o fenômeno é muito forte.\", \"fato\": 2}, {\"speaker\": \"1\", \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": \"0\", \"text\": \"O aquecimento global está somando com isso.\", \"fato\": 4}, {\"speaker\": \"1\", \"text\": \"Tá tudo ligado, parece uma loucura real.\", \"reacao\": false}, {\"speaker\": \"0\", \"text\": \"Mas a gente realmente vai viver isso?\", \"texto\": \"\", \"fato\": 5}]}",
+      "erro": "A fala 4 deve indicar \"fato\": N ou \"reacao\": true.",
+      "erro_validacao": "A fala 4 deve indicar \"fato\": N ou \"reacao\": true."
+    },
+    {
+      "tentativa": 5,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"O mundo já é um mundo diferente?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Cara, o aquecimento global tá pegando!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A região Niño 3.4 já está super quente.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Essa temperatura alta explica muita coisa.\", \"fato\": 2}, {\"speaker\": 0, \"text\": \"Um El Niño muito forte precisa de +2°C.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"O Pacífico tá aquecendo nos níveis máximos.\", \"fato\": 3}, {\"speaker\": 0, \"text\": \"O Oceano está em um dos picos mais altos.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Eles vão manter essa força até março de 2027.\", \"fato\": 0}, {\"speaker\": 0, \"text\": \"Isso vai somar muito com o calor global.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Mano!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O El Niño pode mudar tudo no futuro climático.\"}]}",
+      "erro": "A fala 11 deve indicar \"fato\": N ou \"reacao\": true.",
+      "erro_validacao": "A fala 11 deve indicar \"fato\": N ou \"reacao\": true."
+    },
+    {
+      "tentativa": 6,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"O mundo já é um mundo diferente?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Cara, isso tá super quente aqui!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O Pacífico tá mais aquecido que nunca.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Mano, parece uma fogueira gigante.\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"As tempers subiram bem acima da média.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"A gente vai precisar de muita água!\", \"reacao\": false}, {\"speaker\": 0, \"text\": \"Definição técnica é ter dois graus.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Tá lá!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O planeta sofre com esse fenômeno.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"É pra sempre ou acaba mais cedo?\", \"reacao\": false}]}",
+      "erro": "Fala 3 (\"O Pacífico tá mais aquecido que nunca.\"): A fala citou nome/entidade \"Pacífico\" ausente no fato 1 (ou título).",
+      "erro_validacao": "Fala 3 (\"O Pacífico tá mais aquecido que nunca.\"): A fala citou nome/entidade \"Pacífico\" ausente no fato 1 (ou título)."
+    },
+    {
+      "tentativa": 7,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"O mundo já é um mundo diferente?\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Cara!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A região Niño 3.4 está 2,5 graus acima da média.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Mano!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Um El Niño muito forte precisa de +2°C no mínimo.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"O Oceano Pacífico tá super aquecido agora.\", \"fato\": 3}, {\"speaker\": 0, \"text\": \"Nos anos duros o planeta sente mais calor global.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Temos chance acima de 79% até janeiro-março.\", \"fato\": 0}]}",
+      "erro": "Média de palavras por fala (5.9) abaixo do mínimo de 6 palavras.",
+      "erro_validacao": "Média de palavras por fala (5.9) abaixo do mínimo de 6 palavras."
+    },
+    {
+      "tentativa": 8,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"O mundo já é um mundo diferente?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Cara!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A região Niño 3.4 bateu recorde térmico em outubro.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Mano!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Um El Niño muito forte exige temperatura média positiva.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"O Pacífico está superaquecido comparado a décadas passadas.\", \"fato\": 4}, {\"speaker\": 0, \"text\": \"Nos anos mais duros, o globo acumula calor extremo.\", \"fato\": 5}]}",
+      "erro": "Entregue entre 8 e 12 falas em \"lines\" (vieram 7).",
+      "erro_validacao": "Entregue entre 8 e 12 falas em \"lines\" (vieram 7)."
+    }
+  ]
+}

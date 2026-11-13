@@ -1,0 +1,67 @@
+{
+  "titulo": "Resultado da Quina de hoje: veja números e ganhadores do concurso 7166 (quinta, 12/11)",
+  "fatos": [
+    "O sorteio da Quina 7166 aconteceu na quinta-feira (12/11), às 21h.",
+    "O prêmio estimado do concurso 7166 era de R$ 9,8 milhões.",
+    "Nenhum apostador acertou as cinco dezenas do concurso 7166.",
+    "24 apostas acertaram quatro números e ganharam R$ 18.489,25.",
+    "O próximo sorteio da Quina será o concurso 7167, na sexta-feira, 13 de novembro de 2026."
+  ],
+  "fatos_extraidos": [
+    "O sorteio da Quina 7166 aconteceu na quinta-feira (12/11), às 21h.",
+    "O prêmio estimado do concurso 7166 era de R$ 9,8 milhões.",
+    "Nenhum apostador acertou as cinco dezenas do concurso 7166.",
+    "24 apostas acertaram quatro números e ganharam R$ 18.489,25.",
+    "O próximo sorteio da Quina será o concurso 7167, na sexta-feira, 13 de novembro de 2026."
+  ],
+  "tentativas": [
+    {
+      "tentativa": 1,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Prêmio de R$ 9,8 mi, mas ninguém acertou?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Cara, isso é um absurdo!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Sorteio da Quina 7166 foi na quinta, 12/11.\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Prêmio estimado era de R$ 9,8 milhões.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Pra mim!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"24 apostas acertaram quatro números.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Pelo menos alguém levou algo.\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Próximo sorteio será o concurso 7167.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"A Quina é uma droga!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Pra quê tantos números se ninguém acerta?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"É como se a sorte tivesse se escondido.\"}]}",
+      "erro": "Média de palavras por fala (5.6) abaixo do mínimo de 6 palavras.",
+      "erro_validacao": "Média de palavras por fala (5.6) abaixo do mínimo de 6 palavras."
+    },
+    {
+      "tentativa": 2,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Prêmio de R$ 9,8 mi, mas ninguém acertou?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Cara, foi pra cima mesmo!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O sorteio da Quina 7166 foi na quinta, às 21h.\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Era pra ter alguém acertando?\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O prêmio estimado era de R$ 9,8 milhões.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"24 apostas acertaram quatro números.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Pra mim!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O próximo sorteio é no dia 13 de novembro.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Sério mesmo?\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Quem vai acertar o próximo?\", \"fato\": 3}]}",
+      "erro": "Média de palavras por fala (5.5) abaixo do mínimo de 6 palavras.",
+      "erro_validacao": "Média de palavras por fala (5.5) abaixo do mínimo de 6 palavras."
+    },
+    {
+      "tentativa": 3,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Prêmio de R$ 9,8 mi, mas ninguém acertou?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Caramba, tava pra acertar!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Sorteio da Quina 7166, quinta-feira (12/11), às 21h.\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Era pra ter alguém na bolada?\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Prêmio estimado de R$ 9,8 milhões, mas ninguém acertou as cinco dezenas.\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Pena que não deu pra ninguém.\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"24 apostas acertaram quatro números e levaram R$ 18.489,25.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"É pra ficar com o dinheiro.\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Próximo sorteio é o concurso 7167, sexta-feira, 13 de novembro de 2026.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"A Quina é mesmo complicada.\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A gente vai ter que esperar mais um pouco pra ver quem ganha.\"}, {\"speaker\": 1, \"text\": \"A Quina é mesmo um mistério.\"}]}",
+      "erro": "Fala 1 (\"Prêmio de R$ 9,8 mi, mas ninguém acertou?\"): A fala citou números ausentes no fato 0 (ou título): 98. o fato 1 contém estes números: \"O prêmio estimado do concurso 7166 era de R$ 9,8 milhões.\".",
+      "erro_validacao": "Fala 1 (\"Prêmio de R$ 9,8 mi, mas ninguém acertou?\"): A fala citou números ausentes no fato 0 (ou título): 98. o fato 1 contém estes números: \"O prêmio estimado do concurso 7166 era de R$ 9,8 milhões.\"."
+    },
+    {
+      "tentativa": 4,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Prêmio de R$ 9,8 mi, mas ninguém acertou?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Caramba, tava com cara de acertar!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Sorteio da Quina 7166 foi na quinta, 12/11.\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Era pra ter alguém na bolada.\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O prêmio estimado era de R$ 9,8 milhões.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"24 apostas acertaram quatro números.\", \"fato\": 3}, {\"speaker\": 0, \"text\": \"Ganham quase 18 mil reais cada um.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Pra mim!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Próximo concurso é 7167, sexta, 13/11.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}]}",
+      "erro": "Média de palavras por fala (5.7) abaixo do mínimo de 6 palavras.",
+      "erro_validacao": "Média de palavras por fala (5.7) abaixo do mínimo de 6 palavras."
+    },
+    {
+      "tentativa": 5,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Prêmio de R$ 9,8 mi, mas ninguém acertou?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Mano, que pena, cara!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O sorteio da Quina 7166 foi na quinta, 12/11.\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Foi no mesmo dia que o Brasil mandou mais de 34 milhões de sacas pra fora.\", \"fato\": 0}, {\"speaker\": 0, \"text\": \"Nenhum apostador acertou as cinco dezenas.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Caramba, acertar cinco é complicado.\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"24 apostas acertaram quatro números e levaram R$ 18.489,25.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Ainda assim!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O próximo sorteio será no dia 13/11, 2026.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Talvez o dinheiro ainda vá embora.\", \"fato\": 1}]}",
+      "erro": "Fala 4 (\"Foi no mesmo dia que o Brasil mandou mais de 34 milhões de sacas pra fora.\"): Números ausentes na matéria: 34. nenhum fato contém estes números: não os use.",
+      "erro_validacao": "Fala 4 (\"Foi no mesmo dia que o Brasil mandou mais de 34 milhões de sacas pra fora.\"): Números ausentes na matéria: 34. nenhum fato contém estes números: não os use."
+    },
+    {
+      "tentativa": 6,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Prêmio de R$ 9,8 mi, mas ninguém acertou?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Caramba, foi um acerto difícil!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O sorteio da Quina 7166 foi na quinta, 12/11.\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Ainda não entendi como ninguém acertou.\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O prêmio estimado era de R$ 9,8 milhões.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"24 apostas acertaram quatro números.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Sério mesmo?\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O próximo sorteio será no dia 13/11/2026.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Não acredito.\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Foi no mesmo dia que o Brasil mandou mais de 34 milhões de sacas pra fora.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Muita gente tem sorte!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A Quina hoje é um jogo de pura sorte, mano.\"}]}",
+      "erro": "Entregue entre 8 e 12 falas em \"lines\" (vieram 13).",
+      "erro_validacao": "Entregue entre 8 e 12 falas em \"lines\" (vieram 13)."
+    },
+    {
+      "tentativa": 7,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Prêmio de R$ 9,8 mi, mas ninguém acertou?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Caramba, quase acertou alguém!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O sorteio da Quina 7166 foi na quinta (12/11).\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Era pra ter um acerto, né?\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O prêmio estimado era de R$ 9,8 milhões.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"24 apostas acertaram quatro números.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Sério mesmo?\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O próximo sorteio é no dia 13/11.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Pra mim!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Ou será que a sorte não quer ninguém hoje?\", \"fato\": 0}]}",
+      "erro": "Média de palavras por fala (5.5) abaixo do mínimo de 6 palavras.",
+      "erro_validacao": "Média de palavras por fala (5.5) abaixo do mínimo de 6 palavras."
+    },
+    {
+      "tentativa": 8,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Prêmio de R$ 9,8 mi, mas ninguém acertou?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Cara, foi pra cima mesmo!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O sorteio da Quina 7166 foi na quinta, 12/11.\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Era pra acertar cinco números.\", \"fato\": 0}, {\"speaker\": 0, \"text\": \"Mas ninguém acertou as cinco dezenas.\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Caramba, que sorte pesada!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"24 apostas acertaram quatro números.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"E ganharam quase 18 mil reais.\", \"fato\": 1}, {\"speaker\": 0, \"text\": \"O próximo é o concurso 7167, na sexta.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Pra mim!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A Quina hoje é uma caixinha de surpresas.\", \"fato\": 4}]}",
+      "erro": "Fala 1 (\"Prêmio de R$ 9,8 mi, mas ninguém acertou?\"): A fala citou números ausentes no fato 0 (ou título): 98. o fato 1 contém estes números: \"O prêmio estimado do concurso 7166 era de R$ 9,8 milhões.\".",
+      "erro_validacao": "Fala 1 (\"Prêmio de R$ 9,8 mi, mas ninguém acertou?\"): A fala citou números ausentes no fato 0 (ou título): 98. o fato 1 contém estes números: \"O prêmio estimado do concurso 7166 era de R$ 9,8 milhões.\"."
+    }
+  ]
+}

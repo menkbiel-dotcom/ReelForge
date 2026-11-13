@@ -3098,6 +3098,98 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
         self.assertNotIn('loucura pura', ex3_match.group(1).lower())
         self.assertNotIn('Pra mim', ex3_match.group(1))
 
+    def test_real_failures_regression_six_logs_forty_six_attempts(self):
+        fixtures_dir = Path(__file__).resolve().parent / 'fixtures' / 'real_failures'
+        files = sorted(fixtures_dir.glob('falha_roteiro_*.json'))
+        self.assertEqual(len(files), 6, f'Esperados 6 fixtures reais, encontrados {len(files)}')
+
+        def run_pipeline_on_raw(raw_str, title, facts):
+            story = {
+                'title': title,
+                'body': (' '.join(facts) + ' ' + title).strip(),
+                'extracted_facts': list(facts),
+            }
+            raw = json.loads(raw_str) if isinstance(raw_str, str) else raw_str
+            news_auto.repair_reactions(raw, log=lambda *_: None)
+            norm = news_auto.normalize_lines(raw, facts=facts, title=title, log=lambda *_: None, max_lines=12)
+            news_auto.annotate_lines(norm.get('lines', []), facts, title, log=lambda *_: None)
+            lines, prob = news_auto.validate_lines(
+                norm, story, 150, False, 6, 12, facts=facts, log=lambda *_: None, normalize=False
+            )
+            if prob:
+                raise ValueError(prob)
+            return lines
+
+        outcomes = {}
+        total = 0
+        passed = 0
+        for fp in files:
+            data = json.loads(fp.read_text(encoding='utf-8'))
+            title = data.get('titulo', '')
+            facts = data.get('fatos') or data.get('fatos_extraidos') or []
+            for t in data.get('tentativas', []):
+                total += 1
+                t_num = t.get('tentativa')
+                key = (fp.name, t_num)
+                try:
+                    lines = run_pipeline_on_raw(t.get('resposta_bruta', ''), title, facts)
+                    passed += 1
+                    outcomes[key] = ('PASS', f'{len(lines)} lines')
+                except Exception as exc:
+                    outcomes[key] = ('REJECT', f'{type(exc).__name__}: {exc}')
+
+        self.assertEqual(total, 46, f'Esperadas 46 tentativas nos 6 arquivos, encontradas {total}')
+
+        # Casos específicos que DEVEM continuar reprovados
+        must_reject = [
+            ('falha_roteiro_20261112_222338_989792.json', 5),  # 34 milhões de sacas
+            ('falha_roteiro_20261112_222338_989792.json', 6),  # 34 milhões de sacas
+            ('falha_roteiro_20261112_222422_419836.json', 5),  # Puta que pariu
+            ('falha_roteiro_20261112_222526_519135.json', 8),  # investir bilhões nisso sem testar antes
+            ('falha_roteiro_20261112_215501_460471.json', 3),  # 2026-27
+        ]
+        for fname, tnum in must_reject:
+            status, detail = outcomes[(fname, tnum)]
+            self.assertEqual(status, 'REJECT', f'{fname} #{tnum} deveria permanecer reprovado: {detail}')
+
+        # Verificações diretas dos guardas nos trechos problemáticos sem depender da ordem de normalize_lines
+        d_222422 = json.loads((fixtures_dir / 'falha_roteiro_20261112_222422_419836.json').read_text(encoding='utf-8'))
+        t5_222422 = json.loads(d_222422['tentativas'][4]['resposta_bruta'])
+        with self.assertRaisesRegex(ValueError, r'linguagem imprópria'):
+            news_auto.validate_lines(
+                t5_222422,
+                {'title': d_222422['titulo'], 'body': ' '.join(d_222422['fatos'])},
+                150, False, 6, 12, facts=d_222422['fatos'], normalize=False,
+            )
+
+        d_222526 = json.loads((fixtures_dir / 'falha_roteiro_20261112_222526_519135.json').read_text(encoding='utf-8'))
+        t8_222526 = json.loads(d_222526['tentativas'][7]['resposta_bruta'])
+        self.assertIn('investir bilhões nisso sem testar antes', json.dumps(t8_222526, ensure_ascii=False).lower())
+        with self.assertRaisesRegex(ValueError, r'trecho copiado dos exemplos'):
+            news_auto.validate_lines(
+                {'lines': [{'speaker': l['speaker'], 'text': l['text']} for l in t8_222526['lines']]},
+                {'title': d_222526['titulo'], 'body': ' '.join(d_222526['fatos'])},
+                150, False, 6, 12, facts=d_222526['fatos'], normalize=False,
+            )
+
+        d_215501 = json.loads((fixtures_dir / 'falha_roteiro_20261112_215501_460471.json').read_text(encoding='utf-8'))
+        t3_215501 = json.loads(d_215501['tentativas'][2]['resposta_bruta'])
+        with self.assertRaisesRegex(ValueError, r'Números ausentes na matéria: 27'):
+            news_auto.validate_lines(
+                {'lines': [{'speaker': l['speaker'], 'text': l['text']} for l in t3_215501['lines']]},
+                {'title': d_215501['titulo'], 'body': ' '.join(d_215501['fatos'])},
+                150, False, 6, 12, facts=d_215501['fatos'], normalize=False,
+            )
+
+        # JSONs quebrados ou fora do esquema permanecem reprovados
+        with self.assertRaises(json.JSONDecodeError):
+            run_pipeline_on_raw('{"lines": [{"speaker": 0, "text": "incompleto"', 'Teste', ['Fato teste um dois tres.'])
+        self.assertTrue(news_auto._is_malformed_script_response({'resultado': []}))
+        with self.assertRaises(ValueError):
+            run_pipeline_on_raw('{"resultado": []}', 'Teste', ['Fato teste um dois tres.'])
+
+        self.assertEqual(passed, 0)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

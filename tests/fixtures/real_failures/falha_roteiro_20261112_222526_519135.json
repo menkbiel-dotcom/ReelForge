@@ -1,0 +1,67 @@
+{
+  "titulo": "El Niño ganha força e pode ter intensidade 'muito forte' até março, diz agência climática dos EUA",
+  "fatos": [
+    "El Niño pode ter intensidade 'muito forte' até março de 2027.",
+    "A temperatura da região Niño 3.4 atingiu 2,5°C acima da média em outubro.",
+    "A NOAA prevê mais de 79% de chance de El Niño permanecer forte ou muito forte até janeiro a março de 2027.",
+    "O fenômeno é caracterizado pelo aquecimento das águas do Oceano Pacífico equatorial maior ou igual a 0,5°C.",
+    "A NOAA afirma que sinais atmosféricos indicam que o El Niño continua se fortalecendo."
+  ],
+  "fatos_extraidos": [
+    "El Niño pode ter intensidade 'muito forte' até março de 2027.",
+    "A temperatura da região Niño 3.4 atingiu 2,5°C acima da média em outubro.",
+    "A NOAA prevê mais de 79% de chance de El Niño permanecer forte ou muito forte até janeiro a março de 2027.",
+    "O fenômeno é caracterizado pelo aquecimento das águas do Oceano Pacífico equatorial maior ou igual a 0,5°C.",
+    "A NOAA afirma que sinais atmosféricos indicam que o El Niño continua se fortalecendo."
+  ],
+  "tentativas": [
+    {
+      "tentativa": 1,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"El Niño pode ser 'muito forte', mas será o maior?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Cara!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A temperatura da região Niño 3.4 atingiu 2,5°C acima da média em outubro.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"E a NOAA prevê mais de 79% de chance de El Niño permanecer forte ou muito forte até janeiro a março.\", \"fato\": 2}, {\"speaker\": 0, \"text\": \"O fenômeno é caracterizado pelo aquecimento das águas do Oceano Pacífico equatorial maior ou igual a 0,5°C.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Mano!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A NOAA afirma que sinais atmosféricas indicam que o El Niño continua se fortalecendo.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"E se ele for o maior!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A intensidade do El Niño pode ser 'muito forte', mas não há classificação oficial de 'super El Niño'.\"}, {\"speaker\": 1, \"text\": \"O que a gente vai fazer se ele for o maior?\"}]}",
+      "erro": "A fala 9 deve indicar \"fato\": N ou \"reacao\": true.",
+      "erro_validacao": "A fala 9 deve indicar \"fato\": N ou \"reacao\": true."
+    },
+    {
+      "tentativa": 2,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"El Niño pode ser 'muito forte', mas será o maior?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Cara, isso é sério mesmo!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A NOAA prevê mais de 79% de chance de El Niño permanecer forte ou muito forte até janeiro a março de 2027.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"A temperatura da região Niño 3.4 atingiu 2,5°C acima da média em outubro.\", \"fato\": 1}, {\"speaker\": 0, \"text\": \"O fenômeno é caracterizado pelo aquecimento das águas do Oceano Pacífico equatorial maior ou igual a 0,5°C.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Mano, isso é um cara pesado.\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A NOAA afirma que sinais atmosféricos indicam que o El Niño continua se fortalecendo.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A intensidade pode ser 'muito forte', mas não há classificação oficial de 'super El Niño'.\", \"fato\": 5}, {\"speaker\": 1, \"text\": \"Pra mim!\", \"reacao\": true}]}",
+      "erro": "Índice de fato fora da faixa (0..4): 5",
+      "erro_validacao": "Índice de fato fora da faixa (0..4): 5"
+    },
+    {
+      "tentativa": 3,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"El Niño pode ser 'muito forte', mas será o maior?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Cara, isso é grave mesmo!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A NOAA prevê mais de 79% de chance de El Niño permanecer forte ou muito forte até janeiro a março de 2027.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"E a temperatura da região Niño 3.4 atingiu 2,5°C acima da média em outubro.\", \"fato\": 1}, {\"speaker\": 0, \"text\": \"O fenômeno é caracterizado pelo aquecimento das águas do Oceano Pacífico equatorial maior ou igual a 0,5°C.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Mano, isso é sério, né?\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A NOAA afirma que sinais atmosféricos indicam que o El Niño continua se fortalecendo.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Pode ser o maior, mas não tem classificação oficial de 'super El Niño'.\", \"fato\": 5}]}",
+      "erro": "Índice de fato fora da faixa (0..4): 5",
+      "erro_validacao": "Índice de fato fora da faixa (0..4): 5"
+    },
+    {
+      "tentativa": 4,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"El Niño pode ser 'muito forte', mas será o maior?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A NOAA prevê mais de 79% de chance de El Niño permanecer forte ou muito forte até janeiro a março de 2027.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"A temperatura da região Niño 3.4 atingiu 2,5°C acima da média em outubro.\", \"fato\": 1}, {\"speaker\": 0, \"text\": \"O fenômeno é caracterizado pelo aquecimento das águas do Oceano Pacífico equatorial maior ou igual a 0,5°C.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Mano!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A NOAA afirma que sinais atmosféricos indicam que o El Niño continua se fortalecendo.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Será que vai ser o maior de todos?\", \"fato\": 0}]}",
+      "erro": "A fala 8 não apresenta sobreposição com o fato 0 (exige pelo menos 2 palavras de conteúdo ou 1 número).",
+      "erro_validacao": "A fala 8 não apresenta sobreposição com o fato 0 (exige pelo menos 2 palavras de conteúdo ou 1 número)."
+    },
+    {
+      "tentativa": 5,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"El Niño pode ser 'muito forte', mas será o maior?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Cara!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A NOAA prevê mais de 79% de chance de El Niño permanecer forte ou muito forte até janeiro a março de 2027.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Eles já disseram que o fenômeno é muito forte.\", \"fato\": 0}, {\"speaker\": 0, \"text\": \"A temperatura da região Niño 3.4 atingiu 2,5°C acima da média em outubro.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O fenômeno é caracterizado pelo aquecimento das águas do Oceano Pacífico equatorial maior ou igual a 0,5°C.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Pra mim!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A NOAA afirma que sinais atmosféricos indicam que o El Niño continua se fortalecendo.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Então é isso aí!\", \"reacao\": true}]}",
+      "erro": "A última fala NÃO pode ser reação.",
+      "erro_validacao": "A última fala NÃO pode ser reação."
+    },
+    {
+      "tentativa": 6,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"El Niño pode ser 'muito forte', mas será o maior?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Caramba, isso é sério!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A NOAA prevê mais de 79% de chance de El Niño permanecer forte ou muito forte até janeiro a março de 2027.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A temperatura da região Niño 3.4 atingiu 2,5°C acima da média em outubro.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Pra mim!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O fenômeno é caracterizado pelo aquecimento das águas do Oceano Pacífico equatorial maior ou igual a 0,5°C.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Eles ainda dizem que o El Niño continua se fortalecendo.\", \"fato\": 4}, {\"speaker\": 0, \"text\": \"A intensidade do El Niño pode ser 'muito forte', mas não há classificação oficial de 'super El Niño'.\"}, {\"speaker\": 1, \"text\": \"Pra mim, essa é a maior coisa que o mundo já viu.\"}]}",
+      "erro": "A fala 9 deve indicar \"fato\": N ou \"reacao\": true.",
+      "erro_validacao": "A fala 9 deve indicar \"fato\": N ou \"reacao\": true."
+    },
+    {
+      "tentativa": 7,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"El Niño pode ser 'muito forte', mas será o maior?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Cara, essa coisa já ta pesada.\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A NOAA diz que pode ter intensidade 'muito forte' até março.\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"E a temperatura já ta em 2,5°C acima.\", \"fato\": 1}, {\"speaker\": 0, \"text\": \"A região Niño 3.4 atingiu 2,5°C acima da média.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Será que vai bater o recorde?\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A previsão é de mais de 79% de chance de permanecer forte.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Caramba, isso é muito sério.\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O fenômeno é aquecimento do Pacífico acima de 0,5°C.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Pensei que já era o maior.\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A NOAA vê sinais de que ele ainda vai se fortalecer.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Aí sim!\", \"reacao\": true}]}",
+      "erro": "A última fala NÃO pode ser reação.",
+      "erro_validacao": "A última fala NÃO pode ser reação."
+    },
+    {
+      "tentativa": 8,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"El Niño pode ser 'muito forte', mas será o maior?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Caramba, já está quase lá!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Temperatura da região Niño 3.4 atingiu 2,5°C acima da média.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Pra mim!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"NOAA prevê mais de 79% de chance de El Niño permanecer forte ou muito forte até 2027.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O fenômeno é caracterizado pelo aquecimento das águas do Pacífico maior ou igual a 0,5°C.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Sério mesmo?\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Sinais atmosféricos indicam que ele continua se fortalecendo.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Pra mim, investir bilhões nisso sem testar antes é loucura total.\", \"fato\": 0}]}",
+      "erro": "O roteiro tem 4 falas de reação; o limite é no máximo 2 por roteiro.",
+      "erro_validacao": "O roteiro tem 4 falas de reação; o limite é no máximo 2 por roteiro."
+    }
+  ]
+}

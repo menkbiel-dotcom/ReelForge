@@ -1,0 +1,67 @@
+{
+  "titulo": "Resultado da Quina de hoje: veja números e ganhadores do concurso 7166 (quinta, 12/11)",
+  "fatos": [
+    "O sorteio do concurso 7166 acontece na noite desta quinta-feira (12), às 21h.",
+    "O prêmio deste concurso está estimado em R$ 9,8 milhões.",
+    "Os números sorteados foram: 19 – 31 – 61 – 67 – 69.",
+    "O apostador leva prêmio se acertar a partir de 2 números (duque).",
+    "A aposta simples custa R$ 3 e consiste em marcar 5 números entre os 80 disponíveis."
+  ],
+  "fatos_extraidos": [
+    "O sorteio do concurso 7166 acontece na noite desta quinta-feira (12), às 21h.",
+    "O prêmio deste concurso está estimado em R$ 9,8 milhões.",
+    "Os números sorteados foram: 19 – 31 – 61 – 67 – 69.",
+    "O apostador leva prêmio se acertar a partir de 2 números (duque).",
+    "A aposta simples custa R$ 3 e consiste em marcar 5 números entre os 80 disponíveis."
+  ],
+  "tentativas": [
+    {
+      "tentativa": 1,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Quanto você apostaria para ganhar R$ 9,8 mi?\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Mano!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A sorteio leva pra noite de quinta às 21h.\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O prêmio está estimado em R$ 9,8 milhões.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Mas só precisa acertar dois números pra levar?\", \"fato\": 3}, {\"speaker\": 0, \"text\": \"A aposta simples custa R$ 3 e usa cinco números.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Sério mesmo?\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Os números sorteados foram: 19, 31, 61, 67 e 69.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Você acha que essa é a melhor estratégia do mundo?\", \"reacao\": false}]}",
+      "erro": "A fala 10 deve indicar \"fato\": N ou \"reacao\": true.",
+      "erro_validacao": "A fala 10 deve indicar \"fato\": N ou \"reacao\": true."
+    },
+    {
+      "tentativa": 2,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Quanto você apostaria para ganhar R$ 9,8 mi?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Mano, eu juro que sim!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O prêmio do concurso 7166 é de quase dez milhões.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Mas o cara só precisa acertar dois números pra pegar tudo.\", \"fato\": 2}, {\"speaker\": 0, \"text\": \"Isso faz todo sentido, né?\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A aposta custa apenas três reais para marcar cinco números.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Ela é baratinha mesmo!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Pra mim, vale a pena arriscar essa pequena entrada.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Os números sorteados foram 19, 31, 61, 67 e 69.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Sério mesmo?\", \"reacao\": true}]}",
+      "erro": "Fala 1 (\"Quanto você apostaria para ganhar R$ 9,8 mi?\"): A fala citou números ausentes no fato 0 (ou título): 98. o fato 1 contém estes números: \"O prêmio deste concurso está estimado em R$ 9,8 milhões.\".",
+      "erro_validacao": "Fala 1 (\"Quanto você apostaria para ganhar R$ 9,8 mi?\"): A fala citou números ausentes no fato 0 (ou título): 98. o fato 1 contém estes números: \"O prêmio deste concurso está estimado em R$ 9,8 milhões.\"."
+    },
+    {
+      "tentativa": 3,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Quanto você apostaria para ganhar R$ 9,8 mi?\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Mano!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O prêmio do concurso 7166 é super alto.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Basta acertar apenas dois números para ganhar.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Isso muda tudo!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Cada aposta simples custa só R$ 3,00 reais.\", \"fato\": 5}, {\"speaker\": 1, \"text\": \"Vou marcar os números que saíram na TV.\", \"fato\": 2}]}",
+      "erro": "Média de palavras por fala (5.5) abaixo do mínimo de 6 palavras.",
+      "erro_validacao": "Média de palavras por fala (5.5) abaixo do mínimo de 6 palavras."
+    },
+    {
+      "tentativa": 4,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Quanto você apostaria para ganhar R$ 9,8 mi?\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Cara!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O prêmio desse concurso chega a quase dez milhões.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Mas precisa marcar cinco números certos.\", \"fato\": 4}, {\"speaker\": 0, \"text\": \"Será que ganha com apenas dois acertos?\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Mano!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A aposta custa três reais por cada jogo feito.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Com R$ 9.8 mi ganhando com dois acertos é loucura total.\", \"feito\": 0}, {\"speaker\": 0, \"text\": \"O sorteio acontece na noite desta quinta-feira.\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Eles anunciaram os números sorteados agora mesmo.\", \"fato\": 2}, {\"speaker\": 0, \"text\": \"Você apostaria pra tentar ou vai ficar de fora?\", \"fato\": 5}]}",
+      "erro": "A fala 8 deve indicar \"fato\": N ou \"reacao\": true.",
+      "erro_validacao": "A fala 8 deve indicar \"fato\": N ou \"reacao\": true."
+    },
+    {
+      "tentativa": 5,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Quanto você apostaria para ganhar R$ 9,8 mi?\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Mano!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O prêmio do concurso 7166 é quase dez milhões.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Será que dá pra ganhar de verdade?\", \"fato\": 2}, {\"speaker\": 0, \"text\": \"Você só ganha se acertar a partir de dois números.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Que loucura, precisa marcar cinco num!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A aposta simples custa três reais para tentar.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Você joga 5 de cada vez nos 80 que existem.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Será que é só por chance tudo isso?\", \"reacao\": false}]}",
+      "erro": "A fala 10 deve indicar \"fato\": N ou \"reacao\": true.",
+      "erro_validacao": "A fala 10 deve indicar \"fato\": N ou \"reacao\": true."
+    },
+    {
+      "tentativa": 6,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Quanto você apostaria para ganhar R$ 9,8 mi?\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Mano!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A Quina do concurso 7166 vale esse milhão e pouco.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Mas a gente só ganha se acerta dois números.\", \"fato\": 4}, {\"speaker\": 0, \"text\": \"Caramba, é tão fácil ganhar de tanto jeito.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Porque o prêmio de cada jogo é R$ 3 reais.\", \"fato\": 5}, {\"speaker\": 0, \"text\": \"E só tem 80 números para marcar na hora.\", \"fato\": 2}, {\"speaker\": 1, \"text\": \"Qual seria a minha aposta hoje se fosse você?\", \"reacao\": false}]}",
+      "erro": "Contaminação de manchete relacionada detectada: hora. Use apenas fatos do corpo da matéria principal.",
+      "erro_validacao": "Contaminação de manchete relacionada detectada: hora. Use apenas fatos do corpo da matéria principal."
+    },
+    {
+      "tentativa": 7,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Quanto você apostaria para ganhar R$ 9,8 mi?\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Mano, eu juro que sim!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"A loteria promete o valor mais alto do Brasil.\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Será que a sorte vai nos visitar hoje?\", \"fato\": 2}, {\"speaker\": 0, \"text\": \"Você precisa acertar apenas dois números.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Isso muda tudo, cara!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Uma aposta simples custa três reais.\", \"fato\": 5}, {\"speaker\": 1, \"text\": \"Gasta pouco e ganha montanha de dinheiro.\", \"fato\": 1}, {\"speaker\": 0, \"text\": \"A sorte acontece às vinte e uma horas.\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Nunca perca o momento de ganhar tanto dinheiro.\", \"fato\": 3}]}",
+      "erro": "Contaminação de manchete relacionada detectada: brasil. Use apenas fatos do corpo da matéria principal.",
+      "erro_validacao": "Contaminação de manchete relacionada detectada: brasil. Use apenas fatos do corpo da matéria principal."
+    },
+    {
+      "tentativa": 8,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Quanto você apostaria para ganhar R$ 9,8 mi?\", \"fato\": 1}, {\"speaker\": 1, \"text\": \"Mano, juro que não iria nada!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"Pra ganhar só é preciso acertar dois números.\", \"fato\": 3}, {\"speaker\": 1, \"text\": \"Isso mesmo uma duque vale tudo?\", \"reacao\": false}, {\"speaker\": 0, \"text\": \"Sim a aposta de cinco acertos sai três reais.\", \"fato\": 4}, {\"speaker\": 1, \"text\": \"Caramba!\", \"reacao\": true}, {\"speaker\": 0, \"text\": \"O sorteio só acontece às 21h da noite.\", \"fato\": 0}, {\"speaker\": 1, \"text\": \"Mas será que alguém vai marcar mesmo assim?\", \"fato\": 5}]}",
+      "erro": "A fala 4 deve indicar \"fato\": N ou \"reacao\": true.",
+      "erro_validacao": "A fala 4 deve indicar \"fato\": N ou \"reacao\": true."
+    }
+  ]
+}
