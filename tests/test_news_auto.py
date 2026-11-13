@@ -3103,8 +3103,8 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
 
     def test_real_failures_regression_six_logs_forty_six_attempts(self):
         fixtures_dir = Path(__file__).resolve().parent / 'fixtures' / 'real_failures'
-        files = sorted(fixtures_dir.glob('falha_roteiro_*.json'))
-        self.assertEqual(len(files), 6, f'Esperados 6 fixtures reais, encontrados {len(files)}')
+        files = sorted(fixtures_dir.glob('falha_roteiro_20261112_*.json'))
+        self.assertEqual(len(files), 6, f'Esperados 6 fixtures reais de 20261112, encontrados {len(files)}')
 
         def run_pipeline_on_raw(raw_str, title, facts):
             story = {
@@ -3425,6 +3425,71 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
             ex_lines = json.loads(m.group(1))
             q_count = sum(1 for l in ex_lines if '?' in l['text'])
             self.assertLessEqual(q_count, 3, f'{ex_name} tem {q_count} perguntas')
+
+    def test_item33_real_failures_eight_logs_hard_vs_soft_regression(self):
+        from collections import Counter
+        fixtures_dir = Path(__file__).resolve().parent / 'fixtures' / 'real_failures'
+        files = sorted(fixtures_dir.glob('falha_roteiro_*.json'))
+        self.assertEqual(len(files), 8, f'Esperados 8 fixtures reais, encontrados {len(files)}')
+
+        total = 0
+        hard_pass = 0
+        direct_pass = 0
+        penalty_dist = Counter()
+        outcomes = {}
+        passed_keys = []
+
+        for fp in files:
+            data = json.loads(fp.read_text(encoding='utf-8'))
+            title = data.get('titulo', '')
+            facts = data.get('fatos') or data.get('fatos_extraidos') or []
+            story = {
+                'title': title,
+                'body': (' '.join(facts) + ' ' + title).strip(),
+                'extracted_facts': list(facts),
+            }
+            for t in data.get('tentativas', []):
+                total += 1
+                t_num = t.get('tentativa')
+                key = (fp.name, t_num)
+                try:
+                    raw = json.loads(t.get('resposta_bruta', ''))
+                    news_auto.repair_reactions(raw, log=lambda *_: None)
+                    norm = news_auto.normalize_lines(raw, facts=facts, title=title, log=lambda *_: None, max_lines=12)
+                    lines, prob, avisos, pen = news_auto.validate_lines_with_soft(
+                        norm, story, 150, False, 6, 12, facts=facts, log=lambda *_: None, normalize=False
+                    )
+                    if prob:
+                        raise ValueError(prob)
+                    hard_pass += 1
+                    if pen <= 1:
+                        direct_pass += 1
+                    penalty_dist[pen] += 1
+                    outcomes[key] = ('CANDIDATE', pen)
+                    passed_keys.append(key)
+                except Exception as exc:
+                    outcomes[key] = ('HARD_REJECT', f'{type(exc).__name__}: {exc}')
+
+        self.assertEqual(total, 60)
+        self.assertEqual(hard_pass, 19)
+        self.assertEqual(direct_pass, 5)
+        self.assertEqual(dict(penalty_dist), {1: 5, 2: 11, 3: 3})
+        self.assertGreater(len({fname for fname, _ in passed_keys}), 0)
+
+        # Números inventados, vazamento dos exemplos, palavrão, entidades ausentes e gancho sem resposta seguem BARRADOS
+        must_reject_hard = [
+            ('falha_roteiro_20261112_215421_142082.json', 3),  # R$ 3,00 -> 300 inventado
+            ('falha_roteiro_20261112_215421_142082.json', 7),  # entidade "Brasil" ausente
+            ('falha_roteiro_20261112_222338_989792.json', 4),  # magnitude "mil" ausente
+            ('falha_roteiro_20261112_222338_989792.json', 5),  # "34 milhões de sacas" (trecho de exemplo)
+            ('falha_roteiro_20261112_222422_419836.json', 5),  # palavrão
+            ('falha_roteiro_20261112_222526_519135.json', 8),  # "investir bilhões nisso sem testar antes"
+            ('falha_roteiro_20261113_000231_742905.json', 3),  # entidade "UA" ausente
+            ('falha_roteiro_20261113_000231_742905.json', 4),  # entidade "Voyager"/"UA" ausente
+        ]
+        for fname, tnum in must_reject_hard:
+            status, detail = outcomes[(fname, tnum)]
+            self.assertEqual(status, 'HARD_REJECT', f'{fname} #{tnum} deveria continuar fora das candidatas: {detail}')
 
 
 if __name__ == '__main__':

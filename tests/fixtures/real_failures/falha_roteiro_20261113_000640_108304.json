@@ -1,0 +1,55 @@
+{
+  "titulo": "‘Super El Niño’ existe? Entenda como a ciência mede a força do fenômeno e por que o termo divide especialistas",
+  "fatos": [
+    "O El Niño de 2026-2027 ganhou o apelido de ‘super El Niño’.",
+    "A intensidade do El Niño é medida pela anomalia de temperatura na região Niño 3.4.",
+    "A anomalia de +2 °C marca o limite máximo da escala oficial da NOAA.",
+    "Desde 1950, apenas quatro eventos atingiram a anomalia de +2 °C: 1982-83, 1997-98, 2015-16 e o atual.",
+    "O Índice Oceânico Niño Relativo (RONI) chegou a +2,0 °C no trimestre de agosto a outubro."
+  ],
+  "fatos_extraidos": [
+    "O El Niño de 2026-2027 ganhou o apelido de ‘super El Niño’.",
+    "A intensidade do El Niño é medida pela anomalia de temperatura na região Niño 3.4.",
+    "A anomalia de +2 °C marca o limite máximo da escala oficial da NOAA.",
+    "Desde 1950, apenas quatro eventos atingiram a anomalia de +2 °C: 1982-83, 1997-98, 2015-16 e o atual.",
+    "O Índice Oceânico Niño Relativo (RONI) chegou a +2,0 °C no trimestre de agosto a outubro."
+  ],
+  "tentativas": [
+    {
+      "tentativa": 1,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Por que 'super El Niño' divide cientistas?\"}, {\"speaker\": 1, \"text\": \"O El Niño de 2026-2027 ganhou o apelido de ‘super El Niño’?\"}, {\"speaker\": 0, \"text\": \"A intensidade é medida pela anomalia na região Niño 3.4.\"}, {\"speaker\": 1, \"text\": \"A anomalia de +2 °C é o limite máximo da escala da NOAA?\"}, {\"speaker\": 0, \"text\": \"Desde 1950, só quatro eventos atingiram +2 °C.\"}, {\"speaker\": 1, \"text\": \"O RONI chegou a +2,0 °C no trimestre agosto-outubro?\"}, {\"speaker\": 0, \"text\": \"O termo ‘super El Niño’ não é oficial, mas é usado para eventos excepcionais.\"}, {\"speaker\": 1, \"text\": \"Se a anomalia ultrapassar +2 °C, a escala oficial não tem categoria pra isso.\"}, {\"speaker\": 0, \"text\": \"A ciência não tem um termo pra eventos além do limite máximo.\"}, {\"speaker\": 1, \"text\": \"Então, por que chamam de ‘super’ se a escala não reconhece?\"}]}",
+      "erro": "Nota de qualidade 6/10 (mínimo 7). Corrija: Fala 1 [informalidade]: \"Por que 'super El Niño' divide cientistas?\" - Fala excessivamente formal e educada, sem tom de desafio ou curiosidade típico de um diálogo entre rivais; Fala 2 [repeticao]: \"O El Niño de 2026-2027 ganhou o apelido de ‘super El Niño’?\" - Repete a estrutura de pergunta com o mesmo padrão de frase que a anterior; Fala 3 [ritmo]: \"A intensidade é medida pela anomalia na região Niño 3.4.\" - Fala muito longa e formal, que não mantém o ritmo dinâmico de um diálogo entre amigos; Fala 4 [informalidade]: \"A anomalia de +2 °C é o limite máximo da escala da NOAA?\" - Usa o tom de uma pergunta de aula, não de um diálogo casual; Fala começando igual a duas anteriores.",
+      "erro_validacao": "Nota de qualidade 6/10 (mínimo 7). Corrija: Fala 1 [informalidade]: \"Por que 'super El Niño' divide cientistas?\" - Fala excessivamente formal e educada, sem tom de desafio ou curiosidade típico de um diálogo entre rivais; Fala 2 [repeticao]: \"O El Niño de 2026-2027 ganhou o apelido de ‘super El Niño’?\" - Repete a estrutura de pergunta com o mesmo padrão de frase que a anterior; Fala 3 [ritmo]: \"A intensidade é medida pela anomalia na região Niño 3.4.\" - Fala muito longa e formal, que não mantém o ritmo dinâmico de um diálogo entre amigos; Fala 4 [informalidade]: \"A anomalia de +2 °C é o limite máximo da escala da NOAA?\" - Usa o tom de uma pergunta de aula, não de um diálogo casual; Fala começando igual a duas anteriores."
+    },
+    {
+      "tentativa": 2,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Por que 'super El Niño' divide cientistas?\"}, {\"speaker\": 1, \"text\": \"O El Niño de 2026-2027 ganhou o apelido de ‘super El Niño’?\"}, {\"speaker\": 0, \"text\": \"A intensidade é medida pela anomalia na região Niño 3.4.\"}, {\"speaker\": 1, \"text\": \"A anomalia de +2 °C é o limite máximo da escala da NOAA?\"}, {\"speaker\": 0, \"text\": \"Desde 1950, só quatro eventos atingiram +2 °C.\"}, {\"speaker\": 1, \"text\": \"RONI chegou a +2,0 °C no trimestre agosto-outubro.\"}, {\"speaker\": 0, \"text\": \"A expressão não é oficial, mas descreve eventos excepcionais.\"}, {\"speaker\": 1, \"text\": \"Se o termo é informal, por que tem tantos debates?\"}]}",
+      "erro": "Nota de qualidade 6/10 (mínimo 7). Corrija: Fala 1 [informalidade]: \"Por que 'super El Niño' divide cientistas?\" - A pergunta é clara, mas poderia ser mais informal, usando gírias ou expressões mais cotidianas.; Fala 2 [repeticao]: \"O El Niño de 2026-2027 ganhou o apelido de ‘super El Niño’?\" - A estrutura da frase é repetitiva com relação à anterior, podendo ser variada para evitar muletas.; Fala 8 [informalidade]: \"Se o termo é informal, por que tem tantos debates?\" - A pergunta é direta, mas poderia usar uma expressão mais coloquial ou emocional para melhor engajamento.; Fala começando igual a duas anteriores.",
+      "erro_validacao": "Nota de qualidade 6/10 (mínimo 7). Corrija: Fala 1 [informalidade]: \"Por que 'super El Niño' divide cientistas?\" - A pergunta é clara, mas poderia ser mais informal, usando gírias ou expressões mais cotidianas.; Fala 2 [repeticao]: \"O El Niño de 2026-2027 ganhou o apelido de ‘super El Niño’?\" - A estrutura da frase é repetitiva com relação à anterior, podendo ser variada para evitar muletas.; Fala 8 [informalidade]: \"Se o termo é informal, por que tem tantos debates?\" - A pergunta é direta, mas poderia usar uma expressão mais coloquial ou emocional para melhor engajamento.; Fala começando igual a duas anteriores."
+    },
+    {
+      "tentativa": 3,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Por que 'super El Niño' divide cientistas?\"}, {\"speaker\": 1, \"text\": \"O El Niño de 2026-2027 ganhou o apelido de ‘super El Niño’?\"}, {\"speaker\": 0, \"text\": \"A anomalia chegou a +2 °C, que é o limite máximo da escala da NOAA.\"}, {\"speaker\": 1, \"text\": \"Mas desde 1950, só quatro eventos atingiram essa marca.\"}, {\"speaker\": 0, \"text\": \"O RONI chegou a +2,0 °C no trimestre de agosto a outubro.\"}, {\"speaker\": 1, \"text\": \"Se o termo é informal, por que tem tantos debates?\"}, {\"speaker\": 0, \"text\": \"A ciência não tem categorias acima de 2 °C, então o apelido é controverso.\"}, {\"speaker\": 1, \"text\": \"Tem gente que acha que o termo é só exagero, né?\"}, {\"speaker\": 0, \"text\": \"Se o fenômeno é real, por que não tem um nome oficial pra isso?\"}, {\"speaker\": 1, \"text\": \"A ciência precisa de palavras pra definir o que está acontecendo.\"}]}",
+      "erro": "O roteiro tem 4 falas de opinião; o limite é no máximo 3 por roteiro.",
+      "erro_validacao": "O roteiro tem 4 falas de opinião; o limite é no máximo 3 por roteiro."
+    },
+    {
+      "tentativa": 4,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Por que 'super El Niño' divide cientistas?\"}, {\"speaker\": 1, \"text\": \"O El Niño de 2026-2027 ganhou o apelido de 'super El Niño'?\"}, {\"speaker\": 0, \"text\": \"A intensidade é medida pela anomalia de temperatura na região Niño 3.4.\"}, {\"speaker\": 1, \"text\": \"A anomalia de +2 °C é o limite máximo da escala da NOAA?\"}, {\"speaker\": 0, \"text\": \"Desde 1950, só quatro eventos atingiram +2 °C, incluindo o atual.\"}, {\"speaker\": 1, \"text\": \"O RONI chegou a +2,0 °C no trimestre agosto-outubro?\"}, {\"speaker\": 0, \"text\": \"A expressão 'super El Niño' não é oficial, mas é usada para eventos excepcionais.\"}, {\"speaker\": 1, \"text\": \"Se o termo é informal, por que ainda gera divisão entre cientistas?\"}]}",
+      "erro": "No máximo 50% das falas podem ser perguntas (5 de 8 falas são perguntas).",
+      "erro_validacao": "No máximo 50% das falas podem ser perguntas (5 de 8 falas são perguntas)."
+    },
+    {
+      "tentativa": 5,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Por que 'super El Niño' divide cientistas?\"}, {\"speaker\": 1, \"text\": \"O El Niño de 2026-2027 ganhou o apelido de 'super El Niño'?\"}, {\"speaker\": 0, \"text\": \"A intensidade é medida pela anomalia na região Niño 3.4.\"}, {\"speaker\": 1, \"text\": \"A anomalia de +2 °C é o limite máximo da escala da NOAA?\"}, {\"speaker\": 0, \"text\": \"Desde 1950, só quatro eventos atingiram +2 °C.\"}, {\"speaker\": 1, \"text\": \"O RONI chegou a +2,0 °C no trimestre agosto-outubro?\"}, {\"speaker\": 0, \"text\": \"A expressão não é oficial, mas é usada para eventos excepcionais.\"}, {\"speaker\": 1, \"text\": \"Se o termo não é oficial, por que se chama 'super'?\"}]}",
+      "erro": "No máximo 50% das falas podem ser perguntas (5 de 8 falas são perguntas).",
+      "erro_validacao": "No máximo 50% das falas podem ser perguntas (5 de 8 falas são perguntas)."
+    },
+    {
+      "tentativa": 6,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Por que 'super El Niño' divide cientistas?\"}, {\"speaker\": 1, \"text\": \"O El Niño de 2026-2027 já tem anomalia de +2 °C?\"}, {\"speaker\": 0, \"text\": \"A anomalia na região Niño 3.4 chegou a +2,0 °C no trimestre passado.\"}, {\"speaker\": 1, \"text\": \"Mas a escala oficial da NOAA só vai até +2 °C?\"}, {\"speaker\": 0, \"text\": \"Desde 1950, só quatro eventos atingiram esse limite.\"}, {\"speaker\": 1, \"text\": \"E o atual é o quarto já registrado?\"}, {\"speaker\": 0, \"text\": \"O RONI já foi +2,0 °C, mas não é oficialmente classificado como 'super'.\"}, {\"speaker\": 1, \"text\": \"Então por que chamam de 'super' se a escala não tem categorias acima?\"}]}",
+      "erro": "No máximo 50% das falas podem ser perguntas (5 de 8 falas são perguntas).",
+      "erro_validacao": "No máximo 50% das falas podem ser perguntas (5 de 8 falas são perguntas)."
+    }
+  ]
+}

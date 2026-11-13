@@ -390,7 +390,19 @@
   - **Resumo:** separação explícita em `HARD_RULES` e `SOFT_RULES`; `validate_lines_with_soft()` aceita candidatas com `soft_penalty` ponderado (peso 2 para `> 60%` perguntas ou média não-reação `< 4.5`; peso 1 nos demais avisos moles); `write_script()` só aborta `erro repetido 3x` em erros DUROS, retém candidatas que passaram nas regras DURAS, seleciona a de menor `soft_penalty` (desempate pela mais recente) ao fim das tentativas/aborte e grava `tentativa_usada`, `soft_penalty` e `avisos_estilo` tanto nos `rejected_*.json` quanto no JSON final do reel em `engine.render()`.
 
 - [x] **ITEM 32 — Log completo do motivo e prompt de estilo (`news_auto.py`)**: feito
+  - **Commit:** `f92b74b6bf2ccdb3562a5db410ed749f589b8b2d` — *"Preserva motivo completo no log ate 220 chars e reduz perguntas no prompt do redator"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `HANDOFF.md`
   - **Testes:** `test_integration` (32 testes) + `test_news_auto` (64 testes, incluindo `test_item32_full_reason_logs_and_limited_question_prompt`) — 96 testes passando
   - **Resumo:** `_short_reason()` ampliado para 220 caracteres preservando `Fala N ("...")` e texto completo da fala no log e mantendo `erro`/`erro_validacao` completos em `falha_roteiro_*.json`; prompt do redator remove `"faz perguntas"` de Naruto, define estrutura alvo (`1 pergunta de gancho + falas afirmativas que trazem um fato ou uma opinião curta; no máximo 3 perguntas no roteiro todo; Naruto traz curiosidade COM um fato ou opinião, não com pergunta em toda fala`) e reduz todos os exemplos (`Exemplo 1`, `Exemplo 2` e `Exemplo 3` de 10 falas) para $\le 3$ perguntas (com novas frases registradas em `_EXAMPLE_LEAK_PHRASES`).
-  - **Próximo item:** ITEM 33 (Copiar os 2 novos `falha_roteiro_20261113_*.json` para `tests/fixtures/real_failures/`, reprocessar todas as tentativas com `validate_lines_with_soft()` e medir taxa de candidatas + distribuição de `soft_penalty`).
+
+- [x] **ITEM 33 — Reprocessar falhas reais com regras DURAS x MOLES (`tests/fixtures/real_failures/`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`)**: feito
+  - **Arquivos tocados:** `tests/fixtures/real_failures/falha_roteiro_20261113_000231_742905.json`, `tests/fixtures/real_failures/falha_roteiro_20261113_000640_108304.json`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** `test_integration` (32 testes) + `test_news_auto` (65 testes, incluindo `test_item33_real_failures_eight_logs_hard_vs_soft_regression`) — 97 testes passando
+  - **Resultado do Reprocessamento das 60 Tentativas Reais (8 arquivos, 20261112 + 20261113):**
+    - Na validação estrita legada (`20261112_*`, 46 tentativas): **`0/46`** aprovadas.
+    - Na separação DURAS x MOLES (`validate_lines_with_soft()` nos 8 arquivos / **60 tentativas**):
+      - **`19/60` (31,7%)** passam em todas as **regras DURAS** e viram candidatas (cobrindo **6 de 8** pautas reais, contra `0` anteriormente).
+      - **`5/60` (8,3%)** passam direto com `soft_penalty <= 1` (`soft_penalty == 1`).
+      - **Distribuição de `soft_penalty` entre as 19 candidatas:** `{1: 5, 2: 11, 3: 3}`.
+      - **`41/60` (68,3%)** seguem **barradas nas regras DURAS**, garantindo rejeição de números/magnitudes inventadas (`"300"`, `"mil"`, `"2026-27"`), trechos de exemplo (`"34 milhões de sacas"`, `"investir bilhões nisso sem testar antes"`), linguagem imprópria (`"Puta que pariu"`), entidades ausentes (`"UA"`, `"Brasil"`), ganchos sem resposta, falas genéricas sem 4 detalhes concretos e citações de veículo (`"segundo o"`).
+  - **Status:** Rodada 8 (Itens 31, 32 e 33) concluída por completo e verificada em dupla execução sequencial sem arquivos extras em `output/`.

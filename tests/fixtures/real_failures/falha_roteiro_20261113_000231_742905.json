@@ -1,0 +1,67 @@
+{
+  "titulo": "Voyager 1 vai ficar tão longe da Terra que sinal levará um dia para chegar",
+  "fatos": [
+    "A Voyager 1 será o primeiro objeto humano a ultrapassar a marca de um dia-luz de distância da Terra.",
+    "O marco será atingido em 18 de novembro, às 7h16 (horário de Brasília).",
+    "A sonda estará a cerca de 26 bilhões de quilômetros do Sol, ou 172 unidades astronômicas.",
+    "A Voyager 1 viaja a cerca de 16,9 quilômetros por segundo em relação ao Sol.",
+    "A NASA realizou uma intervenção chamada de 'Big Bang' para substituir componentes que consomem menos energia."
+  ],
+  "fatos_extraidos": [
+    "A Voyager 1 será o primeiro objeto humano a ultrapassar a marca de um dia-luz de distância da Terra.",
+    "O marco será atingido em 18 de novembro, às 7h16 (horário de Brasília).",
+    "A sonda estará a cerca de 26 bilhões de quilômetros do Sol, ou 172 unidades astronômicas.",
+    "A Voyager 1 viaja a cerca de 16,9 quilômetros por segundo em relação ao Sol.",
+    "A NASA realizou uma intervenção chamada de 'Big Bang' para substituir componentes que consomem menos energia."
+  ],
+  "tentativas": [
+    {
+      "tentativa": 1,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Voyager 1 vai para o espaço, mas energia está acabando?\"}, {\"speaker\": 1, \"text\": \"A NASA fez uma atualização pra prolongar a vida da sonda?\"}, {\"speaker\": 0, \"text\": \"A NASA realizou uma intervenção chamada 'Big Bang' pra economizar energia.\"}, {\"speaker\": 1, \"text\": \"A sonda vai passar de 172 unidades astronômicas até 18 de novembro?\"}, {\"speaker\": 0, \"text\": \"A Voyager 1 viaja a 16,9 km/s e vai ultrapassar um dia-luz da Terra.\"}, {\"speaker\": 1, \"text\": \"Ela vai ficar a 26 bilhões de km do Sol, mas ainda tem energia pra ir mais?\"}, {\"speaker\": 0, \"text\": \"A sonda está prestes a ser o primeiro objeto humano a atingir um dia-luz da Terra.\"}, {\"speaker\": 1, \"text\": \"Se a energia acabar, ela pode parar de enviar dados pra cá?\"}, {\"speaker\": 0, \"text\": \"A Voyager 1 vai ficar tão longe que o sinal levará um dia pra chegar.\"}, {\"speaker\": 1, \"text\": \"E se ela parar de enviar dados, será o fim da comunicação com ela?\"}]}",
+      "erro": "o gancho não foi respondido",
+      "erro_validacao": "o gancho não foi respondido"
+    },
+    {
+      "tentativa": 2,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Voyager 1 vai para o espaço, mas energia está acabando?\"}, {\"speaker\": 1, \"text\": \"A NASA fez uma atualização pra economizar energia na sonda?\"}, {\"speaker\": 0, \"text\": \"A NASA realizou uma intervenção chamada 'Big Bang' pra substituir componentes que consomem menos energia.\"}, {\"speaker\": 1, \"text\": \"A sonda vai passar de 26 bilhões de km do Sol até 172 unidades astronômicas?\"}, {\"speaker\": 0, \"text\": \"A Voyager 1 viaja a 16,9 km/s em relação ao Sol e vai passar de 26 bilhões de km até 172 unidades astronômicas.\"}, {\"speaker\": 1, \"text\": \"A sonda vai atingir o marco de um dia-luz em 18 de novembro?\"}, {\"speaker\": 0, \"text\": \"O marco será atingido em 18 de novembro, às 7h16 (horário de Brasília).\"}, {\"speaker\": 1, \"text\": \"Ela será o primeiro objeto humano a ultrapassar um dia-luz da Terra?\"}, {\"speaker\": 0, \"text\": \"A Voyager 1 será o primeiro objeto humano a ultrapassar a marca de um dia-luz de distância da Terra.\"}, {\"speaker\": 1, \"text\": \"E se a energia acabar, ela vai parar de enviar dados?\"}]}",
+      "erro": "o gancho não foi respondido",
+      "erro_validacao": "o gancho não foi respondido"
+    },
+    {
+      "tentativa": 3,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Voyager 1 vai para o espaço, mas energia está acabando?\"}, {\"speaker\": 1, \"text\": \"A NASA fez um 'Big Bang' pra economizar energia na sonda?\"}, {\"speaker\": 0, \"text\": \"A Voyager 1 vai ultrapassar um dia-luz da Terra em novembro.\"}, {\"speaker\": 1, \"text\": \"A sonda vai passar de 26 bilhões de quilômetros do Sol até 172 UA.\"}, {\"speaker\": 0, \"text\": \"Ela anda a 16,9 km/s, mas a bateria está quase esgotada.\"}, {\"speaker\": 1, \"text\": \"A NASA já substituiu peças pra prolongar a vida da sonda.\"}, {\"speaker\": 0, \"text\": \"Agora ela vai ser o primeiro objeto humano a atingir esse recorde.\"}, {\"speaker\": 1, \"text\": \"Se a energia acabar, o sinal levará um dia pra chegar aqui.\"}, {\"speaker\": 0, \"text\": \"E se a Voyager 1 se apagar, o humano perderá o contato?\"}, {\"speaker\": 1, \"text\": \"A sonda já está mais distante do que qualquer outro objeto humano.\"}]}",
+      "erro": "Contaminação de manchete relacionada detectada: distante. Use apenas fatos do corpo da matéria principal.",
+      "erro_validacao": "Contaminação de manchete relacionada detectada: distante. Use apenas fatos do corpo da matéria principal."
+    },
+    {
+      "tentativa": 4,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Voyager 1 vai para o espaço, mas energia está acabando?\"}, {\"speaker\": 1, \"text\": \"A sonda vai passar de 172 unidades astronômicas da Terra até 18 de novembro?\"}, {\"speaker\": 0, \"text\": \"A Voyager 1 está a 26 bilhões de quilômetros do Sol e vai passar de 172 UA.\"}, {\"speaker\": 1, \"text\": \"A NASA fez um 'Big Bang' pra economizar energia na sonda?\"}, {\"speaker\": 0, \"text\": \"A intervenção substituiu componentes que consomem mais energia da sonda.\"}, {\"speaker\": 1, \"text\": \"Vai levar um dia-luz pra sinal da Terra chegar até ela?\"}, {\"speaker\": 0, \"text\": \"A sonda viaja a 16,9 km/s e vai ultrapassar a marca em novembro.\"}, {\"speaker\": 1, \"text\": \"Se a energia acabar, a sonda perde contato com a Terra?\"}, {\"speaker\": 0, \"text\": \"A Voyager 1 pode ser o primeiro objeto humano a ir tão longe.\"}, {\"speaker\": 1, \"text\": \"E se ela parar de enviar dados, perderemos tudo sobre ela?\"}]}",
+      "erro": "Fala 3 (\"A Voyager 1 está a 26 bilhões de quilômetros do Sol e vai passar de 172 UA.\"): A fala citou nome/entidade \"UA\" ausente nos fatos e na matéria.",
+      "erro_validacao": "Fala 3 (\"A Voyager 1 está a 26 bilhões de quilômetros do Sol e vai passar de 172 UA.\"): A fala citou nome/entidade \"UA\" ausente nos fatos e na matéria."
+    },
+    {
+      "tentativa": 5,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Voyager 1 vai para o espaço, mas energia está acabando?\"}, {\"speaker\": 1, \"text\": \"A sonda vai ultrapassar um dia-luz da Terra em novembro?\"}, {\"speaker\": 0, \"text\": \"A Voyager 1 será o primeiro objeto humano a passar de um dia-luz da Terra.\"}, {\"speaker\": 1, \"text\": \"Ela vai atingir esse marco em 18 de novembro, às 7h16?\"}, {\"speaker\": 0, \"text\": \"A sonda está a 26 bilhões de quilômetros do Sol, ou 172 unidades astronômicas.\"}, {\"speaker\": 1, \"text\": \"Ela viaja a 16,9 km/s em relação ao Sol, né?\"}, {\"speaker\": 0, \"text\": \"A NASA fez uma atualização para economizar energia, chamada 'Big Bang'.\"}, {\"speaker\": 1, \"text\": \"Com essa intervenção, a sonda ainda vai durar mais tempo?\"}, {\"speaker\": 0, \"text\": \"A Voyager 1 vai se tornar o objeto mais distante da Terra já criado.\"}, {\"speaker\": 1, \"text\": \"Mas o que acontece quando a energia acabar mesmo assim?\"}]}",
+      "erro": "Contaminação de manchete relacionada detectada: distante. Use apenas fatos do corpo da matéria principal.",
+      "erro_validacao": "Contaminação de manchete relacionada detectada: distante. Use apenas fatos do corpo da matéria principal."
+    },
+    {
+      "tentativa": 6,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Voyager 1 vai para o espaço, mas energia está acabando?\"}, {\"speaker\": 1, \"text\": \"A NASA fez uma intervenção pra economizar energia na sonda?\"}, {\"speaker\": 0, \"text\": \"A Voyager 1 vai ultrapassar um dia-luz da Terra em novembro.\"}, {\"speaker\": 1, \"text\": \"A sonda está a 26 bilhões de km do Sol, isso é muito longe?\"}, {\"speaker\": 0, \"text\": \"Ela viaja a 16,9 km/s, mas energia está escassa na sonda.\"}, {\"speaker\": 1, \"text\": \"A intervenção 'Big Bang' substituiu componentes que consomem mais energia?\"}, {\"speaker\": 0, \"text\": \"O marco será atingido em 18 de novembro, às 7h16.\"}, {\"speaker\": 1, \"text\": \"Com tanta distância, ela ainda vai enviar dados pra Terra?\"}, {\"speaker\": 0, \"text\": \"A sonda pode ser o primeiro objeto humano a passar um dia-luz da Terra.\"}, {\"speaker\": 1, \"text\": \"E se a energia acabar, ela vai parar de nos enviar sinal?\"}]}",
+      "erro": "No máximo 50% das falas podem ser perguntas (6 de 10 falas são perguntas).",
+      "erro_validacao": "No máximo 50% das falas podem ser perguntas (6 de 10 falas são perguntas)."
+    },
+    {
+      "tentativa": 7,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Voyager 1 vai para o espaço, mas energia está acabando?\"}, {\"speaker\": 1, \"text\": \"A NASA fez um 'Big Bang' pra economizar energia na sonda?\"}, {\"speaker\": 0, \"text\": \"A Voyager 1 vai ultrapassar um dia-luz da Terra em novembro.\"}, {\"speaker\": 1, \"text\": \"Ela vai passar de 172 unidades astronômicas da Terra?\"}, {\"speaker\": 0, \"text\": \"A sonda viaja a 16,9 km/s, mas a bateria está quase vazia.\"}, {\"speaker\": 1, \"text\": \"A Voyager 1 vai ser o primeiro objeto humano a chegar a esse marco?\"}, {\"speaker\": 0, \"text\": \"A NASA substituiu componentes pra prolongar a vida da sonda.\"}, {\"speaker\": 1, \"text\": \"Com essa energia, ela vai ficar a 26 bilhões de km do Sol?\"}, {\"speaker\": 0, \"text\": \"A sonda vai se tornar o objeto mais distante da humanidade.\"}, {\"speaker\": 1, \"text\": \"E se a energia acabar, ela vai parar de nos enviar dados?\"}]}",
+      "erro": "Contaminação de manchete relacionada detectada: distante. Use apenas fatos do corpo da matéria principal.",
+      "erro_validacao": "Contaminação de manchete relacionada detectada: distante. Use apenas fatos do corpo da matéria principal."
+    },
+    {
+      "tentativa": 8,
+      "resposta_bruta": "{\"lines\": [{\"speaker\": 0, \"text\": \"Voyager 1 vai para o espaço, mas energia está acabando?\"}, {\"speaker\": 1, \"text\": \"A sonda vai ultrapassar um dia-luz da Terra em novembro?\"}, {\"speaker\": 0, \"text\": \"A Voyager 1 será o primeiro objeto humano a atingir esse recorde.\"}, {\"speaker\": 1, \"text\": \"A sonda já está a 26 bilhões de quilômetros do Sol?\"}, {\"speaker\": 0, \"text\": \"A NASA fez uma intervenção para economizar energia da sonda.\"}, {\"speaker\": 1, \"text\": \"Ela viaja a 16,9 km/s, mas a bateria vai acabar?\"}, {\"speaker\": 0, \"text\": \"A Voyager 1 vai ficar tão longe que o sinal levará um dia para chegar.\"}, {\"speaker\": 1, \"text\": \"Se a energia acabar, ela vai parar de enviar dados?\"}, {\"speaker\": 0, \"text\": \"A Voyager 1 pode ser o primeiro objeto humano a sair do sistema solar.\"}, {\"speaker\": 1, \"text\": \"E se ela parar de funcionar, será o fim do contato humano com ela?\"}]}",
+      "erro": "No máximo 50% das falas podem ser perguntas (6 de 10 falas são perguntas).",
+      "erro_validacao": "No máximo 50% das falas podem ser perguntas (6 de 10 falas são perguntas)."
+    }
+  ]
+}
