@@ -384,7 +384,13 @@
 - **Status:** Rodada 7 concluída por completo (Itens 25 a 30 + regressão real + verificação dupla da suíte com isolamento do `output/`).
 
 - [x] **ITEM 31 — Regras DURAS x MOLES (`news_auto.py`, `engine.py`)**: feito
+  - **Commit:** `2e76fa3c8f6dc768c993496e2aaff507782c0885` — *"Separa regras duras e moles com selecao da melhor candidata no redator"*
   - **Arquivos tocados:** `news_auto.py`, `engine.py`, `tests/test_news_auto.py`, `HANDOFF.md`
   - **Testes:** `test_integration` (32 testes) + `test_news_auto` (63 testes, incluindo `test_item31_hard_vs_soft_rules_and_candidate_selection`) — 95 testes passando
   - **Resumo:** separação explícita em `HARD_RULES` e `SOFT_RULES`; `validate_lines_with_soft()` aceita candidatas com `soft_penalty` ponderado (peso 2 para `> 60%` perguntas ou média não-reação `< 4.5`; peso 1 nos demais avisos moles); `write_script()` só aborta `erro repetido 3x` em erros DUROS, retém candidatas que passaram nas regras DURAS, seleciona a de menor `soft_penalty` (desempate pela mais recente) ao fim das tentativas/aborte e grava `tentativa_usada`, `soft_penalty` e `avisos_estilo` tanto nos `rejected_*.json` quanto no JSON final do reel em `engine.render()`.
-  - **Próximo item:** ITEM 32 (Log completo do motivo + prompt limitando perguntas nos exemplos e instruções).
+
+- [x] **ITEM 32 — Log completo do motivo e prompt de estilo (`news_auto.py`)**: feito
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `HANDOFF.md`
+  - **Testes:** `test_integration` (32 testes) + `test_news_auto` (64 testes, incluindo `test_item32_full_reason_logs_and_limited_question_prompt`) — 96 testes passando
+  - **Resumo:** `_short_reason()` ampliado para 220 caracteres preservando `Fala N ("...")` e texto completo da fala no log e mantendo `erro`/`erro_validacao` completos em `falha_roteiro_*.json`; prompt do redator remove `"faz perguntas"` de Naruto, define estrutura alvo (`1 pergunta de gancho + falas afirmativas que trazem um fato ou uma opinião curta; no máximo 3 perguntas no roteiro todo; Naruto traz curiosidade COM um fato ou opinião, não com pergunta em toda fala`) e reduz todos os exemplos (`Exemplo 1`, `Exemplo 2` e `Exemplo 3` de 10 falas) para $\le 3$ perguntas (com novas frases registradas em `_EXAMPLE_LEAK_PHRASES`).
+  - **Próximo item:** ITEM 33 (Copiar os 2 novos `falha_roteiro_20261113_*.json` para `tests/fixtures/real_failures/`, reprocessar todas as tentativas com `validate_lines_with_soft()` e medir taxa de candidatas + distribuição de `soft_penalty`).

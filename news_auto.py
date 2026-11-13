@@ -420,12 +420,15 @@ COMMON_WORDS = {
 _EXAMPLE_LEAK_PHRASES = (
     'Gastar 742 barras num hoverboard solar faz sentido?',
     'A Zorbax fabrica esse modelo mesmo ou é só protótipo?',
+    'A Zorbax fabrica esse modelo de verdade em linha comercial.',
     'A Zorbax já produziu 742 hoverboards solares em Valoria.',
     'A Zorbax produziu 742 hoverboards solares em Valoria.',
     'Com 742 unidades rodando em Valoria, isso muda o trânsito local?',
+    'Com 742 unidades rodando em Valoria, isso muda o trânsito local.',
     'Será que alguém compra esse hoverboard em Valoria?',
     'Quem investe 819 milhões em reatores em Luminopolis?',
     'A NeoQuimera realmente consegue erguer tanto reator lá?',
+    'A NeoQuimera assumiu o projeto e já iniciou os módulos lá.',
     'A NeoQuimera colocou 819 milhões para erguer reatores em Luminopolis.',
     'A NeoQuimera colocou 819 milhões em Luminopolis.',
     'Com 819 milhões no caixa, vão abastecer 2089 torres em Luminopolis.',
@@ -434,6 +437,7 @@ _EXAMPLE_LEAK_PHRASES = (
     'A Kryptonix já espalhou mais de 400 mecazoids pelos bairros.',
     'E a prefeitura ainda liberou quase 953 barras de ouro nisso.',
     'Quanto cada unidade dessa custou para os cofres de Zyphoria?',
+    'Cada unidade custou caro para os cofres públicos de Zyphoria.',
     'O contrato prevê ronda contínua em todas as avenidas centrais.',
     'Mas quem garante que esses robôs não falhem no tráfego?',
     'Os engenheiros da Kryptonix prometeram revisar os sensores a cada mês.',
@@ -2494,14 +2498,9 @@ def _short_reason(error):
     if not error:
         return 'erro desconhecido'
     first_line = str(error).split('\n')[0].strip()
-    m = re.match(r'Fala \d+\s*\([^)]*\):\s*(.+)', first_line)
-    if m:
-        reason = m.group(1).strip()
-    else:
-        reason = first_line
-    if len(reason) > 60:
-        return reason[:57] + '...'
-    return reason
+    if len(first_line) > 220:
+        return first_line[:217] + '...'
+    return first_line
 
 
 def _add_concrete_example(error_msg):
@@ -2660,22 +2659,22 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
     target = max(12, min(int(max_words * 0.9), max_lines * 12))
     few_shot = (
         'EXEMPLOS FICTÍCIOS: copie apenas o estilo e o ritmo, nunca os fatos nem frases prontas.\n'
-        'Sasuke (0): seco, irônico e direto ao ponto. Naruto (1): curioso, faz perguntas e dá opinião curta usando algum fato da matéria — reação curta é opcional, nunca enchimento do Naruto.\n'
+        'Sasuke (0): seco, irônico e direto ao ponto. Naruto (1): curioso, traz curiosidade COM um fato ou opinião curta (não com pergunta em toda fala) — reação curta é opcional, nunca enchimento do Naruto.\n'
         'Exemplo 1:\n'
         '[{"speaker":0,"text":"Gastar 742 barras num hoverboard solar faz sentido?"},'
-        '{"speaker":1,"text":"A Zorbax fabrica esse modelo mesmo ou é só protótipo?"},'
+        '{"speaker":1,"text":"A Zorbax fabrica esse modelo de verdade em linha comercial."},'
         '{"speaker":0,"text":"A Zorbax já produziu 742 hoverboards solares em Valoria."},'
-        '{"speaker":1,"text":"Com 742 unidades rodando em Valoria, isso muda o trânsito local?"}]\n'
+        '{"speaker":1,"text":"Com 742 unidades rodando em Valoria, isso muda o trânsito local."}]\n'
         'Exemplo 2:\n'
         '[{"speaker":0,"text":"Quem investe 819 milhões em reatores em Luminopolis?"},'
-        '{"speaker":1,"text":"A NeoQuimera realmente consegue erguer tanto reator lá?"},'
+        '{"speaker":1,"text":"A NeoQuimera assumiu o projeto e já iniciou os módulos lá."},'
         '{"speaker":0,"text":"A NeoQuimera colocou 819 milhões para erguer reatores em Luminopolis."},'
         '{"speaker":1,"text":"Com 819 milhões no caixa, vão abastecer 2089 torres em Luminopolis."}]\n'
         'Exemplo 3: (roteiro completo de 10 falas sem reações vazias)\n'
         '[{"speaker":0,"text":"Colocar 412 mecazoids para vigiar Zyphoria resolve algum problema?"},'
         '{"speaker":1,"text":"A Kryptonix já espalhou mais de 400 mecazoids pelos bairros."},'
         '{"speaker":0,"text":"E a prefeitura ainda liberou quase 953 barras de ouro nisso."},'
-        '{"speaker":1,"text":"Quanto cada unidade dessa custou para os cofres de Zyphoria?"},'
+        '{"speaker":1,"text":"Cada unidade custou caro para os cofres públicos de Zyphoria."},'
         '{"speaker":0,"text":"O contrato prevê ronda contínua em todas as avenidas centrais."},'
         '{"speaker":1,"text":"Mas quem garante que esses robôs não falhem no tráfego?"},'
         '{"speaker":0,"text":"Os engenheiros da Kryptonix prometeram revisar os sensores a cada mês."},'
@@ -2690,9 +2689,10 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
     )
     instruction = (
         'Passo 2 — Roteiro de diálogo: escreva um diálogo para Reel vertical de ' + kind.lower() + ' em português brasileiro. '
-        'Sasuke (speaker 0: seco, irônico e direto) e Naruto (speaker 1: curioso, faz perguntas e dá opinião curta usando um fato) conversam ALTERNANDO as falas.\n'
+        'Sasuke (speaker 0: seco, irônico e direto) e Naruto (speaker 1: curioso, traz curiosidade com um fato ou opinião curta) conversam ALTERNANDO as falas.\n'
         + few_shot +
         'Regras obrigatórias:\n'
+        '- Estrutura alvo: 1 pergunta de gancho + falas afirmativas que trazem um fato ou uma opinião curta; no máximo 3 perguntas no roteiro todo; Naruto traz curiosidade COM um fato ou opinião, não com pergunta em toda fala.\n'
         '- TODA fala deve trazer informação factual nova de "fatos_da_materia", pergunta baseada em fato ou opinião curta apoiada em fato (nunca coloque fala vazia ou enchimento).\n'
         '- Use exclusivamente os fatos numerados em "fatos_da_materia" (pode combinar mais de um fato na mesma fala; cubra pelo menos 4 fatos distintos).\n'
         '- Reações curtas são opcionais (máximo 6 palavras, sem números, nunca consecutivas, nunca na última fala e no máximo 2 por roteiro — prefira resposta com fato ou opinião curta em vez de reação).\n'

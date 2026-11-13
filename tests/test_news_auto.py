@@ -1492,7 +1492,8 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
 
         writer_inst = captured_instructions[0]
         self.assertIn('Sasuke (0): seco, irônico e direto ao ponto', writer_inst)
-        self.assertIn('Naruto (1): curioso, faz perguntas e dá opinião curta usando algum fato da matéria', writer_inst)
+        self.assertIn('Naruto (1): curioso, traz curiosidade COM um fato ou opinião curta', writer_inst)
+        self.assertNotIn('faz perguntas', writer_inst)
         self.assertIn('hoverboard', writer_inst)
         self.assertIn('Luminopolis', writer_inst)
 
@@ -3085,7 +3086,8 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
         self.assertTrue(captured_prompts)
         inst = captured_prompts[0]
         self.assertIn('seco, irônico e direto', inst)
-        self.assertIn('curioso, faz perguntas e dá opinião curta usando algum fato da matéria', inst)
+        self.assertIn('curioso, traz curiosidade COM um fato ou opinião curta', inst)
+        self.assertNotIn('faz perguntas', inst)
         self.assertIn('reação curta é opcional', inst)
         self.assertIn('nunca enchimento do Naruto', inst)
         self.assertIn('Exemplo 3: (roteiro completo de 10 falas sem reações vazias)', inst)
@@ -3095,6 +3097,7 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
         ex3_lines = json.loads(ex3_match.group(1))
         self.assertEqual(len(ex3_lines), 10)
         self.assertEqual([l['speaker'] for l in ex3_lines], [i % 2 for i in range(10)])
+        self.assertLessEqual(sum(1 for l in ex3_lines if '?' in l['text']), 3)
         self.assertNotIn('loucura pura', ex3_match.group(1).lower())
         self.assertNotIn('Pra mim', ex3_match.group(1))
 
@@ -3352,6 +3355,76 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
             self.assertEqual(reel_meta.get('tentativa_usada'), 6)
             self.assertEqual(reel_meta.get('soft_penalty'), 2)
             self.assertEqual(reel_meta.get('avisos_estilo'), story_best.get('avisos_estilo'))
+
+    def test_item32_full_reason_logs_and_limited_question_prompt(self):
+        # 1. _short_reason preserva até 220 caracteres e inclui Fala N + texto completo da fala
+        per_line_err = 'Fala 8 ("Se o aquecimento continuar, o Brasil pode enfrentar secas graves"): Números ausentes na matéria: 999.'
+        reason = news_auto._short_reason(per_line_err)
+        self.assertIn('Fala 8', reason)
+        self.assertIn('Se o aquecimento continuar, o Brasil pode enfrentar secas graves', reason)
+        self.assertGreater(len(reason), 60)
+        self.assertEqual(reason, per_line_err)
+
+        long_err = 'Fala 8 ("' + ('palavra ' * 35).strip() + '"): motivo longo.'
+        truncated = news_auto._short_reason(long_err)
+        self.assertEqual(len(truncated), 220)
+        self.assertTrue(truncated.endswith('...'))
+
+        # 2. write_script loga fala inteira + motivo no log e grava completo em falha_roteiro_*.json
+        facts = [
+            'O telescópio espacial James Webb da Nasa observou galáxias distantes.',
+            'A missão espacial durou cerca de três anos.',
+            'O Webb detectou 25 novos exoplanetas e 277 asteroides.',
+            'Os cientistas analisaram amostras de poeira cósmica.',
+        ]
+        story = {
+            'title': 'Descobertas do Telescópio Webb',
+            'body': ' '.join(facts) + ' O telescópio Webb revelou imagens inéditas e os cientistas celebraram.',
+            'source_type': 'rss',
+            'extracted_facts': list(facts),
+        }
+        captured_inst = []
+        bad_line8 = 'Se o aquecimento espacial continuar, o Brasil enfrenta 999 problemas novos.'
+        bad_script = {
+            'lines': [
+                {'speaker': 0, 'text': 'O que o telescópio James Webb detectou?'},
+                {'speaker': 1, 'text': 'O Webb detectou 25 novos exoplanetas e 277 asteroides.'},
+                {'speaker': 0, 'text': 'A missão espacial da Nasa durou cerca de três anos.'},
+                {'speaker': 1, 'text': 'O observatório espacial captou galáxias muito distantes.'},
+                {'speaker': 0, 'text': 'Os cientistas analisaram amostras de poeira cósmica.'},
+                {'speaker': 1, 'text': 'Essas descobertas ampliam nosso mapa espacial.'},
+                {'speaker': 0, 'text': 'O custo científico compensou cada mês de pesquisa.'},
+                {'speaker': 1, 'text': bad_line8},
+            ]
+        }
+        logs = []
+
+        def mock_writer_fail(inst, payload_str, temperature=None):
+            captured_inst.append(inst)
+            return bad_script
+
+        with self.assertRaises(RuntimeError):
+            news_auto.write_script(story, max_words=150, ask=mock_writer_fail, facts=facts, log=logs.append)
+
+        self.assertTrue(any('Fala 8' in l and bad_line8 in l and 'Números ausentes' in l for l in logs), logs)
+        fail_files = sorted(engine.OUTPUT.glob('falha_roteiro_*.json'))
+        self.assertTrue(fail_files)
+        fail_data = json.loads(fail_files[-1].read_text(encoding='utf-8'))
+        self.assertIn(bad_line8, fail_data['tentativas'][0]['erro'])
+        self.assertIn(bad_line8, fail_data['tentativas'][0]['erro_validacao'])
+
+        # 3. Prompt remove "faz perguntas", instrui <= 3 perguntas e todos os exemplos respeitam <= 3 perguntas
+        inst = captured_inst[0]
+        self.assertNotIn('faz perguntas', inst)
+        self.assertIn('1 pergunta de gancho + falas afirmativas que trazem um fato ou uma opinião curta', inst)
+        self.assertIn('no máximo 3 perguntas no roteiro todo', inst)
+        self.assertIn('Naruto traz curiosidade COM um fato ou opinião, não com pergunta em toda fala', inst)
+        for ex_name in ('Exemplo 1:', 'Exemplo 2:', 'Exemplo 3:'):
+            m = news_auto.re.search(news_auto.re.escape(ex_name) + r'[^\n]*\n(\[\{.*?\}\])', inst)
+            self.assertIsNotNone(m, ex_name)
+            ex_lines = json.loads(m.group(1))
+            q_count = sum(1 for l in ex_lines if '?' in l['text'])
+            self.assertLessEqual(q_count, 3, f'{ex_name} tem {q_count} perguntas')
 
 
 if __name__ == '__main__':
