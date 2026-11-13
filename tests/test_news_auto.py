@@ -1491,8 +1491,8 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
             res_lines = news_auto.write_script(story, max_words=80, ask=capture_ask, judge_ask=mock_judge, facts=story['extracted_facts'])
 
         writer_inst = captured_instructions[0]
-        self.assertIn('Sasuke (0): direto, seco e irônico', writer_inst)
-        self.assertIn('Naruto (1): exagerado, curioso e espontâneo', writer_inst)
+        self.assertIn('Sasuke (0): seco, irônico e direto ao ponto', writer_inst)
+        self.assertIn('Naruto (1): curioso, faz perguntas e dá opinião curta usando algum fato da matéria', writer_inst)
         self.assertIn('hoverboard', writer_inst)
         self.assertIn('Luminopolis', writer_inst)
 
@@ -3050,6 +3050,53 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
         self.assertFalse(any('Quina' in t for t in titles))
         self.assertFalse(any('futebol' in t for t in titles))
         self.assertTrue(any("tema 'ciência': 3 pautas compatíveis; usando as 3 melhores" in l for l in gather_logs), gather_logs)
+
+    def test_item30_writer_style_prompt_and_ten_line_example(self):
+        story = {
+            'title': 'Solaris amplia usinas eólicas no Ceará com 12 parques',
+            'body': 'A Solaris concluiu a expansão de 12 parques eólicos no Ceará com R$ 350 milhões investidos em energia limpa e 80 mil residências atendidas. ' * 40,
+        }
+        facts = [
+            'A Solaris concluiu a expansão de 12 parques eólicos no Ceará.',
+            'O investimento total no Ceará somou R$ 350 milhões.',
+            'As novas turbinas abastecem 80 mil residências na região.',
+            'O projeto reduziu custos de distribuição elétrica no estado.',
+        ]
+        captured_prompts = []
+        valid_lines = [
+            {'speaker': 0, 'text': 'Valeu investir R$ 350 milhões em energia no Ceará?'},
+            {'speaker': 1, 'text': 'A Solaris concluiu 12 parques eólicos novos no Ceará.'},
+            {'speaker': 0, 'text': 'O investimento total somou R$ 350 milhões em infraestrutura.'},
+            {'speaker': 1, 'text': 'As turbinas já abastecem 80 mil residências na região.'},
+            {'speaker': 0, 'text': 'O projeto reduziu bastante os custos de distribuição elétrica.'},
+            {'speaker': 1, 'text': 'Expandir a energia eólica evita apagões caros no estado.'},
+        ]
+
+        def mock_ask(inst, payload_str, temperature=None):
+            captured_prompts.append(inst)
+            return {'lines': valid_lines}
+
+        mock_judge = lambda i, p, **k: (
+            {'falas': [{'i': idx, 'suportada': True, 'motivo': ''} for idx in range(len(valid_lines))]}
+            if 'checador de fatos' in i.lower() else {'nota': 9, 'problemas': []}
+        )
+        res = news_auto.write_script(story, max_words=120, ask=mock_ask, judge_ask=mock_judge, facts=facts)
+        self.assertEqual(len(res), 6)
+        self.assertTrue(captured_prompts)
+        inst = captured_prompts[0]
+        self.assertIn('seco, irônico e direto', inst)
+        self.assertIn('curioso, faz perguntas e dá opinião curta usando algum fato da matéria', inst)
+        self.assertIn('reação curta é opcional', inst)
+        self.assertIn('nunca enchimento do Naruto', inst)
+        self.assertIn('Exemplo 3: (roteiro completo de 10 falas sem reações vazias)', inst)
+        # Extrai o JSON do Exemplo 3 e garante exatamente 10 falas alternadas e sem reações vazias
+        ex3_match = news_auto.re.search(r'Exemplo 3:[^\n]*\n(\[\{.*?\}\])', inst)
+        self.assertIsNotNone(ex3_match)
+        ex3_lines = json.loads(ex3_match.group(1))
+        self.assertEqual(len(ex3_lines), 10)
+        self.assertEqual([l['speaker'] for l in ex3_lines], [i % 2 for i in range(10)])
+        self.assertNotIn('loucura pura', ex3_match.group(1).lower())
+        self.assertNotIn('Pra mim', ex3_match.group(1))
 
 
 if __name__ == '__main__':

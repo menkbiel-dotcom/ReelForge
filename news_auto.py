@@ -419,11 +419,27 @@ COMMON_WORDS = {
 
 _EXAMPLE_LEAK_PHRASES = (
     'Gastar 742 barras num hoverboard solar faz sentido?',
+    'A Zorbax fabrica esse modelo mesmo ou é só protótipo?',
+    'A Zorbax já produziu 742 hoverboards solares em Valoria.',
     'A Zorbax produziu 742 hoverboards solares em Valoria.',
+    'Com 742 unidades rodando em Valoria, isso muda o trânsito local?',
     'Será que alguém compra esse hoverboard em Valoria?',
     'Quem investe 819 milhões em reatores em Luminopolis?',
+    'A NeoQuimera realmente consegue erguer tanto reator lá?',
+    'A NeoQuimera colocou 819 milhões para erguer reatores em Luminopolis.',
     'A NeoQuimera colocou 819 milhões em Luminopolis.',
+    'Com 819 milhões no caixa, vão abastecer 2089 torres em Luminopolis.',
     'Eles ainda vão abastecer 2089 torres em Luminopolis.',
+    'Colocar 412 mecazoids para vigiar Zyphoria resolve algum problema?',
+    'A Kryptonix já espalhou mais de 400 mecazoids pelos bairros.',
+    'E a prefeitura ainda liberou quase 953 barras de ouro nisso.',
+    'Quanto cada unidade dessa custou para os cofres de Zyphoria?',
+    'O contrato prevê ronda contínua em todas as avenidas centrais.',
+    'Mas quem garante que esses robôs não falhem no tráfego?',
+    'Os engenheiros da Kryptonix prometeram revisar os sensores a cada mês.',
+    'Se falharem nas avenidas, o prejuízo de Zyphoria só aumenta.',
+    'A oposição cobrou auditoria completa antes de ampliar o lote.',
+    'Sem auditoria aberta antes da compra, esse gasto de ouro não se paga.',
     'Colocar 412 mecazoids para patrulhar faz sentido?',
     'A Kryptonix espalhou mais de 400 mecazoids em Zyphoria.',
     'Os caras vão vigiar a cidade inteira agora!',
@@ -2444,27 +2460,29 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
     min_lines, max_lines = turn_range(story, max_words, previous)
     target = max(12, min(int(max_words * 0.9), max_lines * 12))
     few_shot = (
-        'EXEMPLOS FICTÍCIOS: copie apenas o estilo e o ritmo, nunca os fatos.\n'
-        'Sasuke (0): direto, seco e irônico. Naruto (1): exagerado, curioso e espontâneo.\n'
+        'EXEMPLOS FICTÍCIOS: copie apenas o estilo e o ritmo, nunca os fatos nem frases prontas.\n'
+        'Sasuke (0): seco, irônico e direto ao ponto. Naruto (1): curioso, faz perguntas e dá opinião curta usando algum fato da matéria — reação curta é opcional, nunca enchimento do Naruto.\n'
         'Exemplo 1:\n'
         '[{"speaker":0,"text":"Gastar 742 barras num hoverboard solar faz sentido?"},'
-        '{"speaker":1,"text":"Mano, isso é caro demais!"},'
-        '{"speaker":0,"text":"A Zorbax produziu 742 hoverboards solares em Valoria."},'
-        '{"speaker":1,"text":"Será que alguém compra esse hoverboard em Valoria?"}]\n'
+        '{"speaker":1,"text":"A Zorbax fabrica esse modelo mesmo ou é só protótipo?"},'
+        '{"speaker":0,"text":"A Zorbax já produziu 742 hoverboards solares em Valoria."},'
+        '{"speaker":1,"text":"Com 742 unidades rodando em Valoria, isso muda o trânsito local?"}]\n'
         'Exemplo 2:\n'
         '[{"speaker":0,"text":"Quem investe 819 milhões em reatores em Luminopolis?"},'
-        '{"speaker":1,"text":"Caramba, não sabia dessa loucura!"},'
-        '{"speaker":0,"text":"A NeoQuimera colocou 819 milhões em Luminopolis."},'
-        '{"speaker":1,"text":"Eles ainda vão abastecer 2089 torres em Luminopolis."}]\n'
-        'Exemplo 3:\n'
-        '[{"speaker":0,"text":"Colocar 412 mecazoids para patrulhar faz sentido?"},'
-        '{"speaker":1,"text":"Mano, isso é loucura pura!"},'
-        '{"speaker":0,"text":"A Kryptonix espalhou mais de 400 mecazoids em Zyphoria."},'
-        '{"speaker":1,"text":"Os caras vão vigiar a cidade inteira agora!"},'
-        '{"speaker":0,"text":"Eles gastaram cerca de 953 barras de ouro nisso."},'
-        '{"speaker":1,"text":"Caramba, gastaram tudo isso mesmo?"},'
-        '{"speaker":0,"text":"O objetivo oficial é monitorar todas as ruas."},'
-        '{"speaker":1,"text":"Encher a cidade de robôs desse jeito é arriscado demais."}]\n'
+        '{"speaker":1,"text":"A NeoQuimera realmente consegue erguer tanto reator lá?"},'
+        '{"speaker":0,"text":"A NeoQuimera colocou 819 milhões para erguer reatores em Luminopolis."},'
+        '{"speaker":1,"text":"Com 819 milhões no caixa, vão abastecer 2089 torres em Luminopolis."}]\n'
+        'Exemplo 3: (roteiro completo de 10 falas sem reações vazias)\n'
+        '[{"speaker":0,"text":"Colocar 412 mecazoids para vigiar Zyphoria resolve algum problema?"},'
+        '{"speaker":1,"text":"A Kryptonix já espalhou mais de 400 mecazoids pelos bairros."},'
+        '{"speaker":0,"text":"E a prefeitura ainda liberou quase 953 barras de ouro nisso."},'
+        '{"speaker":1,"text":"Quanto cada unidade dessa custou para os cofres de Zyphoria?"},'
+        '{"speaker":0,"text":"O contrato prevê ronda contínua em todas as avenidas centrais."},'
+        '{"speaker":1,"text":"Mas quem garante que esses robôs não falhem no tráfego?"},'
+        '{"speaker":0,"text":"Os engenheiros da Kryptonix prometeram revisar os sensores a cada mês."},'
+        '{"speaker":1,"text":"Se falharem nas avenidas, o prejuízo de Zyphoria só aumenta."},'
+        '{"speaker":0,"text":"A oposição cobrou auditoria completa antes de ampliar o lote."},'
+        '{"speaker":1,"text":"Sem auditoria aberta antes da compra, esse gasto de ouro não se paga."}]\n'
     )
     hook_instruction = (
         f'- PRIMEIRA FALA OBRIGATÓRIA: a primeira fala (speaker 0) DEVE ser exatamente este gancho: "{valid_hook}". Não altere essa pergunta.\n'
@@ -2473,11 +2491,12 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
     )
     instruction = (
         'Passo 2 — Roteiro de diálogo: escreva um diálogo para Reel vertical de ' + kind.lower() + ' em português brasileiro. '
-        'Sasuke (speaker 0, direto e irônico) e Naruto (speaker 1, curioso e espontâneo) conversam ALTERNANDO as falas.\n'
+        'Sasuke (speaker 0: seco, irônico e direto) e Naruto (speaker 1: curioso, faz perguntas e dá opinião curta usando um fato) conversam ALTERNANDO as falas.\n'
         + few_shot +
         'Regras obrigatórias:\n'
+        '- TODA fala deve trazer informação factual nova de "fatos_da_materia", pergunta baseada em fato ou opinião curta apoiada em fato (nunca coloque fala vazia ou enchimento).\n'
         '- Use exclusivamente os fatos numerados em "fatos_da_materia" (pode combinar mais de um fato na mesma fala; cubra pelo menos 4 fatos distintos).\n'
-        '- Reações curtas são opcionais (máximo 6 palavras, sem números, nunca consecutivas, nunca na última fala e no máximo 2 por roteiro).\n'
+        '- Reações curtas são opcionais (máximo 6 palavras, sem números, nunca consecutivas, nunca na última fala e no máximo 2 por roteiro — prefira resposta com fato ou opinião curta em vez de reação).\n'
         '- Comentários ou opiniões próprias curtas (até 14 palavras) não podem conter números nem entidades fora dos fatos/título.\n'
         '- Estilo falado e informal: evite tom de matéria lida ou telejornal (ex.: em vez de "O Brasil exportou 34,478 milhões de sacas", use "O Brasil mandou mais de 34 milhões de sacas pra fora"; em vez de "arrecadou US$ 1,786 bilhão", prefira "faturou quase 1,8 bilhão de dólares").\n'
         '- Arredonde números com naturalidade: use qualificadores conforme a regra: "mais de X" se o valor real for maior que X (ex.: 34,478 vira "mais de 34 milhões"); "quase X" se for logo abaixo de X (ex.: 1,786 vira "quase 1,8 bilhão"); ou "cerca de X" para valores aproximados. Nunca invente números fora da matéria.\n'

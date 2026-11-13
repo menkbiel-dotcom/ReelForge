@@ -350,6 +350,7 @@
 - **Refino de `"contaminação de manchete relacionada"` (`COMMON_WORDS`):** só acusa token presente nas manchetes relacionadas que não apareça na matéria nem nos fatos, tenha $\ge 6$ letras ou seja nome próprio (`_entities`), e não esteja em `COMMON_WORDS` (`hora`, `horas`, `brasil`, `brasileiro`, `brasileiros`, `pais`, `mundo`, `governo`, `dia`, `dias`, `ano`, `anos`, `agora`, `hoje`, `tempo`, `vez`, `gente`, `pessoas`, ...).
 
 - [x] **ITEM 29 — Filtro de pautas (`news_auto.py`)**: feito
+  - **Commit:** `30e85a276dc7e9a3f5c85fa4c0d5ea7331fb2303` — *"Reforca filtro de pautas (exclui loterias/bets, exige 300 palavras e aplica filtro duro de tema)"*
   - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** 92 testes passando (incluindo `test_item29_junk_lottery_filter_min_body_and_hard_topic_filter`)
 
@@ -357,4 +358,12 @@
 - **Exclusão de loterias/apostas/serviços (`EXCLUDED_TITLE_RE` em `is_news()` e `pick_story()`):** rejeita títulos (case-insensitive) contendo `quina`, `mega-sena`, `lotofácil`, `lotomania`, `dia de sorte`, `timemania`, `loteria`, `sorteio`, `resultado do jogo`, `horóscopo`, `palpite`, `\bbet\b`, `bets`, `cotação do dia` e `previsão do tempo de hoje`.
 - **Corpo mínimo `>= 300` palavras:** `MIN_BODY` elevado para `300` (em `parse_entry` e `gather_candidates`) e priorização de pautas com $\ge 300$ palavras em `pick_story()`.
 - **Filtro DURO de tema (`_topic_keywords` / `_matches_topic` / `CATEGORY_EXTRA_KEYWORDS`):** quando houver $\ge 3$ pautas compatíveis com o tema especificado em `gather_candidates()` ou `pick_story(..., topic=...)`, descarta pautas fora do tema e loga `"tema 'X': N pautas compatíveis; usando as M melhores"`.
-- **Próximo item:** ITEM 30 — Estilo do redator (`news_auto.py`).
+
+- [x] **ITEM 30 — Estilo do redator (`news_auto.py`)**: feito
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 93 testes passando (incluindo `test_item30_writer_style_prompt_and_ten_line_example`)
+
+### Detalhes do ITEM 30
+- **Prompt de persona e substância em `write_script()`:** define explicitamente **Sasuke (`0`)** como seco, irônico e direto ao ponto, e **Naruto (`1`)** como curioso, que faz perguntas e dá opinião curta apoiada em fato da matéria — reação curta é opcional (máximo 2, nunca enchimento do Naruto). Exige que toda fala traga informação factual nova, pergunta baseada em fato ou opinião curta apoiada em fato.
+- **Exemplos fictícios (`few_shot` e `_EXAMPLE_LEAK_PHRASES`):** limpos de reações vazias/chavões, incluindo um roteiro fictício completo de **10 falas** (`Exemplo 3:`) sem reações vazias nem bordões reutilizáveis, mantendo a cobertura de `FICTIONAL_EXAMPLE_TERMS` e `_PROMPT_EXAMPLE_5GRAMS`.
+- **Próximo item:** Teste de regressão com os 6 arquivos reais em `tests/fixtures/real_failures/` (`tests/test_news_auto.py`).
