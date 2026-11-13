@@ -3190,6 +3190,169 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
 
         self.assertEqual(passed, 0)
 
+    def test_item31_hard_vs_soft_rules_and_candidate_selection(self):
+        # 1. Constantes HARD_RULES e SOFT_RULES existem e estão documentadas
+        self.assertIn('numeros_e_quantidades', news_auto.HARD_RULES)
+        self.assertIn('checagem_fatos_fail_closed', news_auto.HARD_RULES)
+        self.assertIn('proporcao_perguntas', news_auto.SOFT_RULES)
+        self.assertIn('media_palavras', news_auto.SOFT_RULES)
+
+        base_facts = [
+            'O telescópio espacial James Webb da Nasa observou galáxias distantes.',
+            'A missão espacial durou cerca de três anos.',
+            'O Webb detectou 25 novos exoplanetas e 277 asteroides.',
+            'Os cientistas analisaram amostras de poeira cósmica.',
+        ]
+        base_story = {
+            'title': 'Descobertas do Telescópio Webb',
+            'body': 'O telescópio espacial James Webb da Nasa observou galáxias distantes. '
+                    'A missão espacial durou cerca de três anos e analisou amostras de poeira cósmica. '
+                    'O Webb detectou 25 novos exoplanetas e 277 asteroides.',
+            'source_type': 'rss',
+            'extracted_facts': list(base_facts),
+        }
+        mock_judge = (
+            lambda i, p, model=None:
+            {'falas': [{'i': idx, 'suportada': True, 'motivo': ''} for idx in range(8)]}
+            if 'checador de fatos' in i.lower()
+            else {'nota': 8, 'responde_perguntas': True, 'contradiz_materia': False, 'problemas': []}
+        )
+
+        # Script válido nas regras DURAS, mas com 5 de 8 perguntas (>60% => peso 2)
+        many_questions_script = {
+            'lines': [
+                {'speaker': 0, 'text': 'O que o telescópio James Webb detectou no espaço?'},
+                {'speaker': 1, 'text': 'Ele detectou 25 novos exoplanetas e 277 asteroides?'},
+                {'speaker': 0, 'text': 'As descobertas de galáxias distantes surpreenderam a Nasa?'},
+                {'speaker': 1, 'text': 'A missão espacial do observatório durou cerca de três anos.'},
+                {'speaker': 0, 'text': 'Os cientistas realmente analisaram amostras de poeira cósmica?'},
+                {'speaker': 1, 'text': 'Isso abre caminho para entender novos sistemas planetários?'},
+                {'speaker': 0, 'text': 'Sem falar que a poeira cósmica traz pistas antigas.'},
+                {'speaker': 1, 'text': 'Vale acompanhar o próximo passo da astronomia com calma.'},
+            ]
+        }
+
+        # 2 & 4. 5/8 perguntas repetidas 8x NÃO abortam por "erro repetido 3x" e viram candidata aceita no fim
+        calls_q = []
+        logs_q = []
+        story_q = dict(base_story)
+
+        def writer_many_questions(inst, payload_str, temperature=None):
+            calls_q.append(temperature)
+            return many_questions_script
+
+        out_q = news_auto.write_script(
+            story_q, max_words=150, ask=writer_many_questions, judge_ask=mock_judge,
+            facts=base_facts, log=logs_q.append,
+        )
+        self.assertEqual(len(calls_q), 8)
+        self.assertEqual(len(out_q), 8)
+        self.assertFalse(any('erro repetido 3x:' in m for m in logs_q))
+        self.assertTrue(any('usando a melhor tentativa (8/8) com 1 avisos de estilo:' in m for m in logs_q))
+        self.assertEqual(story_q.get('tentativa_usada'), 8)
+        self.assertEqual(story_q.get('soft_penalty'), 2)
+        self.assertEqual(len(story_q.get('avisos_estilo', [])), 1)
+
+        # 3. Número inventado NUNCA vira candidato (falha se todas as tentativas violarem regras DURAS)
+        story_inv = dict(base_story)
+
+        def writer_invented(inst, payload_str, temperature=None):
+            bad = {'lines': [dict(l) for l in many_questions_script['lines']]}
+            bad['lines'][1]['text'] = 'Ele detectou 999 planetas secretos bem longe?'
+            return bad
+
+        with self.assertRaisesRegex(RuntimeError, r'erro repetido 3x:'):
+            news_auto.write_script(
+                story_inv, max_words=150, ask=writer_invented, judge_ask=mock_judge,
+                facts=base_facts, log=lambda *_: None,
+            )
+
+        # 4b. Seleção da melhor candidata: menor soft_penalty, desempate pela mais recente
+        # Tentativa 2: soft_penalty=3 (62.5% perguntas peso 2 + >3 opiniões peso 1? ou + fecho repetido/filler peso 1)
+        # Tentativa 4: soft_penalty=2 (5/8 perguntas peso 2)
+        # Tentativa 6: soft_penalty=2 (5/8 perguntas peso 2) -> deve escolher tentativa 6!
+        # Tentativas 1,3,5,7,8: erro DURO
+        script_pen3 = {
+            'lines': [dict(l) for l in many_questions_script['lines'][:-1]] + [
+                {'speaker': 1, 'text': 'Que legal saber disso tudo!'}
+            ]
+        }
+        story_best = dict(base_story)
+        attempt_counter = {'n': 0}
+        logs_best = []
+
+        def writer_best_pick(inst, payload_str, temperature=None):
+            attempt_counter['n'] += 1
+            n = attempt_counter['n']
+            if n == 2:
+                return script_pen3
+            if n == 4:
+                s4 = {'lines': [dict(l) for l in many_questions_script['lines']]}
+                s4['lines'][7]['text'] = 'A pesquisa espacial merece atenção redobrada agora.'
+                return s4
+            if n == 6:
+                s6 = {'lines': [dict(l) for l in many_questions_script['lines']]}
+                s6['lines'][7]['text'] = 'Esse avanço científico muda nossa visão do universo!'
+                return s6
+            bad = {'lines': [dict(l) for l in many_questions_script['lines']]}
+            bad['lines'][1]['text'] = f'Ele detectou {800 + n} novos cometas!'
+            return bad
+
+        out_best = news_auto.write_script(
+            story_best, max_words=150, ask=writer_best_pick, judge_ask=mock_judge,
+            facts=base_facts, log=logs_best.append,
+        )
+        self.assertEqual(story_best.get('tentativa_usada'), 6)
+        self.assertEqual(story_best.get('soft_penalty'), 2)
+        self.assertEqual(out_best[-1]['text'], 'Esse avanço científico muda nossa visão do universo!')
+        self.assertTrue(any('usando a melhor tentativa (6/8)' in m for m in logs_best))
+
+        # 5. Campos tentativa_usada, soft_penalty e avisos_estilo salvos em rejected_*.json e no JSON do reel
+        mock_judge_low = (
+            lambda i, p, model=None:
+            {'falas': [{'i': idx, 'suportada': True, 'motivo': ''} for idx in range(8)]}
+            if 'checador de fatos' in i.lower()
+            else {
+                'nota': 4,
+                'responde_perguntas': True,
+                'contradiz_materia': False,
+                'problemas': [{
+                    'i': 0,
+                    'trecho': many_questions_script['lines'][0]['text'],
+                    'tipo': 'ritmo',
+                    'motivo': 'Perguntas em excesso quebram o ritmo',
+                }],
+            }
+        )
+        story_rej = dict(base_story)
+        with self.assertRaises(RuntimeError) as ctx_rej:
+            news_auto.write_script(
+                story_rej, max_words=150, ask=writer_many_questions, judge_ask=mock_judge_low,
+                facts=base_facts, accept_low_score=False, log=lambda *_: None,
+            )
+        self.assertIn('Salvo em', str(ctx_rej.exception))
+        rej_files = sorted(engine.OUTPUT.glob('rejected_*.json'))
+        self.assertTrue(rej_files)
+        rej_data = json.loads(rej_files[-1].read_text(encoding='utf-8'))
+        self.assertEqual(rej_data.get('tentativa_usada'), 8)
+        self.assertEqual(rej_data.get('soft_penalty'), 2)
+        self.assertIsInstance(rej_data.get('avisos_estilo'), list)
+        self.assertEqual(len(rej_data['avisos_estilo']), 1)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_mp4 = Path(tmp) / 'reel_test.mp4'
+            fake_mp4.write_bytes(b'mp4')
+            fake_gp = Path(tmp) / 'bg.mp4'
+            fake_json = fake_mp4.with_suffix('.json')
+            fake_json.write_text(json.dumps({'title': story_best['title'], 'lines': [{'speaker': 0, 'text': 'a'}]}), encoding='utf-8')
+            with patch('render_pipeline.render', return_value=fake_mp4), \
+                 patch.object(engine, 'load_settings', return_value={}):
+                engine.render(story_best, [{'speaker': 0, 'text': 'a', 'fato': 0}], fake_gp, fps=30, max_seconds=45)
+            reel_meta = json.loads(fake_json.read_text(encoding='utf-8'))
+            self.assertEqual(reel_meta.get('tentativa_usada'), 6)
+            self.assertEqual(reel_meta.get('soft_penalty'), 2)
+            self.assertEqual(reel_meta.get('avisos_estilo'), story_best.get('avisos_estilo'))
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

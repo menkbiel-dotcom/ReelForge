@@ -1710,8 +1710,47 @@ def normalize_lines(raw_or_lines, facts=None, title='', log=print, max_lines=12)
     return norm
 
 
-def validate_lines(raw, story, budget, loop=False, min_lines=6, max_lines=12, facts=None, log=print, repair_reactions_enabled=False, normalize=False):
-    """Valida o roteiro contra a união de fatos, título e corpo da matéria (nunca contra manchetes relacionadas)."""
+# Regras DURAS: violar qualquer uma destas regras rejeita a tentativa imediatamente.
+HARD_RULES = {
+    'estrutura_json': 'JSON válido com falas entre min_lines e max_lines após reparo de estrutura.',
+    'gancho_curto': 'Primeira fala tem no máximo 10 palavras, sem "Mas..."/conector solto nem repetição literal da manchete.',
+    'gancho_respondido': 'Quando o gancho é pergunta, as falas 2-3 trazem resposta ancorada nos fatos.',
+    'limite_palavras': 'Total de palavras dentro do orçamento (budget).',
+    'numeros_e_quantidades': 'Números e quantidades pertencem à união fatos+título+fonte.',
+    'unidades_temporais': 'Unidades temporais existem na fonte/título.',
+    'entidades_validadas': 'Nomes próprios/entidades em falas factuais existem na união fatos+título+fonte.',
+    'termos_exemplo_e_5gramas': 'Sem termos fictícios dos exemplos nem 5-gramas copiados do prompt.',
+    'contaminacao_manchete_relacionada': 'Sem vazamento de termos/entidades de manchetes relacionadas.',
+    'lingua_impropria': 'Sem palavrões ou termos ofensivos.',
+    'veiculo_ou_telejornal': 'Sem citar nome do veículo ou expressões de telejornal.',
+    'cobertura_fatos_e_titulo': 'Cobertura mínima de fatos distintos, detalhes concretos e palavras-chave do título.',
+    'nao_termina_em_reacao': 'Última fala nunca pode ser reação.',
+    'fecho_completo': 'Com loop=False, última fala não termina cortada em conector solto.',
+    'checagem_fatos_fail_closed': 'Verificação factual (verificar_fatos) aprovada no modo fail-closed.',
+}
+
+# Regras MOLES: penalizam (soft_penalty) e geram avisos para retry, mas permitem candidatas quando todas as DURAS passam.
+SOFT_RULES = {
+    'proporcao_perguntas': {'weight': 1, 'heavy_weight': 2, 'description': 'Mais de 50% de perguntas (peso 1; >60% peso 2).'},
+    'vocativos': {'weight': 1, 'description': 'Mais de 3 vocativos no roteiro ou vocativo em fala com número.'},
+    'muletas_concordancia': {'weight': 1, 'description': 'Mais de 1 fala começando com muleta de concordância.'},
+    'media_palavras': {'weight': 1, 'heavy_weight': 2, 'description': 'Média de palavras por fala não-reação < 6.0 (peso 1; <4.5 peso 2).'},
+    'num_reacoes_opinioes': {'weight': 1, 'description': 'Reações > 2, consecutivas/repetidas, ou opiniões > 3.'},
+    'fecho_enchimento': {'weight': 1, 'description': 'Fecho genérico ("Será que ...?", enchimento ou repetindo dados).'},
+    'falas_comecam_igual': {'weight': 1, 'description': 'Fala começando igual a 2 anteriores.'},
+    'sasuke_sem_pergunta': {'weight': 1, 'description': 'Sasuke sem nenhuma pergunta ou provocação.'},
+    'repeticao_falas': {'weight': 1, 'description': 'Falas duplicadas após normalização.'},
+}
+
+
+def _validate_lines_core(raw, story, budget, loop=False, min_lines=6, max_lines=12, facts=None, log=print, repair_reactions_enabled=False, normalize=False, allow_soft=False):
+    """Valida o roteiro contra a união de fatos, título e corpo da matéria (separando regras DURAS e MOLES)."""
+    soft_violations = []
+
+    def _soft_or_raise(rule_id, message, weight=1):
+        if not allow_soft:
+            raise ValueError(message)
+        soft_violations.append((rule_id, weight, message))
     if not story.get('body') and len(source_text(story).split()) < MIN_SOURCE_WORDS:
         # Se não tem corpo nem atinge a fonte mínima, só permite se for teste explícito de manchete com >= 6 palavras,
         # mas em pautas com source_type=='rss' exige corpo.
@@ -1847,13 +1886,18 @@ def validate_lines(raw, story, budget, loop=False, min_lines=6, max_lines=12, fa
     if min_lines >= 6:
         non_reaction_texts = [e['text'] for e in annotated if e['tipo'] != 'reacao']
         avg_words = (sum(len(t.split()) for t in non_reaction_texts) / len(non_reaction_texts)) if non_reaction_texts else 0.0
-        if avg_words < 5.0:
-            raise ValueError(f'Média de palavras por fala ({avg_words:.1f}) abaixo do mínimo de 5 palavras.')
-        if avg_words < 6.0:
+        if avg_words < 4.5:
+            _soft_or_raise('media_palavras', f'Média de palavras por fala ({avg_words:.1f}) abaixo do mínimo de 5 palavras.', weight=2)
+        elif avg_words < 5.0:
+            _soft_or_raise('media_palavras', f'Média de palavras por fala ({avg_words:.1f}) abaixo do mínimo de 5 palavras.', weight=1)
+        elif avg_words < 6.0:
             log(f'aviso: média de palavras por fala não-reação ({avg_words:.1f}) entre 5.0 e 6.0.')
+            if allow_soft:
+                soft_violations.append(('media_palavras', 1, f'Média de palavras por fala não-reação ({avg_words:.1f}) abaixo de 6 palavras.'))
 
-    if FILLER_CLOSE.search(texts[-1]):
-        raise ValueError(f'A última fala não pode ter fecho de enchimento ({FILLER_CLOSE.search(texts[-1]).group(0)}).')
+    filler_match = FILLER_CLOSE.search(texts[-1])
+    if filler_match:
+        _soft_or_raise('fecho_enchimento', f'A última fala não pode ter fecho de enchimento ({filler_match.group(0)}).', weight=1)
     needed = 4 if story.get('body') else 1
     if len(_facts(texts, source)) < needed:
         raise ValueError(f'Roteiro genérico. Inclua pelo menos {needed} detalhes concretos da matéria '
@@ -1899,11 +1943,14 @@ def validate_lines(raw, story, budget, loop=False, min_lines=6, max_lines=12, fa
         if not hook_answered:
             raise ValueError('o gancho não foi respondido')
 
-    # Item 4: Variedade e muletas
+    # Item 4: Variedade e muletas (regras moles)
     crutch_starts = sum(1 for t in texts if CRUTCH_STARTERS_RE.match(t))
     if crutch_starts > 1:
-        raise ValueError('No máximo 1 fala pode começar com muletas de concordância '
-                         '("Exatamente", "Isso mesmo", "Verdade", "Concordo", "Pois é", "Realmente").')
+        _soft_or_raise(
+            'muletas_concordancia',
+            'No máximo 1 fala pode começar com muletas de concordância '
+            '("Exatamente", "Isso mesmo", "Verdade", "Concordo", "Pois é", "Realmente").',
+        )
 
     total_vocatives = 0
     for i, t in enumerate(texts):
@@ -1912,40 +1959,63 @@ def validate_lines(raw, story, budget, loop=False, min_lines=6, max_lines=12, fa
             total_vocatives += len(vocs)
             has_nums = bool(_numbers(t) or _quantity_pairs(t) or re.search(r'\d', t))
             if has_nums:
-                raise ValueError(f'A fala {i + 1} contém vocativo ("{vocs[0]}") em fala que carrega número; '
-                                 'separe a explicação numérica do vocativo.')
+                _soft_or_raise(
+                    'vocativos',
+                    f'A fala {i + 1} contém vocativo ("{vocs[0]}") em fala que carrega número; '
+                    'separe a explicação numérica do vocativo.',
+                )
     if total_vocatives > 3:
-        raise ValueError(f'O roteiro tem {total_vocatives} vocativos (mano, cara, Sasuke, Naruto); '
-                         'o limite máximo permitido é 3.')
+        _soft_or_raise(
+            'vocativos',
+            f'O roteiro tem {total_vocatives} vocativos (mano, cara, Sasuke, Naruto); '
+            'o limite máximo permitido é 3.',
+        )
 
     questions_count = sum(1 for t in texts if '?' in t)
-    if len(texts) > 0 and (questions_count / len(texts)) > 0.50:
-        raise ValueError(f'No máximo 50% das falas podem ser perguntas '
-                         f'({questions_count} de {len(texts)} falas são perguntas).')
+    if len(texts) > 0:
+        q_ratio = questions_count / len(texts)
+        if q_ratio > 0.60:
+            _soft_or_raise(
+                'proporcao_perguntas',
+                f'No máximo 50% das falas podem ser perguntas ({questions_count} de {len(texts)} falas são perguntas).',
+                weight=2,
+            )
+        elif q_ratio > 0.50:
+            _soft_or_raise(
+                'proporcao_perguntas',
+                f'No máximo 50% das falas podem ser perguntas ({questions_count} de {len(texts)} falas são perguntas).',
+                weight=1,
+            )
 
     first_speaker = lines[0].get('speaker') if lines[0].get('speaker') in (0, 1) else 0
     sasuke_has_provocation = any(('?' in texts[i] or '!' in texts[i])
                                  for i in range(len(texts))
                                  if (first_speaker + i) % 2 == 0)
     if not sasuke_has_provocation:
-        raise ValueError('O Sasuke deve fazer pelo menos 1 pergunta ou provocação no roteiro.')
+        _soft_or_raise('sasuke_sem_pergunta', 'O Sasuke deve fazer pelo menos 1 pergunta ou provocação no roteiro.')
 
     seen_reactions = set()
     for i, entry in enumerate(annotated):
         if entry['tipo'] == 'reacao':
-            if i > 0 and annotated[i - 1]['tipo'] == 'reacao':
-                raise ValueError('Falas de reação não podem ser consecutivas.')
             if i == len(annotated) - 1:
                 raise ValueError('A última fala NÃO pode ser reação.')
+            if i > 0 and annotated[i - 1]['tipo'] == 'reacao':
+                _soft_or_raise('num_reacoes_opinioes', 'Falas de reação não podem ser consecutivas.')
             norm_r = re.sub(r'[^a-z0-9 ]+', '', _normalize_plain(entry['text'])).strip()
             if norm_r in seen_reactions:
-                raise ValueError(f'Reação repetida no roteiro: "{entry["text"]}". Não repita a mesma reação.')
+                _soft_or_raise('num_reacoes_opinioes', f'Reação repetida no roteiro: "{entry["text"]}". Não repita a mesma reação.')
             seen_reactions.add(norm_r)
 
     if reacoes_count > 2:
-        raise ValueError(f'O roteiro tem {reacoes_count} falas de reação; o limite é no máximo 2 por roteiro.')
+        _soft_or_raise(
+            'num_reacoes_opinioes',
+            f'O roteiro tem {reacoes_count} falas de reação; o limite é no máximo 2 por roteiro.',
+        )
     if opinioes_count > 3:
-        raise ValueError(f'O roteiro tem {opinioes_count} falas de opinião; o limite é no máximo 3 por roteiro.')
+        _soft_or_raise(
+            'num_reacoes_opinioes',
+            f'O roteiro tem {opinioes_count} falas de opinião; o limite é no máximo 3 por roteiro.',
+        )
 
     min_facts_req = min(4, len(facts)) if (min_lines >= 6 or len(annotated) >= 6) else min(2, len(facts))
     if len(facts) >= 1 and len(used_facts) < min_facts_req:
@@ -1973,7 +2043,7 @@ def validate_lines(raw, story, budget, loop=False, min_lines=6, max_lines=12, fa
         if tail in {'porque', 'que', 'pois', 'como', 'quando', 'onde'} and not texts[-1].rstrip().endswith('?'):
             raise ValueError('A última fala não pode terminar cortada em uma ponte incompleta; feche com uma frase completa ou pergunta aberta.')
 
-    # Validação do fecho para roteiros completos (8+ falas)
+    # Validação do fecho para roteiros completos (8+ falas) — regra mole
     if min_lines >= 8 or len(annotated) >= 8:
         last_text = texts[-1]
         if re.search(r'^\s*será\s+que\b', last_text, re.I):
@@ -1986,19 +2056,62 @@ def validate_lines(raw, story, budget, loop=False, min_lines=6, max_lines=12, fa
             }
             last_words = {w.casefold() for w in re.findall(r'[a-zA-ZÀ-ú]+', last_text)}
             if not (last_words & opinion_terms):
-                raise ValueError('A última fala não pode ser um "Será que ...?" genérico: traga uma opinião ou um ângulo novo no fecho.')
+                _soft_or_raise('fecho_enchimento', 'A última fala não pode ser um "Será que ...?" genérico: traga uma opinião ou um ângulo novo no fecho.')
 
         last_content = _content_words(last_text)
         for prev_idx, prev_t in enumerate(texts[:-1]):
             prev_content = _content_words(prev_t)
             shared_count = sum(1 for lw in last_content if any(_word_matches_keyword(lw, pw) for pw in prev_content))
             if shared_count >= 3:
-                raise ValueError(
+                _soft_or_raise(
+                    'fecho_enchimento',
                     f'A última fala repete dados já ditos no roteiro (compartilha {shared_count} palavras de conteúdo com a fala {prev_idx + 1}). '
-                    'Traga um fecho com ângulo novo ou opinião sem repetir os fatos.'
+                    'Traga um fecho com ângulo novo ou opinião sem repetir os fatos.',
                 )
+                break
+
+    if allow_soft:
+        seen_lines = set()
+        for t in texts:
+            norm_line = re.sub(r'\s+', ' ', re.sub(r'[^\wÀ-ú ]+', '', t).strip().casefold())
+            if norm_line and norm_line in seen_lines:
+                soft_violations.append(('repeticao_falas', 1, 'Há fala repetida no roteiro.'))
+                break
+            seen_lines.add(norm_line)
+        starts = []
+        for t in texts:
+            words = [re.sub(r'^[^\wÀ-ú]+|[^\wÀ-ú]+$', '', w).casefold() for w in t.split()]
+            words = [w for w in words if w]
+            if not words:
+                continue
+            first = words[0]
+            if starts.count(first) >= 2:
+                soft_violations.append(('falas_comecam_igual', 1, f'Fala começando igual a duas anteriores ("{first}").'))
+                break
+            starts.append(first)
+        avisos_estilo = [m for _, _, m in soft_violations]
+        soft_penalty = sum(w for _, w, _ in soft_violations)
+        return result, problem, avisos_estilo, soft_penalty
 
     return result, problem
+
+
+def validate_lines(raw, story, budget, loop=False, min_lines=6, max_lines=12, facts=None, log=print, repair_reactions_enabled=False, normalize=False):
+    """Valida o roteiro (regras DURAS + MOLES); lança ValueError se qualquer regra falhar."""
+    return _validate_lines_core(
+        raw, story, budget, loop=loop, min_lines=min_lines, max_lines=max_lines,
+        facts=facts, log=log, repair_reactions_enabled=repair_reactions_enabled,
+        normalize=normalize, allow_soft=False,
+    )
+
+
+def validate_lines_with_soft(raw, story, budget, loop=False, min_lines=6, max_lines=12, facts=None, log=print, repair_reactions_enabled=False, normalize=False):
+    """Valida regras DURAS (lança ValueError) e retorna (lines, problem, avisos_estilo, soft_penalty) para regras MOLES."""
+    return _validate_lines_core(
+        raw, story, budget, loop=loop, min_lines=min_lines, max_lines=max_lines,
+        facts=facts, log=log, repair_reactions_enabled=repair_reactions_enabled,
+        normalize=normalize, allow_soft=True,
+    )
 
 
 def accept_low_score_enabled():
@@ -2345,6 +2458,9 @@ def _save_rejected_script(story, lines, review):
         'motivo_checagem': motivo_checagem,
         'contradicao': story.get('contradicao') if story else None,
         'gancho': story.get('gancho') if story else None,
+        'tentativa_usada': story.get('tentativa_usada') if story else None,
+        'soft_penalty': story.get('soft_penalty', 0) if story else 0,
+        'avisos_estilo': list(story.get('avisos_estilo') or []) if story else [],
         'lines': lines_saved,
     }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -2430,6 +2546,89 @@ def _is_malformed_script_response(raw):
 
 
 _EXACT_SCRIPT_SCHEMA = '{"lines":[{"speaker":0,"text":"..."}]}'
+
+
+def _judge_script(lines, attempt, max_attempts, story, facts, ask, judge_ask, log, allow_low,
+                  quality_retries, allow_retry=True, request_fn=None):
+    """Executa verificar_fatos + evaluate_script sobre uma tentativa que passou nas regras DURAS."""
+    if judge_ask is not None:
+        vf = verificar_fatos(lines, facts if facts else [source_text(story)], ask=judge_ask, story=story, log=log)
+    elif request_fn is not None and ask is request_fn:
+        vf = verificar_fatos(lines, facts if facts else [source_text(story)], ask=None, story=story, log=log)
+    elif getattr(ask, 'check_facts', False) or hasattr(ask, 'is_fact_checker'):
+        vf = verificar_fatos(lines, facts if facts else [source_text(story)], ask=ask, story=story, log=log)
+    else:
+        vf = None
+
+    if vf is not None:
+        if vf.get('indisponivel'):
+            motivo_concreto = vf.get('motivo') or 'indisponível'
+            log('verificação de fatos indisponível')
+            log(f'motivo da checagem: {motivo_concreto}')
+            if not allow_no_fact_check_enabled():
+                motivo = f'checagem de fatos indisponível: {motivo_concreto}'
+                log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
+                review = {
+                    'nota': None,
+                    'problemas': ['checagem de fatos indisponível'],
+                    'motivo_checagem': motivo_concreto,
+                }
+                if not allow_retry or quality_retries >= 2:
+                    rejected_path = _save_rejected_script(story, lines, review)
+                    raise RuntimeError(
+                        f'Roteiro reprovado após 2 regenerações '
+                        f'(problemas: checagem de fatos indisponível). Salvo em {rejected_path}.'
+                    )
+                return 'retry', f'Checagem de fatos indisponível no Ollama ({motivo_concreto}).', quality_retries + 1, review, False
+            else:
+                log('Aviso: seguindo sem checagem de fatos (permitir_sem_checagem_de_fatos ativo).')
+        unsupported = [item for item in vf.get('falas', []) if not item.get('suportada', True)]
+        if unsupported:
+            motivo = 'falas não suportadas pelos fatos'
+            if not allow_retry or quality_retries >= 2:
+                if allow_low:
+                    log('Aviso: seguindo mesmo com falas não suportadas (--aceitar-nota-baixa ativo).')
+                    log(f'Tentativa {attempt}/{max_attempts}: aceita')
+                    return 'accepted', None, quality_retries, None, True
+                review = {'nota': 4, 'problemas': [f"Fala {u.get('i', 0) + 1} não suportada: {u.get('motivo', '')}" for u in unsupported]}
+                rejected_path = _save_rejected_script(story, lines, review)
+                issues = '; '.join(str(p) for p in review['problemas'])
+                log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
+                raise RuntimeError(
+                    f'Roteiro reprovado por falhas factuais após 2 regenerações (problemas: {issues}). Salvo em {rejected_path}.'
+                )
+            corr_items = []
+            for u in unsupported:
+                idx = u.get('i', 0)
+                txt = lines[idx]['text'] if 0 <= idx < len(lines) else ''
+                mot = u.get('motivo', 'sem suporte nos fatos')
+                corr_items.append(f'Fala {idx + 1} ("{txt}"): {mot}')
+            log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
+            return 'retry', 'Falas não suportadas pelos fatos. Corrija:\n' + '\n'.join(corr_items), quality_retries + 1, None, False
+
+    review = evaluate_script(lines, story, ask=judge_ask or ask, log=log)
+    story['quality_score'] = review['nota']
+    story['quality_issues'] = review['problemas']
+    approved = review['nota'] is not None and review['nota'] >= 7
+    if approved:
+        log(f'Tentativa {attempt}/{max_attempts}: aceita')
+        return 'accepted', None, quality_retries, review, True
+    motivo = f'nota {review["nota"]}/10' if review.get('nota') is not None else 'avaliação indisponível'
+    if not allow_retry or quality_retries >= 2:
+        if allow_low:
+            log(f'Aviso: seguindo com nota {review["nota"]} (--aceitar-nota-baixa / aceitar_nota_baixa ativo).')
+            log(f'Tentativa {attempt}/{max_attempts}: aceita')
+            return 'accepted', None, quality_retries, review, True
+        rejected_path = _save_rejected_script(story, lines, review)
+        issues = '; '.join(str(p) for p in review['problemas']) or 'nota abaixo do mínimo'
+        log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
+        raise RuntimeError(
+            f'Roteiro reprovado no filtro de qualidade após 2 regenerações '
+            f'(nota {review["nota"]}/10; problemas: {issues}). Salvo em {rejected_path}.'
+        )
+    issues = '; '.join(str(p) for p in review['problemas']) or 'Melhore a naturalidade, o gancho provocativo e o fecho.'
+    log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
+    return 'retry', f'Nota de qualidade {review["nota"]}/10 (mínimo 7). Corrija: {issues}', quality_retries + 1, review, True
 
 
 def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, loop=None,
@@ -2529,9 +2728,33 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
     quality_retries = 0
     max_attempts = 8
     attempts_history = []
+    candidates = []
     last_val_error = None
     repeat_count = 0
+    aborted_motivo = None
     force_low_temp = False
+
+    def _record_hard_error(err_text, attempt_idx, raw_text):
+        nonlocal last_val_error, repeat_count, aborted_motivo
+        motivo = _short_reason(err_text)
+        if motivo == last_val_error:
+            repeat_count += 1
+        else:
+            last_val_error = motivo
+            repeat_count = 1
+        attempts_history.append({
+            'tentativa': attempt_idx,
+            'resposta_bruta': raw_text[:4000],
+            'erro': err_text,
+            'erro_validacao': err_text,
+        })
+        log(f'Tentativa {attempt_idx}/{max_attempts}: rejeitada ({motivo})')
+        if repeat_count >= 3:
+            log(f'erro repetido 3x: {motivo}')
+            aborted_motivo = motivo
+            return True
+        return False
+
     for attempt in range(1, max_attempts + 1):
         if error:
             payload['correcao'] = _add_concrete_example(error)
@@ -2551,179 +2774,79 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
         if json_err is not None:
             force_low_temp = True
             error = f'JSON inválido ou truncado ({str(json_err)[:120]}). Use exatamente o formato: {_EXACT_SCRIPT_SCHEMA}'
-            motivo = _short_reason(error)
-            if motivo == last_val_error:
-                repeat_count += 1
-            else:
-                last_val_error = motivo
-                repeat_count = 1
-            attempts_history.append({
-                'tentativa': attempt,
-                'resposta_bruta': raw_str[:4000],
-                'erro': error,
-                'erro_validacao': error,
-            })
-            log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
-            if repeat_count >= 3:
-                log(f'erro repetido 3x: {motivo}')
-                falha_path = _save_failure_log(story, facts, attempts_history)
-                raise RuntimeError(f'Não foi possível gerar um roteiro válido (erro repetido 3x: {motivo}). Detalhes em {falha_path}')
+            if _record_hard_error(error, attempt, raw_str):
+                break
             continue
         repair_reactions(raw, log=log)
         try:
             raw_norm = normalize_lines(raw, facts=facts if facts else [source_text(story)], title=story.get('title', ''), log=log, max_lines=max_lines)
-            lines, problem = validate_lines(raw_norm, story, max_words, loop, min_lines, max_lines, facts=facts, log=log, normalize=False)
+            lines, problem, avisos_estilo, soft_penalty = validate_lines_with_soft(
+                raw_norm, story, max_words, loop, min_lines, max_lines, facts=facts, log=log, normalize=False
+            )
         except ValueError as exc:
             error = str(exc)
             if _is_malformed_script_response(raw):
                 force_low_temp = True
                 if _EXACT_SCRIPT_SCHEMA not in error:
                     error = f'{error} Use exatamente o formato: {_EXACT_SCRIPT_SCHEMA}'
-            motivo = _short_reason(error)
-            if motivo == last_val_error:
-                repeat_count += 1
-            else:
-                last_val_error = motivo
-                repeat_count = 1
-            attempts_history.append({
-                'tentativa': attempt,
-                'resposta_bruta': raw_str[:4000],
-                'erro': error,
-                'erro_validacao': error,
-            })
-            log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
-            if repeat_count >= 3:
-                log(f'erro repetido 3x: {motivo}')
-                falha_path = _save_failure_log(story, facts, attempts_history)
-                raise RuntimeError(f'Não foi possível gerar um roteiro válido (erro repetido 3x: {motivo}). Detalhes em {falha_path}')
+            if _record_hard_error(error, attempt, raw_str):
+                break
             continue
         if problem:
             error = problem
             best_lines = lines
-            motivo = _short_reason(error)
-            if motivo == last_val_error:
-                repeat_count += 1
-            else:
-                last_val_error = motivo
-                repeat_count = 1
+            if _record_hard_error(error, attempt, raw_str):
+                break
+            continue
+
+        # Passou nas regras DURAS: não incrementa repeat_count de erro duro
+        last_val_error = None
+        repeat_count = 0
+        cand_entry = (soft_penalty, -attempt, attempt, lines, raw_str, list(avisos_estilo))
+        candidates.append(cand_entry)
+
+        if soft_penalty > 1:
+            warnings_txt = '; '.join(avisos_estilo)
+            log(f'Tentativa {attempt}/{max_attempts}: candidata (peso {soft_penalty}; {len(avisos_estilo)} avisos de estilo: {warnings_txt})')
+            error = 'Ajuste estes pontos de estilo mantendo os fatos:\n' + '\n'.join(avisos_estilo)
             attempts_history.append({
                 'tentativa': attempt,
                 'resposta_bruta': raw_str[:4000],
                 'erro': error,
                 'erro_validacao': error,
+                'candidata': True,
+                'soft_penalty': soft_penalty,
+                'avisos_estilo': list(avisos_estilo),
             })
-            log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
-            if repeat_count >= 3:
-                log(f'erro repetido 3x: {motivo}')
-                falha_path = _save_failure_log(story, facts, attempts_history)
-                raise RuntimeError(f'Não foi possível gerar um roteiro válido (erro repetido 3x: {motivo}). Detalhes em {falha_path}')
             continue
-        last_val_error = None
-        repeat_count = 0
 
-        # Verificação factual das falas pelo modelo juiz
-        if judge_ask is not None:
-            vf = verificar_fatos(lines, facts if facts else [source_text(story)], ask=judge_ask, story=story, log=log)
-        elif ask is engine.request_json:
-            vf = verificar_fatos(lines, facts if facts else [source_text(story)], ask=None, story=story, log=log)
-        elif getattr(ask, 'check_facts', False) or hasattr(ask, 'is_fact_checker'):
-            vf = verificar_fatos(lines, facts if facts else [source_text(story)], ask=ask, story=story, log=log)
-        else:
-            vf = None
+        if avisos_estilo:
+            log(f'Tentativa {attempt}/{max_attempts}: avisos de estilo (peso {soft_penalty}): {"; ".join(avisos_estilo)}')
+        story['tentativa_usada'] = attempt
+        story['soft_penalty'] = soft_penalty
+        story['avisos_estilo'] = list(avisos_estilo)
 
-        if vf is not None:
-            if vf.get('indisponivel'):
-                motivo_concreto = vf.get('motivo') or 'indisponível'
-                log('verificação de fatos indisponível')
-                log(f'motivo da checagem: {motivo_concreto}')
-                if not allow_no_fact_check_enabled():
-                    motivo = f'checagem de fatos indisponível: {motivo_concreto}'
-                    log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
-                    if quality_retries >= 2:
-                        review = {
-                            'nota': None,
-                            'problemas': ['checagem de fatos indisponível'],
-                            'motivo_checagem': motivo_concreto,
-                        }
-                        rejected_path = _save_rejected_script(story, lines, review)
-                        raise RuntimeError(
-                            f'Roteiro reprovado após 2 regenerações '
-                            f'(problemas: checagem de fatos indisponível). Salvo em {rejected_path}.'
-                        )
-                    quality_retries += 1
-                    error = f'Checagem de fatos indisponível no Ollama ({motivo_concreto}).'
-                    attempts_history.append({
-                        'tentativa': attempt,
-                        'resposta_bruta': raw_str[:4000],
-                        'erro': error,
-                        'erro_validacao': error,
-                    })
-                    continue
-                else:
-                    log('Aviso: seguindo sem checagem de fatos (permitir_sem_checagem_de_fatos ativo).')
-            unsupported = [item for item in vf.get('falas', []) if not item.get('suportada', True)]
-            if unsupported:
-                motivo = 'falas não suportadas pelos fatos'
-                if quality_retries >= 2:
-                    if allow_low:
-                        log('Aviso: seguindo mesmo com falas não suportadas (--aceitar-nota-baixa ativo).')
-                        log(f'Tentativa {attempt}/{max_attempts}: aceita')
-                        return lines
-                    review = {'nota': 4, 'problemas': [f"Fala {u.get('i', 0) + 1} não suportada: {u.get('motivo', '')}" for u in unsupported]}
-                    rejected_path = _save_rejected_script(story, lines, review)
-                    issues = '; '.join(str(p) for p in review['problemas'])
-                    log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
-                    raise RuntimeError(
-                        f'Roteiro reprovado por falhas factuais após 2 regenerações (problemas: {issues}). Salvo em {rejected_path}.'
-                    )
-                quality_retries += 1
-                corr_items = []
-                for u in unsupported:
-                    idx = u.get('i', 0)
-                    txt = lines[idx]['text'] if 0 <= idx < len(lines) else ''
-                    mot = u.get('motivo', 'sem suporte nos fatos')
-                    corr_items.append(f'Fala {idx + 1} ("{txt}"): {mot}')
-                error = 'Falas não suportadas pelos fatos. Corrija:\n' + '\n'.join(corr_items)
-                attempts_history.append({
-                    'tentativa': attempt,
-                    'resposta_bruta': raw_str[:4000],
-                    'erro': error,
-                    'erro_validacao': error,
-                })
-                log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
-                continue
-        review = evaluate_script(lines, story, ask=judge_ask or ask, log=log)
-        last_review = review
-        story['quality_score'] = review['nota']
-        story['quality_issues'] = review['problemas']
-        best_lines = lines
-        approved = review['nota'] is not None and review['nota'] >= 7
-        if approved:
-            log(f'Tentativa {attempt}/{max_attempts}: aceita')
+        status, next_error, quality_retries, review, keep_cand = _judge_script(
+            lines, attempt, max_attempts, story, facts, ask, judge_ask, log, allow_low,
+            quality_retries, allow_retry=True, request_fn=engine.request_json,
+        )
+        if not keep_cand and cand_entry in candidates:
+            candidates.remove(cand_entry)
+        if status == 'accepted':
             return lines
-        motivo = f'nota {review["nota"]}/10' if review.get('nota') is not None else 'avaliação indisponível'
-        if quality_retries >= 2:
-            if allow_low:
-                log(f'Aviso: seguindo com nota {review["nota"]} (--aceitar-nota-baixa / aceitar_nota_baixa ativo).')
-                log(f'Tentativa {attempt}/{max_attempts}: aceita')
-                return lines
-            rejected_path = _save_rejected_script(story, lines, review)
-            issues = '; '.join(str(p) for p in review['problemas']) or 'nota abaixo do mínimo'
-            log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
-            raise RuntimeError(
-                f'Roteiro reprovado no filtro de qualidade após 2 regenerações '
-                f'(nota {review["nota"]}/10; problemas: {issues}). Salvo em {rejected_path}.'
-            )
-        quality_retries += 1
-        issues = '; '.join(str(p) for p in review['problemas']) or 'Melhore a naturalidade, o gancho provocativo e o fecho.'
-        log(f'Tentativa {attempt}/{max_attempts}: rejeitada ({motivo})')
-        error = f'Nota de qualidade {review["nota"]}/10 (mínimo 7). Corrija: {issues}'
+        if review is not None:
+            last_review = review
+            best_lines = lines
+        error = next_error
         attempts_history.append({
             'tentativa': attempt,
             'resposta_bruta': raw_str[:4000],
             'erro': error,
             'erro_validacao': error,
+            'soft_penalty': soft_penalty,
+            'avisos_estilo': list(avisos_estilo),
         })
+
     if best_lines is not None and last_review is not None:
         if allow_low:
             log(f'Tentativa {max_attempts}/{max_attempts}: aceita')
@@ -2736,7 +2859,21 @@ def write_script(story, kind='Notícia', max_words=60, previous=None, ask=None, 
         )
     if best_lines and allow_low:
         return best_lines
+    if candidates:
+        best_pen, _, best_attempt, cand_lines, _, cand_avisos = min(candidates, key=lambda c: (c[0], c[1]))
+        log(f'usando a melhor tentativa ({best_attempt}/{max_attempts}) com {len(cand_avisos)} avisos de estilo: {"; ".join(cand_avisos)}')
+        story['tentativa_usada'] = best_attempt
+        story['soft_penalty'] = best_pen
+        story['avisos_estilo'] = list(cand_avisos)
+        status, _, _, _, _ = _judge_script(
+            cand_lines, best_attempt, max_attempts, story, facts, ask, judge_ask, log, allow_low,
+            quality_retries, allow_retry=False, request_fn=engine.request_json,
+        )
+        if status == 'accepted':
+            return cand_lines
     falha_path = _save_failure_log(story, facts, attempts_history)
+    if aborted_motivo:
+        raise RuntimeError(f'Não foi possível gerar um roteiro válido (erro repetido 3x: {aborted_motivo}). Detalhes em {falha_path}')
     raise RuntimeError(f'Não foi possível gerar um roteiro válido em 8 tentativas. Detalhes em {falha_path}')
 
 

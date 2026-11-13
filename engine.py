@@ -429,9 +429,11 @@ def render(news, lines, gameplay, fps=30, max_seconds=45, impact_opening=False, 
         try:
             meta = json.loads(json_path.read_text(encoding='utf-8'))
             changed = False
-            if 'modelos' not in meta and isinstance(news, dict) and 'modelos' in news:
-                meta['modelos'] = news['modelos']
-                changed = True
+            if isinstance(news, dict):
+                for meta_key in ('modelos', 'tentativa_usada', 'soft_penalty', 'avisos_estilo'):
+                    if meta_key not in meta and meta_key in news:
+                        meta[meta_key] = news[meta_key]
+                        changed = True
             if 'lines' in meta and isinstance(meta['lines'], list):
                 for i, pline in enumerate(meta['lines']):
                     if i < len(lines):

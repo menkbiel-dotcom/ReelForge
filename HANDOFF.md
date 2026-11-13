@@ -382,3 +382,9 @@
   4. `O roteiro tem 3 falas de reação; o limite é no máximo 2`: **7/46 (15,2%)** — `normalize_lines()` remove excedentes apenas quando `> 3` (mantendo exatamente 2), deixando o caso de 3 reações ser barrado na validação.
   5. Outros motivos reais (**12/46**): `< 6` falas (`2`), magnitude ausente (`2`), número inventado (`1`), trecho copiado dos exemplos (`1`), linguagem imprópria (`1`), entidade ausente (`1`), telejornal (`1`), >50% perguntas (`1`), fecho repetido / `"Será que ...?"` (`2`).
 - **Status:** Rodada 7 concluída por completo (Itens 25 a 30 + regressão real + verificação dupla da suíte com isolamento do `output/`).
+
+- [x] **ITEM 31 — Regras DURAS x MOLES (`news_auto.py`, `engine.py`)**: feito
+  - **Arquivos tocados:** `news_auto.py`, `engine.py`, `tests/test_news_auto.py`, `HANDOFF.md`
+  - **Testes:** `test_integration` (32 testes) + `test_news_auto` (63 testes, incluindo `test_item31_hard_vs_soft_rules_and_candidate_selection`) — 95 testes passando
+  - **Resumo:** separação explícita em `HARD_RULES` e `SOFT_RULES`; `validate_lines_with_soft()` aceita candidatas com `soft_penalty` ponderado (peso 2 para `> 60%` perguntas ou média não-reação `< 4.5`; peso 1 nos demais avisos moles); `write_script()` só aborta `erro repetido 3x` em erros DUROS, retém candidatas que passaram nas regras DURAS, seleciona a de menor `soft_penalty` (desempate pela mais recente) ao fim das tentativas/aborte e grava `tentativa_usada`, `soft_penalty` e `avisos_estilo` tanto nos `rejected_*.json` quanto no JSON final do reel em `engine.render()`.
+  - **Próximo item:** ITEM 32 (Log completo do motivo + prompt limitando perguntas nos exemplos e instruções).
