@@ -66,12 +66,12 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
         facts_resp = {'fatos': ['A Sony relançou o Walkman no Brasil.', 'O aparelho custa R$ 32 mil.',
                                 'O foco desse modelo é áudio de estúdio.', 'O modelo chega este mês.', 'É voltado a profissionais.']}
         bad = {'lines': [{'speaker': 0, 'text': 'Pagaria 50 mil reais num Walkman?', 'fato': 1}] + [{'speaker': 0, 'text': 'O aparelho custa 32 mil.', 'fato': 1}] * 5}
-        good = {'lines': [{'speaker': 1, 'text': 'Naruto: Pagaria 32 mil reais num Walkman hoje?', 'fato': 1},
-                          {'speaker': 1, 'text': 'R$ 32 mil é preço de carro!', 'fato': 1},
-                          {'speaker': 0, 'text': 'A Sony lançou esse modelo focado em estúdio.', 'fato': 2},
-                          {'speaker': 0, 'text': 'Mesmo assim, quem no Brasil vai comprar esse Walkman?', 'fato': 0},
-                          {'speaker': 1, 'text': 'Caramba, só colecionador!', 'reacao': True},
-                          {'speaker': 0, 'text': 'Você compraria o Walkman da Sony no Brasil?', 'fato': 0}]}
+        good = {'lines': [{'speaker': 1, 'text': 'Naruto: Pagaria 32 mil reais num Walkman hoje?'},
+                          {'speaker': 1, 'text': 'R$ 32 mil é preço de carro!'},
+                          {'speaker': 0, 'text': 'A Sony lançou esse modelo focado em estúdio.'},
+                          {'speaker': 0, 'text': 'Ele chega este mês voltado a profissionais.'},
+                          {'speaker': 1, 'text': 'Caramba, só colecionador!'},
+                          {'speaker': 0, 'text': 'Você compraria o Walkman da Sony no Brasil?'}]}
         answers = iter([facts_resp, bad, good, {'nota': 9, 'problemas': []}])
         lines = news_auto.write_script(story, max_words=80, ask=lambda i, p: next(answers), loop=False)
         self.assertEqual([l['speaker'] for l in lines], [1, 0, 1, 0, 1, 0])
@@ -545,12 +545,12 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
             'O produto mira audiófilos.',
         ], 'contradicao': 'Aparelho caro voltado a audiófilos.', 'gancho': 'Pagaria R$ 32 mil num Walkman novo?'}
         script_resp = {'lines': [
-            {'speaker': 0, 'text': 'Pagaria R$ 32 mil num Walkman novo?', 'fato': 1},
-            {'speaker': 0, 'text': 'O preço oficial é de R$ 32 mil no Brasil.', 'fato': 1},
-            {'speaker': 0, 'text': 'O foco é áudio de estúdio profissional.', 'fato': 2},
-            {'speaker': 0, 'text': 'Mesmo assim o aparelho custa R$ 32 mil.', 'fato': 1},
-            {'speaker': 0, 'text': 'Caramba, só colecionador!', 'reacao': True},
-            {'speaker': 0, 'text': 'Vale pagar 32 mil nesse aparelho?', 'fato': 1}
+            {'speaker': 0, 'text': 'Pagaria R$ 32 mil num Walkman novo?'},
+            {'speaker': 0, 'text': 'O preço oficial é de R$ 32 mil no Brasil.'},
+            {'speaker': 0, 'text': 'O foco é áudio de estúdio profissional.'},
+            {'speaker': 0, 'text': 'A venda no mercado nacional mira audiófilos!'},
+            {'speaker': 0, 'text': 'Caramba, só colecionador!'},
+            {'speaker': 0, 'text': 'Vale pagar 32 mil nesse aparelho no Brasil?'}
         ]}
         seq = iter([
             facts_resp,
@@ -579,117 +579,78 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
                 'A colheita de conilon e robusta cresceu 72,5%.',
             ]
         }
-        # 1. Fala sem "fato" e sem "reacao"
-        bad_no_tag = {'lines': [
-            {'speaker': 0, 'text': 'Sabia do novo recorde de café?', 'fato': 0},
-            {'speaker': 1, 'text': 'Fala sem amarra nenhuma aqui no meio.'},
-            {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
-            {'speaker': 1, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
+        # 1. Fala longa (>14 palavras) sem ligação com fatos (não cai em fato, reação ou opinião)
+        bad_unclassified = {'lines': [
+            {'speaker': 0, 'text': 'Sabia do novo recorde de café no Brasil?'},
+            {'speaker': 1, 'text': 'Essa fala inventada não tem nenhuma relação com nada disso que estamos conversando agora neste exato momento aqui.'},
+            {'speaker': 0, 'text': 'A receita atingiu US$ 1,786 bilhão no período.'},
+            {'speaker': 1, 'text': 'A Europa recebeu 17,8 milhões de sacas e o preço caiu 9,5%.'},
         ]}
-        with self.assertRaisesRegex(ValueError, 'deve indicar "fato": N ou "reacao": true'):
-            news_auto.validate_lines(bad_no_tag, story, 80, min_lines=4)
+        with self.assertRaisesRegex(ValueError, 'opiniões próprias permitem no máximo 14 palavras'):
+            news_auto.validate_lines(bad_unclassified, story, 80, min_lines=4)
 
-        # 2. Reação com mais de 6 palavras
-        bad_long_reaction = {'lines': [
-            {'speaker': 0, 'text': 'Sabia do novo recorde de café?', 'fato': 0},
-            {'speaker': 1, 'text': 'Esta reação tem palavras demais para ser aceita pelo sistema', 'reacao': True},
-            {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
-            {'speaker': 1, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
-        ]}
-        with self.assertRaisesRegex(ValueError, 'máximo permitido é 6'):
-            news_auto.validate_lines(bad_long_reaction, story, 80, min_lines=4)
-
-        # 3. Reação com dígitos
-        bad_digits_reaction = {'lines': [
-            {'speaker': 0, 'text': 'Sabia do novo recorde de café?', 'fato': 0},
-            {'speaker': 1, 'text': 'Caramba, 5 sacas!', 'reacao': True},
-            {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
-            {'speaker': 1, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
-        ]}
-        with self.assertRaisesRegex(ValueError, 'não podem conter números'):
-            news_auto.validate_lines(bad_digits_reaction, story, 80, min_lines=4)
-
-        # 4. Reações consecutivas
+        # 2. Reações consecutivas inferidas
         bad_consecutive_reactions = {'lines': [
-            {'speaker': 0, 'text': 'Sabia do novo recorde de café?', 'fato': 0},
-            {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
-            {'speaker': 0, 'text': 'Mano do céu!', 'reacao': True},
-            {'speaker': 1, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
+            {'speaker': 0, 'text': 'Olha o recorde de 5,3 milhões no Brasil!'},
+            {'speaker': 1, 'text': 'Caramba!'},
+            {'speaker': 0, 'text': 'Mano do céu!'},
+            {'speaker': 1, 'text': 'A receita atingiu US$ 1,786 bilhão e Europa somou 17,8 milhões e caiu 9,5%.'},
         ]}
         with self.assertRaisesRegex(ValueError, 'não podem ser consecutivas'):
             news_auto.validate_lines(bad_consecutive_reactions, story, 80, min_lines=4)
 
-        # 5. Mais de 2 reações
+        # 3. Mais de 2 reações
         bad_3_reactions = {'lines': [
-            {'speaker': 0, 'text': 'Sabia do novo recorde de café?', 'fato': 0},
-            {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
-            {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
-            {'speaker': 1, 'text': 'Pois é!', 'reacao': True},
-            {'speaker': 0, 'text': 'Europa comprou 17,8 milhões.', 'fato': 2},
-            {'speaker': 1, 'text': 'Inacreditável!', 'reacao': True},
-            {'speaker': 0, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
+            {'speaker': 0, 'text': 'O Brasil exportou 5,3 milhões de sacas de café?'},
+            {'speaker': 1, 'text': 'Caramba!'},
+            {'speaker': 0, 'text': 'Sim, 5,3 milhões de sacas com receita de US$ 1,786 bilhão.'},
+            {'speaker': 1, 'text': 'Pois é!'},
+            {'speaker': 0, 'text': 'Europa comprou 17,8 milhões e preço caiu 9,5%.'},
+            {'speaker': 1, 'text': 'Inacreditável!'},
+            {'speaker': 0, 'text': 'O conilon cresceu 72,5% na colheita.'},
         ]}
         with self.assertRaisesRegex(ValueError, 'máximo 2 por roteiro'):
             news_auto.validate_lines(bad_3_reactions, story, 80, min_lines=4)
 
-        # 6. Última fala sendo reação
+        # 4. Última fala sendo reação
         bad_last_reaction = {'lines': [
-            {'speaker': 0, 'text': 'Sabia do novo recorde de café?', 'fato': 0},
-            {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
-            {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
-            {'speaker': 1, 'text': 'Pois é!', 'reacao': True},
+            {'speaker': 0, 'text': 'O Brasil exportou 5,3 milhões de sacas de café?'},
+            {'speaker': 1, 'text': 'Caramba!'},
+            {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão e Europa somou 17,8 milhões com queda de 9,5%.'},
+            {'speaker': 1, 'text': 'Pois é!'},
         ]}
         with self.assertRaisesRegex(ValueError, 'última fala NÃO pode ser reação'):
             news_auto.validate_lines(bad_last_reaction, story, 80, min_lines=4)
 
-        # 7. Fecho de enchimento (FILLER_CLOSE)
+        # 5. Fecho de enchimento (FILLER_CLOSE)
         bad_filler = {'lines': [
-            {'speaker': 0, 'text': 'Sabia do novo recorde de café?', 'fato': 0},
-            {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
-            {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
-            {'speaker': 1, 'text': 'Que legal ver o Brasil fazendo números assim!', 'fato': 0},
+            {'speaker': 0, 'text': 'O Brasil exportou 5,3 milhões de sacas?'},
+            {'speaker': 1, 'text': 'Caramba!'},
+            {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão na Europa com 17,8 milhões.'},
+            {'speaker': 1, 'text': 'Que legal ver o Brasil fazendo números assim!'},
         ]}
         with self.assertRaisesRegex(ValueError, 'fecho de enchimento'):
             news_auto.validate_lines(bad_filler, story, 80, min_lines=4)
 
-        # 8. Outro fecho com FILLER_CLOSE
-        bad_filler2 = {'lines': [
-            {'speaker': 0, 'text': 'Sabia do novo recorde de café?', 'fato': 0},
-            {'speaker': 1, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
-            {'speaker': 0, 'text': 'Os embarques foram gigantes.', 'fato': 0},
-            {'speaker': 1, 'text': 'Isso é show demais!', 'fato': 0},
+        # 6. Número de outro fato é aceito mesmo com "fato": 0 errado (união + inferência)
+        cross_fact = {'lines': [
+            {'speaker': 0, 'text': 'Olha o recorde de 5,3 milhões de sacas de café!', 'fato': 0},
+            {'speaker': 1, 'text': 'Caramba!'},
+            {'speaker': 0, 'text': 'A receita atingiu US$ 1,786 bilhão no período.', 'fato': 0},
+            {'speaker': 1, 'text': 'A Europa somou 17,8 milhões de sacas e o preço médio caiu 9,5%.', 'fato': 0},
         ]}
-        with self.assertRaisesRegex(ValueError, 'fecho de enchimento'):
-            news_auto.validate_lines(bad_filler2, story, 80, min_lines=4)
+        res_cross, prob_cross = news_auto.validate_lines(cross_fact, story, 80, min_lines=4)
+        self.assertEqual(prob_cross, '')
+        self.assertEqual(res_cross[2]['fato'], 1)
 
-        # 9. Número ausente no fato citado (fato 0 não tem 1,786 e fala não compartilha palavras com fato 1)
-        bad_num_mismatch = {'lines': [
-            {'speaker': 0, 'text': 'Sabia do café de US$ 1,786 bilhão no porto?', 'fato': 0},
-            {'speaker': 1, 'text': 'Caramba!', 'reacao': True},
-            {'speaker': 0, 'text': 'Foram 5,3 milhões de sacas.', 'fato': 0},
-            {'speaker': 1, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
-        ]}
-        with self.assertRaisesRegex(ValueError, 'números ausentes no fato 0'):
-            news_auto.validate_lines(bad_num_mismatch, story, 80, min_lines=4)
-
-        # 10. Entidade ausente no fato citado (Europa só está no fato 2)
-        bad_ent_mismatch = {'lines': [
-            {'speaker': 0, 'text': 'Sabia do novo recorde de café?', 'fato': 0},
-            {'speaker': 1, 'text': 'A Europa comprou muito!', 'fato': 1},  # Fato 1 não cita Europa
-            {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
-            {'speaker': 1, 'text': 'Será que o mercado mantém o ritmo?', 'fato': 0},
-        ]}
-        with self.assertRaisesRegex(ValueError, 'ausente no fato 1'):
-            news_auto.validate_lines(bad_ent_mismatch, story, 80, min_lines=4)
-
-        # 11. Roteiro válido
+        # 7. Roteiro válido sem campos fato/reacao (classificação inferida)
         valid = {'lines': [
-            {'speaker': 0, 'text': 'Olha o recorde de 5,3 milhões de sacas!', 'fato': 0},
-            {'speaker': 1, 'text': 'Caramba, isso tudo?!', 'reacao': True},
-            {'speaker': 0, 'text': 'A receita foi de US$ 1,786 bilhão.', 'fato': 1},
-            {'speaker': 1, 'text': 'E a Europa comprou 17,8 milhões de sacas!', 'fato': 2},
-            {'speaker': 0, 'text': 'Mesmo assim o preço caiu 9,5% no ano.', 'fato': 3},
-            {'speaker': 1, 'text': 'Será que o Brasil exporta mais café?', 'fato': 0},
+            {'speaker': 0, 'text': 'Olha o recorde de 5,3 milhões de sacas de café!'},
+            {'speaker': 1, 'text': 'Caramba, isso tudo?!'},
+            {'speaker': 0, 'text': 'A receita atingiu US$ 1,786 bilhão no período.'},
+            {'speaker': 1, 'text': 'E os embarques para a Europa somaram 17,8 milhões de sacas!'},
+            {'speaker': 0, 'text': 'Mesmo assim o preço médio caiu 9,5% no acumulado.'},
+            {'speaker': 1, 'text': 'Será que o conilon cresce ainda mais?'},
         ]}
         lines, prob = news_auto.validate_lines(valid, story, 80, min_lines=4)
         self.assertEqual(prob, '')
@@ -1223,8 +1184,8 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
         self.assertEqual(len(res), 4)
 
     def test_item3_round2_non_decorative_fact(self):
-        # 1. Roteiro fixture Anthropic/Texas: a última fala é pura especulação ("Será que vai faltar luz pro resto do estado?")
-        # marcada fato: 2, mas não compartilha 2 palavras de conteúdo nem número com fato 2
+        # 1. No Item 25, falas curtas de comentário próprio (<=14 palavras, sem dígitos, sem entidade nova)
+        # são classificadas automaticamente como 'opinião' por annotate_lines.
         fixture_path = Path(__file__).parent / 'fixtures' / 'rejected_20261111_181036_244323.json'
         with open(fixture_path, encoding='utf-8') as f:
             anth_data = json.load(f)
@@ -1243,32 +1204,29 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
             'A energia atenderá data centers até 2045.',
         ]
 
-        # Rejeita a última fala com mensagem clara
-        with self.assertRaisesRegex(ValueError, r'A fala 6 não apresenta sobreposição com o fato 2'):
-            news_auto.validate_lines(anth_data, story, budget=120, min_lines=4, facts=facts)
+        res_ok, prob_ok = news_auto.validate_lines(anth_data, story, budget=120, min_lines=4, facts=facts)
+        self.assertEqual(prob_ok, '')
+        self.assertTrue(res_ok[5].get('opiniao'))
 
-        # 2. Quando a pergunta compartilha pelo menos 2 palavras de conteúdo com o fato citado, é aceita
+        # 2. Opinião com entidade nova (OpenAI) ou >14 palavras sem fato é rejeitada com motivo claro
         import copy
-        fixed_data = copy.deepcopy(anth_data)
-        fixed_data['lines'][5] = {
+        bad_opinion_entity = copy.deepcopy(anth_data)
+        bad_opinion_entity['lines'][5] = {
             'speaker': 1,
-            'text': 'Será que a rede elétrica do Texas vai aguentar?',
-            'fato': 2
+            'text': 'Será que vai faltar energia para a OpenAI também?'
         }
-        res, prob = news_auto.validate_lines(fixed_data, story, budget=120, min_lines=4, facts=facts)
-        self.assertEqual(prob, '')
-        self.assertEqual(len(res), 6)
+        with self.assertRaisesRegex(ValueError, r'entidade "OpenAI" ausente nos fatos e no título'):
+            news_auto.validate_lines(bad_opinion_entity, story, budget=120, min_lines=4, facts=facts)
 
-        # 3. Fala com número compartilhado passa mesmo com poucas palavras de conteúdo
+        # 3. Fala com número do fato passa normalmente e infere fato correspondente
         number_line_data = copy.deepcopy(anth_data)
         number_line_data['lines'][5] = {
             'speaker': 1,
-            'text': 'Isso vai mesmo até 2045?',
-            'fato': 3
+            'text': 'Isso vai mesmo até 2045?'
         }
         res_num, prob_num = news_auto.validate_lines(number_line_data, story, budget=120, min_lines=4, facts=facts)
         self.assertEqual(prob_num, '')
-        self.assertEqual(len(res_num), 6)
+        self.assertEqual(res_num[5].get('fato'), 3)
 
     def test_item4_round2_variety_and_crutches(self):
         story = {
@@ -1737,49 +1695,36 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
         story = {
             'title': 'Descobertas do Telescópio Webb',
             'body': 'O telescópio espacial James Webb da Nasa fez grandes descobertas científicas no espaço profundo. '
-                    'A missão espacial do James durou cerca de três anos e analisou amostras cósmicas em 90 dias. '
+                    'A missão espacial do James durou cerca de três anos e analisou amostras cósmicas. '
                     'O Webb detectou 25 novos exoplanetas e 277 asteroides na pesquisa recente. '
                     'A temperatura no vácuo espacial atingiu níveis extremos e vinte países parceiros participaram.',
             'source_type': 'rss',
         }
-        # 1. Linha diz fato: 4, mas os números 25 e 277 estão no fato 2
-        lines_relink = {
+        # 1. Inferência automática ignora índice "fato" antigo e encontra fato 2 e fato 0
+        lines_inferred = {
             'lines': [
                 {'speaker': 0, 'text': 'O que o telescópio Webb detectou no espaço?', 'fato': 0},
                 {'speaker': 1, 'text': 'O Webb detectou 25 novos exoplanetas e 277 asteroides!', 'fato': 4},
-                {'speaker': 0, 'text': 'A missão do James durou três anos no vácuo.', 'fato': 1},
-                {'speaker': 1, 'text': 'Será que acham vida nesses novos exoplanetas?', 'fato': 2},
+                {'speaker': 0, 'text': 'A Nasa observou galáxias distantes e a missão durou três anos.'},
+                {'speaker': 1, 'text': 'Os cientistas analisaram amostras de poeira cósmica!'},
             ]
         }
         logs = []
-        valid_lines, prob = news_auto.validate_lines(lines_relink, story, budget=80, min_lines=4, facts=facts, log=logs.append)
+        valid_lines, prob = news_auto.validate_lines(lines_inferred, story, budget=80, min_lines=4, facts=facts, log=logs.append)
+        self.assertEqual(prob, '')
         self.assertEqual(valid_lines[1]['fato'], 2)
-        self.assertIn('fala 2 recolocada do fato 4 para o fato 2', logs)
+        self.assertIn('fala 2: inferida como fato 2', logs)
 
-        # 2. Linha cita nome próprio (entidade) que está no fato 0 mas a fala diz fato: 3
-        lines_entity_relink = {
-            'lines': [
-                {'speaker': 0, 'text': 'O que o telescópio Webb detectou no espaço?', 'fato': 0},
-                {'speaker': 1, 'text': 'O Webb detectou 25 novos exoplanetas e 277 asteroides!', 'fato': 2},
-                {'speaker': 0, 'text': 'A Nasa observou galáxias distantes no vácuo.', 'fato': 3},
-                {'speaker': 1, 'text': 'Será que acham vida nesses novos exoplanetas?', 'fato': 2},
-            ]
-        }
-        logs_entity = []
-        valid_lines_ent, _ = news_auto.validate_lines(lines_entity_relink, story, budget=80, min_lines=4, facts=facts, log=logs_entity.append)
-        self.assertEqual(valid_lines_ent[2]['fato'], 0)
-        self.assertIn('fala 3 recolocada do fato 3 para o fato 0', logs_entity)
-
-        # 3. Linha cita número que não existe em nenhum fato (ex: 90 está no corpo da matéria mas em nenhum fato)
+        # 2. Número ausente em todos os fatos e na matéria continua rejeitado
         lines_invalid = {
             'lines': [
-                {'speaker': 0, 'text': 'O que o telescópio Webb detectou no espaço?', 'fato': 0},
-                {'speaker': 1, 'text': 'O Webb analisou dados por 90 dias seguidos!', 'fato': 4},
-                {'speaker': 0, 'text': 'A missão do James durou três anos no vácuo.', 'fato': 1},
-                {'speaker': 1, 'text': 'Será que acham vida nesses novos exoplanetas?', 'fato': 2},
+                {'speaker': 0, 'text': 'O que o telescópio Webb detectou no espaço?'},
+                {'speaker': 1, 'text': 'O Webb analisou dados por 99 dias seguidos!'},
+                {'speaker': 0, 'text': 'A missão do James durou três anos no vácuo.'},
+                {'speaker': 1, 'text': 'Os cientistas analisaram amostras de poeira cósmica.'},
             ]
         }
-        with self.assertRaisesRegex(ValueError, r'A fala citou números ausentes no fato 4.*90'):
+        with self.assertRaisesRegex(ValueError, r'Números ausentes na matéria: 99\. nenhum fato contém estes números'):
             news_auto.validate_lines(lines_invalid, story, budget=80, min_lines=4, facts=facts)
 
     def test_item11_feedback_useful_between_retries_and_attempt_logging(self):
@@ -1795,47 +1740,13 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
         story = {
             'title': 'Descobertas do Telescópio Webb',
             'body': 'O telescópio espacial James Webb da Nasa fez grandes descobertas científicas no espaço profundo. '
-                    'A missão espacial do James durou cerca de três anos e analisou amostras cósmicas em 90 dias. '
+                    'A missão espacial do James durou cerca de três anos e analisou amostras cósmicas. '
                     'O Webb detectou 25 novos exoplanetas e 277 asteroides na pesquisa recente. '
                     'A temperatura no vácuo espacial atingiu níveis extremos e vinte países parceiros participaram.',
             'source_type': 'rss',
             'extracted_facts': facts,
         }
 
-        # 1. Correção indicando o fato que contém os números (quando houver) e logging de tentativas
-        corrections = []
-        logs = []
-
-        def mock_writer_with_fact(inst, payload_str):
-            payload = json.loads(payload_str)
-            if 'correcao' in payload:
-                corrections.append(payload['correcao'])
-                return {'lines': [
-                    {'speaker': 0, 'text': 'O que o telescópio Webb detectou no espaço?', 'fato': 0},
-                    {'speaker': 1, 'text': 'O Webb detectou 25 novos exoplanetas e 277 asteroides!', 'fato': 2},
-                    {'speaker': 0, 'text': 'A missão do James durou três anos no vácuo.', 'fato': 1},
-                    {'speaker': 1, 'text': 'Será que acham vida nesses novos exoplanetas?', 'fato': 2},
-                ]}
-            return {'lines': [
-                {'speaker': 0, 'text': 'O que o telescópio Webb detectou no espaço?', 'fato': 0},
-                {'speaker': 1, 'text': 'A temperatura atingiu 25 graus e 277 sensores congelaram!', 'fato': 4},
-                {'speaker': 0, 'text': 'A missão do James durou três anos no vácuo.', 'fato': 1},
-                {'speaker': 1, 'text': 'Será que acham vida nesses novos exoplanetas?', 'fato': 2},
-            ]}
-
-        mock_judge = lambda i, p, model=None: {'falas': [{'i': idx, 'suportada': True, 'motivo': ''} for idx in range(4)]} if 'checador de fatos' in i.lower() else {'nota': 8, 'responde_perguntas': True, 'contradiz_materia': False, 'problemas': []}
-
-        res = news_auto.write_script(story, max_words=80, ask=mock_writer_with_fact, judge_ask=mock_judge, facts=facts, log=logs.append)
-        self.assertEqual(len(res), 4)
-        self.assertEqual(len(corrections), 1)
-        corr1 = corrections[0]
-        self.assertIn('Fala 2', corr1)
-        self.assertIn('25 graus e 277 sensores', corr1)
-        self.assertIn('o fato 2 contém estes números', corr1)
-        self.assertTrue(any('Tentativa 1/8: rejeitada' in l for l in logs))
-        self.assertTrue(any('Tentativa 2/8: aceita' in l for l in logs))
-
-        # 2. Correção indicando "nenhum fato contém estes números: não os use"
         corrections_none = []
         logs_none = []
 
@@ -1844,25 +1755,29 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
             if 'correcao' in payload:
                 corrections_none.append(payload['correcao'])
                 return {'lines': [
-                    {'speaker': 0, 'text': 'O que o telescópio Webb detectou no espaço?', 'fato': 0},
-                    {'speaker': 1, 'text': 'O Webb detectou 25 novos exoplanetas e 277 asteroides!', 'fato': 2},
-                    {'speaker': 0, 'text': 'A missão do James durou três anos no vácuo.', 'fato': 1},
-                    {'speaker': 1, 'text': 'Será que acham vida nesses novos exoplanetas?', 'fato': 2},
+                    {'speaker': 0, 'text': 'O que o telescópio Webb detectou no espaço?'},
+                    {'speaker': 1, 'text': 'O Webb detectou 25 novos exoplanetas e 277 asteroides!'},
+                    {'speaker': 0, 'text': 'A Nasa observou galáxias e a missão durou três anos.'},
+                    {'speaker': 1, 'text': 'Os cientistas analisaram amostras de poeira cósmica.'},
                 ]}
             return {'lines': [
-                {'speaker': 0, 'text': 'O que o telescópio Webb detectou no espaço?', 'fato': 0},
-                {'speaker': 1, 'text': 'O telescópio analisou dados durante 90 dias seguidos!', 'fato': 4},
-                {'speaker': 0, 'text': 'A missão do James durou três anos no vácuo.', 'fato': 1},
-                {'speaker': 1, 'text': 'Será que acham vida nesses novos exoplanetas?', 'fato': 2},
+                {'speaker': 0, 'text': 'O que o telescópio Webb detectou no espaço?'},
+                {'speaker': 1, 'text': 'O telescópio analisou dados durante 99 dias seguidos!'},
+                {'speaker': 0, 'text': 'A missão do James durou três anos no vácuo.'},
+                {'speaker': 1, 'text': 'Será que acham vida nesses novos exoplanetas?'},
             ]}
+
+        mock_judge = lambda i, p, model=None: {'falas': [{'i': idx, 'suportada': True, 'motivo': ''} for idx in range(4)]} if 'checador de fatos' in i.lower() else {'nota': 8, 'responde_perguntas': True, 'contradiz_materia': False, 'problemas': []}
 
         res2 = news_auto.write_script(story, max_words=80, ask=mock_writer_no_fact, judge_ask=mock_judge, facts=facts, log=logs_none.append)
         self.assertEqual(len(res2), 4)
         self.assertEqual(len(corrections_none), 1)
         corr2 = corrections_none[0]
         self.assertIn('Fala 2', corr2)
-        self.assertIn('90 dias seguidos', corr2)
+        self.assertIn('99 dias seguidos', corr2)
         self.assertIn('nenhum fato contém estes números: não os use', corr2)
+        self.assertTrue(any('Tentativa 1/8: rejeitada' in l for l in logs_none))
+        self.assertTrue(any('Tentativa 2/8: aceita' in l for l in logs_none))
 
     def test_item12_failure_log_file_and_runtime_error(self):
         import json
@@ -2654,6 +2569,88 @@ class NewsAutoTests(IsolatedOutputMixin, unittest.TestCase):
         self.assertTrue(err_log.is_file())
         log_txt = err_log.read_text(encoding='utf-8')
         self.assertIn('falha simulada de rede/tempo', log_txt)
+
+    def test_item25_infer_facts_reactions_and_opinions(self):
+        facts = [
+            'A empresa Alpha construiu 12 usinas solares no Ceará.',
+            'O investimento total chegou a R$ 4,5 bilhões neste projeto.',
+            'As usinas vão abastecer 800 mil casas na região.',
+            'A obra gerou 3 mil empregos diretos durante a construção.',
+            'O governo estadual reduziu impostos para energia limpa.',
+        ]
+        story = {
+            'title': 'Alpha investe R$ 4,5 bilhões em 12 usinas solares no Ceará',
+            'body': ' '.join(facts) + ' ' + ('Energia renovável ganha força no Nordeste. ' * 25),
+            'extracted_facts': facts,
+        }
+
+        # 1. annotate_lines infere fato (combinando 2 fatos), reação e opinião
+        sample_lines = [
+            {'speaker': 0, 'text': 'Por que construir 12 usinas solares custou R$ 4,5 bilhões?'},
+            {'speaker': 1, 'text': 'Caramba, quanta grana!'},
+            {'speaker': 0, 'text': 'A Alpha investiu R$ 4,5 bilhões e abastece 800 mil casas.'},
+            {'speaker': 1, 'text': 'Esse projeto todo muda bastante o futuro energético.'},
+            {'speaker': 0, 'text': 'Também gerou 3 mil empregos diretos no Ceará.'},
+            {'speaker': 1, 'text': 'O governo estadual reduziu impostos para energia limpa.'},
+            {'speaker': 0, 'text': 'A empresa Alpha acelerou muito a construção inteira.'},
+            {'speaker': 1, 'text': 'Acho ótimo apostar em energia limpa no estado.'},
+        ]
+        logs = []
+        ann = news_auto.annotate_lines(sample_lines, facts, story['title'], log=logs.append)
+        self.assertEqual(ann[0]['tipo'], 'fato')
+        self.assertIn(0, ann[0]['matched_facts'])
+        self.assertIn(1, ann[0]['matched_facts'])
+        self.assertEqual(ann[1]['tipo'], 'reacao')
+        self.assertEqual(ann[2]['tipo'], 'fato')
+        self.assertIn(2, ann[2]['matched_facts'])
+        self.assertEqual(ann[3]['tipo'], 'opiniao')
+        self.assertIn('fala 2: inferida como reação', logs)
+
+        res, prob = news_auto.validate_lines({'lines': sample_lines}, story, budget=140, facts=facts)
+        self.assertEqual(prob, '')
+        self.assertEqual(len(res), 8)
+        self.assertTrue(res[1].get('reacao'))
+        self.assertTrue(res[3].get('opiniao'))
+
+        # 2. Número inventado continua rejeitado
+        bad_inv = list(sample_lines)
+        bad_inv[4] = {'speaker': 0, 'text': 'Também gerou 99 empregos diretos no Ceará.'}
+        with self.assertRaisesRegex(ValueError, 'Números ausentes na matéria: 99'):
+            news_auto.validate_lines({'lines': bad_inv}, story, budget=140, facts=facts)
+
+        # 3. Número de outro fato é aceito (mesmo se modelo passar "fato" errado)
+        cross_num = list(sample_lines)
+        cross_num[4] = {'speaker': 0, 'text': 'A Alpha abastece 800 mil casas com os empregos e 3 mil vagas.', 'fato': 0}
+        res_cross, prob_cross = news_auto.validate_lines({'lines': cross_num}, story, budget=140, facts=facts)
+        self.assertEqual(prob_cross, '')
+        self.assertEqual(len(res_cross), 8)
+
+        # 4. Opinião com número sem ligação com fatos é rejeitada
+        bad_op_num = [{'speaker': 0, 'text': 'Eu vi quase 77 motivos para duvidar disso.'}]
+        with self.assertRaisesRegex(ValueError, 'opiniões não podem conter dígitos'):
+            news_auto.annotate_lines(bad_op_num, facts, story['title'])
+
+        # 5. Opinião com entidade nova é rejeitada
+        bad_op_ent = [{'speaker': 1, 'text': 'Acho que a Petrobras vai copiar esse projeto logo.'}]
+        with self.assertRaisesRegex(ValueError, 'entidade "Petrobras" ausente nos fatos e no título'):
+            news_auto.annotate_lines(bad_op_ent, facts, story['title'])
+
+        # 6. Prompt sem "fato"/"reacao" e com fatos numerados no payload
+        seen_prompts = []
+        mock_judge = lambda i, p, m=None: (
+            {'falas': [{'i': idx, 'suportada': True, 'motivo': ''} for idx in range(8)]}
+            if 'checador de fatos' in i.lower() else {'nota': 9, 'problemas': []}
+        )
+
+        def mock_ask(inst, payload_str, temperature=None):
+            seen_prompts.append((inst, json.loads(payload_str)))
+            return {'lines': sample_lines}
+
+        news_auto.write_script(story, max_words=140, ask=mock_ask, judge_ask=mock_judge, facts=facts)
+        w_inst, w_pay = seen_prompts[0]
+        self.assertNotIn('"fato":', w_inst)
+        self.assertNotIn('"reacao":', w_inst)
+        self.assertTrue(all(f.startswith(f'{idx + 1}. ') for idx, f in enumerate(w_pay['fatos_da_materia'])))
 
 
 if __name__ == '__main__':

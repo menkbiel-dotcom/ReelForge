@@ -304,4 +304,18 @@
     - Executa chamada de teste `"responda só: ok"` via `POST /api/chat` (`think: false`, `stream: false`) tanto para o redator quanto para o juiz e reporta o tempo decorrido de cada um.
     - Consulta `GET /api/ps` listando modelos carregados com `size_vram` vs `size` (`_format_bytes`) e avisando em português caso `size_vram < size` que parte está na CPU e a geração será lenta.
   - `App._check`: captura `ollama_model`, `judge_model` e `provider` na thread principal e registra as linhas de `diagnose_ollama_environment` no console da GUI.
-- **Estado atual:** Todos os itens da Rodada 6 (20 a 23) concluídos!
+- **Estado atual:** Itens da Rodada 6 (20 a 23) concluídos; iniciada Rodada 7 (itens 25 a 30 + regressão com falhas reais).
+
+---
+
+## Rodada 7 (Itens 25 a 30 + Regressão Real)
+
+- [x] **ITEM 25 — Inferir fato/reação no código (`news_auto.py`)**: feito
+  - **Arquivos tocados:** `news_auto.py`, `tests/test_news_auto.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** 88 testes passando (incluindo `test_item25_infer_facts_reactions_and_opinions`)
+
+### Detalhes do ITEM 25
+- `write_script`: o prompt agora pede ao modelo apenas `{"lines":[{"speaker":0,"text":"..."}]}` (removidos os campos `"fato"` e `"reacao"` das instruções e dos exemplos *few-shot*; mantidos os `fatos_da_materia` numerados no payload).
+- `annotate_lines(lines, facts, title='', log=print)`: classifica cada fala deterministicamente em `fato` ($\ge 2$ palavras de conteúdo ou $\ge 1$ número em comum com algum fato, registrando `matched_facts` para permitir combinação de fatos), `reacao` (até 6 palavras e nenhum dígito), ou `opiniao` (sem dígitos, sem entidades ausentes de fatos+título, máx. 14 palavras, máx. 3 por roteiro), logando `fala X: inferida como fato N` / `reação` / `opinião`.
+- `validate_lines`: valida números, quantidades (`_quantity_pairs`), entidades (`_missing_entities`) e `TEMPORAL_UNITS` contra a **união** de fatos + título + corpo da matéria (sem rejeições artificiais por índice de fato trocado ou fusão de fatos); exige pelo menos 4 fatos distintos usados (em 6+ falas) e verifica gancho respondido pela combinação das falas 2–3 (`texts[1:3]`).
+- **Próximo item:** ITEM 26 — Normalizar/reparar antes de rejeitar (`news_auto.py`).
