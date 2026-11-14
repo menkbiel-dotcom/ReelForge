@@ -572,6 +572,62 @@ class ClipperSelectionTests(IsolatedOutputMixin, unittest.TestCase):
         # Motivo longo preservado sem truncar abaixo de ~170-220 chars
         self.assertTrue(any(len(a) > 120 for a in report['avisos']))
 
+    def test_item43_weak_start_transition_penalty_repair_hook_and_report_flag(self):
+        # (1) starts_with_weak_transition e penalidade -1.0 em heuristic_score
+        for prefix in ('E galera, veja isso', 'Então, o motor funciona', 'Bom, a verdade é', 'Outra coisa importante', 'Agora veja o dado', 'Mas tem um detalhe', 'Aí aconteceu isso', 'Olha só esse resultado'):
+            self.assertTrue(clipper.starts_with_weak_transition(prefix), prefix)
+        self.assertFalse(clipper.starts_with_weak_transition('Por que 80% das baterias viciam rápido?'))
+
+        u_strong = [{'indice': 0, 'inicio': 0.0, 'fim': 30.0, 'texto': 'O motor elétrico reduziu o consumo em 30 porcento na cidade.'}]
+        u_weak = [{'indice': 0, 'inicio': 0.0, 'fim': 30.0, 'texto': 'Então, o motor elétrico reduziu o consumo em 30 porcento na cidade.'}]
+        b_strong, p_strong = clipper.heuristic_score(u_strong[0]['texto'], 0.0, 30.0, u_strong)
+        b_weak, p_weak = clipper.heuristic_score(u_weak[0]['texto'], 0.0, 30.0, u_weak)
+        self.assertAlmostEqual(b_strong - b_weak, 1.0, places=2)
+        self.assertAlmostEqual(p_strong - p_weak, 1.0, places=2)
+
+        # (2) _repair_unit_bounds avança para a próxima unidade quando a primeira começa com transição e cabe na faixa
+        units = [
+            {'indice': 0, 'inicio': 0.0, 'fim': 8.0, 'texto': 'Então, antes de mais nada deixa eu contextualizar.', 'palavras': []},
+            {'indice': 1, 'inicio': 8.2, 'fim': 20.0, 'texto': 'Por que 80% dos carros elétricos recuperam energia no freio?', 'palavras': []},
+            {'indice': 2, 'inicio': 20.2, 'fim': 36.0, 'texto': 'O inversor transforma o motor em gerador instantaneamente.', 'palavras': []},
+            {'indice': 3, 'inicio': 36.2, 'fim': 48.0, 'texto': 'Isso economiza até 30% de bateria no trânsito urbano.', 'palavras': []},
+        ]
+        # Com [0..2] (0..36s), unidade 0 começa com "Então," e [1..2] (8.2..36s = ~28.2s) cabe em [25, 55] -> avança início para 1!
+        repaired = clipper._repair_unit_bounds(units, 0, 2, min_duration=25.0, max_duration=55.0, video_duration=60.0)
+        self.assertEqual(repaired, (1, 2))
+
+        # (3) validate_or_repair_hook no fallback pula frases que começam com transição e loga "gancho: fallback usado"
+        logs = []
+        clip_txt = 'Então, deixa eu te falar uma coisa. Por que 80% dos motores aquecem? A resposta está no radiador.'
+        repaired_hook = clipper.validate_or_repair_hook('Gancho com numero 999 inventado', clip_txt, log=logs.append)
+        self.assertEqual(repaired_hook, 'Por que 80% dos motores aquecem?')
+        self.assertIn('gancho: fallback usado', logs)
+
+        # (4) Prompt exige início forte e proíbe conectores; relatorio.json grava "inicio_fraco": true/false
+        info, trans = self._fake_info_and_trans(units, duracao=60.0)
+        prompts_seen = []
+
+        def fake_ask(instruction, payload, model=None, temperature=0.55, log=print, num_ctx=4096):
+            if 'ATÉ 3 trechos' in instruction:
+                prompts_seen.append(instruction)
+                return {
+                    'cortes': [
+                        {'inicio_unidade': 0, 'fim_unidade': 2, 'nota': 9, 'gancho': 'Por que 80% dos carros recuperam energia?', 'motivo': 'Forte'}
+                    ]
+                }
+            if 'EXATAMENTE 2 frases' in instruction:
+                return {'resumo': 'Resumo um. Resumo dois.'}
+            return {'resumo': ['B1', 'B2', 'B3'], 'potencial_cortes': 'alto', 'justificativa_potencial': 'Ótimo.'}
+
+        report = clipper.select_cuts_and_report(info, trans, min_duration=25.0, max_duration=55.0, num_cuts=3, ask=fake_ask, log=lambda *_: None)
+        self.assertTrue(any('olha só' in p and 'pergunta, afirmação forte ou dado surpreendente' in p for p in prompts_seen))
+        self.assertEqual(len(report['candidatos']), 1)
+        self.assertIn('inicio_fraco', report['candidatos'][0])
+        self.assertFalse(report['candidatos'][0]['inicio_fraco'])
+        saved = json.loads((engine.OUTPUT / 'cortes' / 'vid_sel' / 'relatorio.json').read_text(encoding='utf-8'))
+        self.assertIn('inicio_fraco', saved['candidatos'][0])
+        self.assertFalse(saved['candidatos'][0]['inicio_fraco'])
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

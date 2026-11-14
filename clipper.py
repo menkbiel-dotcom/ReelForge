@@ -711,10 +711,29 @@ _NUMBER_WORDS_PT = {
     'bilhao': '1000000000', 'bilhoes': '1000000000',
 }
 
+WEAK_START_TRANSITIONS = (
+    'e galera',
+    'então',
+    'bom',
+    'outra coisa',
+    'agora',
+    'mas',
+    'aí',
+    'olha só',
+)
+
 
 def _strip_accents_lower(text: str) -> str:
     norm = unicodedata.normalize('NFKD', str(text or '').casefold())
     return ''.join(c for c in norm if not unicodedata.combining(c))
+
+
+def starts_with_weak_transition(text: str) -> bool:
+    """Retorna True se o texto começa com transição/conector fraco ('e galera', 'então', 'bom', etc.)."""
+    plain = re.sub(r'^[^\w]+', '', _strip_accents_lower(text)).strip()
+    if not plain:
+        return False
+    return bool(re.match(r'^(e galera|entao|bom|outra coisa|agora|mas|ai|olha so)\b', plain))
 
 
 def _normalize_tokens(text: str) -> list[str]:
@@ -879,6 +898,16 @@ def _repair_unit_bounds(
         else:
             s_idx += 1
 
+    # 3. Se a primeira unidade começar com transição fraca e a próxima ainda mantiver a duração na faixa, avança o início
+    while s_idx < e_idx and starts_with_weak_transition(str(units[s_idx].get('texto', ''))):
+        if min_duration <= dur(s_idx + 1, e_idx) <= max_duration:
+            s_idx += 1
+        elif e_idx + 1 < n and min_duration <= dur(s_idx + 1, e_idx + 1) <= max_duration:
+            s_idx += 1
+            e_idx += 1
+        else:
+            break
+
     final_dur = dur(s_idx, e_idx)
     if min_duration <= final_dur <= max_duration:
         return s_idx, e_idx
@@ -900,39 +929,48 @@ def _truncate_first_sentence(text: str, max_words: int = 10) -> str:
     cleaned = ' '.join(str(text or '').split()).strip()
     if not cleaned:
         return ''
-    first_sent = re.split(r'(?<=[.!?…])\s+', cleaned, maxsplit=1)[0].strip()
+    sentences = [s.strip() for s in re.split(r'(?<=[.!?…])\s+', cleaned) if s.strip()]
+    first_sent = sentences[0]
+    for s in sentences:
+        if not starts_with_weak_transition(s):
+            first_sent = s
+            break
     words = first_sent.split()
     if len(words) <= max_words:
         return first_sent
     return ' '.join(words[:max_words]).rstrip(',;:') + '...'
 
 
-def validate_or_repair_hook(gancho: str, clip_text: str) -> str:
+def validate_or_repair_hook(gancho: str, clip_text: str, log=print) -> str:
     """Garante que o gancho tenha <=10 palavras, >=50% das palavras de conteúdo no corte e zero números inventados."""
+    def _fallback() -> str:
+        log('gancho: fallback usado')
+        return _truncate_first_sentence(clip_text, 10)
+
     hook = ' '.join(str(gancho or '').split()).strip()
     if not hook or len(hook.split()) > 10:
-        return _truncate_first_sentence(clip_text, 10)
+        return _fallback()
 
     clip_tokens = set(_normalize_tokens(clip_text))
     hook_tokens = _normalize_tokens(hook)
     if not hook_tokens:
-        return _truncate_first_sentence(clip_text, 10)
+        return _fallback()
 
     # Todos os números citados no gancho devem constar no texto do corte
     hook_nums = _extract_numbers_from_text(hook)
     clip_nums = _extract_numbers_from_text(clip_text)
     if not hook_nums.issubset(clip_nums):
-        return _truncate_first_sentence(clip_text, 10)
+        return _fallback()
 
     content_words = [t for t in hook_tokens if t not in _STOPWORDS_PT and not t.isdigit()]
     if content_words:
         matched = sum(1 for t in content_words if t in clip_tokens)
         if matched / len(content_words) < 0.5:
-            return _truncate_first_sentence(clip_text, 10)
+            return _fallback()
     else:
         matched = sum(1 for t in hook_tokens if t in clip_tokens)
         if matched / len(hook_tokens) < 0.5:
-            return _truncate_first_sentence(clip_text, 10)
+            return _fallback()
 
     return hook
 
@@ -998,7 +1036,12 @@ def heuristic_score(clip_text: str, start: float, end: float, clip_units: list[d
         bonus -= 0.4
         pure -= 1.0
 
-    bonus = round(max(-0.5, min(2.0, bonus)), 2)
+    # 7. Penalidade (-1.0) se começar com transição/conector fraco ("e galera", "então", "bom", etc.)
+    if starts_with_weak_transition(text):
+        bonus -= 1.0
+        pure -= 1.0
+
+    bonus = round(max(-1.5, min(2.0, bonus)), 2)
     pure = round(max(1.0, min(10.0, pure)), 2)
     return bonus, pure
 
@@ -1040,6 +1083,7 @@ def select_top_candidates(candidates: list[dict], max_cuts: int = 5, min_distanc
             break
     for idx, cand in enumerate(selected, start=1):
         cand['indice'] = idx
+        cand.setdefault('inicio_fraco', starts_with_weak_transition(str(cand.get('texto', ''))))
     return selected
 
 
@@ -1087,6 +1131,7 @@ def fallback_heuristic_candidates(
                 'gancho': _truncate_first_sentence(texto, 10),
                 'motivo': 'Selecionado pelo ranqueamento heurístico determinístico (gancho, densidade e ritmo).',
                 'texto': texto,
+                'inicio_fraco': starts_with_weak_transition(texto),
             })
 
     if not pool:
@@ -1106,6 +1151,7 @@ def fallback_heuristic_candidates(
             'gancho': _truncate_first_sentence(texto, 10),
             'motivo': 'Trecho único disponível dentro da duração do vídeo.',
             'texto': texto,
+            'inicio_fraco': starts_with_weak_transition(texto),
         })
 
     return select_top_candidates(pool, max_cuts=max_cuts, min_distance_s=10.0)
@@ -1127,6 +1173,8 @@ def _evaluate_window_cuts(
         f'com duração aproximada entre {int(round(min_duration))} e {int(round(max_duration))} segundos.\n'
         'Critérios:\n'
         '- Ideia completa: começa com gancho forte e termina com conclusão clara.\n'
+        '- O corte DEVE COMEÇAR com pergunta, afirmação forte ou dado surpreendente; '
+        'NÃO começar com transições/conectores ("e galera", "então", "bom", "outra coisa", "agora", "mas", "aí", "olha só").\n'
         '- Compreensível sozinha fora de contexto.\n'
         '- Surpreendente, útil ou emocional.\n'
         '- Evite introduções ("oi pessoal"), despedidas ("se inscreve"), patrocínios e cortes no meio de frase.\n'
@@ -1171,7 +1219,7 @@ def _evaluate_window_cuts(
         nota_llm = max(1.0, min(10.0, nota_llm))
         bonus, _ = heuristic_score(texto, st, en, slice_units)
         nota_final = round(min(10.0, max(1.0, nota_llm + bonus)), 2)
-        gancho = validate_or_repair_hook(str(item.get('gancho', '')), texto)
+        gancho = validate_or_repair_hook(str(item.get('gancho', '')), texto, log=log)
         motivo = ' '.join(str(item.get('motivo', '')).split()).strip() or 'Trecho com boa unidade e gancho.'
         parsed.append({
             'inicio_unidade': r_start_idx,
@@ -1185,6 +1233,7 @@ def _evaluate_window_cuts(
             'gancho': gancho,
             'motivo': motivo,
             'texto': texto,
+            'inicio_fraco': starts_with_weak_transition(texto),
         })
     return parsed
 

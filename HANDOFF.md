@@ -470,7 +470,14 @@
   - **Próximo item:** ITEM 42 — Modo `"preencher"` melhor (`crop_x` + detecção automática de rosto via OpenCV) e padrão sensato.
 
 - [x] **ITEM 42 — Modo `"preencher"` melhor e padrão sensato (`clip_render.py`, `clipper.py`, `gui_cortes.py`, `settings.json`, `tests/test_clip_render.py`, `tests/test_gui_cortes.py`)**: feito
+  - **Commit:** `afbb489b8ad543ef6ff93c84468b67c1b43c1b5f` — *"Item 42: Modo preencher com crop_x, enquadramento auto via OpenCV e padrao na GUI"*
   - **Arquivos:** `clip_render.py`, `clipper.py`, `gui_cortes.py`, `settings.json`, `tests/test_clip_render.py`, `tests/test_gui_cortes.py`
   - **Testes:** `tests.test_clip_render` (3 testes passando) + `tests.test_gui_cortes` (3 testes passando)
   - **Resumo:** Adicionado `crop_x` (`0.0–1.0`, padrão `0.5`) ao modo `"preencher"` (`crop=1080:960:(in_w-1080)*{crop_x:.4f}:(in_h-960)/2`), detecção automática opcional de rostos via OpenCV em `detect_face_crop_x()` (amostrando ~5 frames do corte com import tardio de `cv2`, mediana do centro X normalizado e fallback seguro para `0.5` com aviso quando não instalado), configuração `"cortes.enquadramento": "auto"|"centro"` (padrão `"auto"`), modo padrão alterado para `"preencher"` em `DEFAULT_CORTES_SETTINGS`, `settings.json` e `gui_cortes.py` (mantendo `"ajustar"` disponível) e campo opcional `"Enquadramento (X%)"` na aba Cortes.
   - **Próximo item:** ITEM 43 — Qualidade do começo do corte (`clipper.py`).
+
+- [x] **ITEM 43 — Qualidade do começo do corte (`clipper.py`, `tests/test_clipper.py`)**: feito
+  - **Arquivos:** `clipper.py`, `tests/test_clipper.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** `tests.test_clipper` (18 testes passando) + suíte completa (121 testes, 2x consecutivas)
+  - **Resumo:** (1) Prompt de seleção em `_evaluate_window_cuts()` instrui explicitamente a começar com pergunta, afirmação forte ou dado surpreendente e não começar com transições/conectores (`"e galera"`, `"então"`, `"bom"`, `"outra coisa"`, `"agora"`, `"mas"`, `"aí"`, `"olha só"`). (2) `heuristic_score()` penaliza em `-1.0` cortes que começam com essas transições (`starts_with_weak_transition`). (3) `_repair_unit_bounds()` avança o início para a próxima unidade quando a primeira começa com transição e a duração resultante permanece dentro de `[min_duration, max_duration]`. (4) `validate_or_repair_hook()` pula frases iniciadas com transição ao cair no fallback e registra `"gancho: fallback usado"` no log. (5) `relatorio.json` registra `"inicio_fraco": true/false` em cada candidato.
+  - **Status:** Todos os itens (41 a 43) concluídos.
