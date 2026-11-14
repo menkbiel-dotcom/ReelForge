@@ -54,12 +54,34 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
    - `engine.character()` redimensiona o sprite com `thumbnail((510, 640))` e gera sombra suave projetada atrás do sprite (`GaussianBlur(9)`, opacidade `0.62`, deslocamento `+6px` para baixo) com cache em `output/cache/sprite_v2_<indice>_<mtime_ns>.png`.
    - `render_pipeline.py` usa `-threads 0`, aplica `vignette=PI/6` no fundo, `highpass=f=80,acompressor=threshold=-18dB:ratio=2.2:attack=10:release=120` antes do `alimiter` nas vozes e `loudnorm=I=-14:TP=-1.5:LRA=11` no áudio final em 30 FPS padrão.
 
-6. **Interface Gráfica (`gui.py`):**
-   - `merge_settings(current, from_ui)`: Ao salvar configurações pela GUI (`_save`), mescla as alterações com o `settings.json` existente sem apagar chaves desconhecidas pela tela (como `aceitar_nota_baixa`, `permitir_sem_checagem_de_fatos`, `judge_model`, `whisper_model`), preservando também provedores adicionais e parâmetros ocultos em `voice_profiles`.
+6. **Interface Gráfica (`gui.py` + `gui_cortes.py`):**
+   - `merge_settings(current, from_ui)`: Ao salvar configurações pela GUI (`_save`), mescla as alterações com o `settings.json` existente sem apagar chaves desconhecidas pela tela (como `aceitar_nota_baixa`, `permitir_sem_checagem_de_fatos`, `judge_model`, `whisper_model`) nem subchaves extras em `voice_profiles` ou `cortes`.
    - `list_ollama_models()`: Popula o Combobox editável do modelo do redator consultando `GET http://127.0.0.1:11434/api/tags` (timeout 1.5s) com fallback offline para `['qwen3.5:4b', 'qwen3:8b', 'qwen2.5:7b']`.
    - Campo "Modelo do juiz": Combobox com os mesmos modelos + opção "igual ao redator" (salva `judge_model: ""` e propaga o modelo do redator para `OLLAMA_JUDGE_MODEL`).
    - Checkbox "Aceitar nota baixa (apenas testes)": mapeado para `aceitar_nota_baixa` no `settings.json` e `REELFORGE_ACCEPT_LOW_SCORE` no ambiente.
    - Botão "Verificar ambiente" (`App._check` + `diagnose_ollama_environment`): além de FFmpeg, `faster_whisper` e gameplays locais, consulta `GET /api/tags` avisando `ollama pull <modelo>` se redator ou juiz estiverem ausentes, envia teste `"responda só: ok"` ao redator e ao juiz medindo o tempo de resposta de cada um, e consulta `GET /api/ps` exibindo VRAM vs tamanho total (`size_vram < size` emite aviso em português sobre execução parcial na CPU e lentidão).
+
+## Modo "Cortes" (`clipper.py`, `clip_render.py`, `gui_cortes.py`)
+
+> [!IMPORTANT]
+> **Uso exclusivo com conteúdo autorizado:** O modo **Cortes** exige confirmação explícita (`"Confirmo que tenho autorização para cortar este vídeo"` na GUI ou `--autorizado` no CLI) e registra `fonte_url`, `canal`, `autorizado: true`, `credito` e `data` em todos os JSONs gerados. O ReelForge **não** contorna DRM, restrições de idade, login/cookies e **não** realiza postagem automática.
+
+1. **Entrada e Download (`clipper.py` — `prepare_source()`):**
+   - Aceita URL (baixada via `python -m yt_dlp` até 1080p MP4 com timeout e mensagens amigáveis em português) ou caminho de arquivo local.
+   - Cache em `output/cortes/<video_id>/source.mp4` + `info.json`, reutilizado em execuções seguintes.
+2. **Transcrição com Palavras (`clipper.py` — `transcribe_video()`):**
+   - Usa `faster-whisper` (`word_timestamps=True`, `vad_filter=True`, CPU `int8`, `local_files_only=True`, modelo de `settings.json`, idioma configurável padrão `"pt"`), com log de progresso (tempo, %, decorrido, estimativa), recorte opcional por minutos (`inicio_min`/`fim_min`), cancelamento cooperativo (`CancelledError`) e cache em `output/cortes/<video_id>/transcricao.json` (invalidado se modelo, idioma ou trecho mudarem).
+   - Agrupa palavras em `"unidades"` (sentenças por pontuação terminal ou pausa `> 0,7 s`).
+3. **Avaliação, Reparo e Seleção (`clipper.py` — `select_cuts_and_report()`):**
+   - Divide unidades em janelas de `<= 650` palavras (~1 min de sobreposição) para caber em `num_ctx=4096` via `engine.request_json(..., think=false)` (retries 0.55/0.60/0.65 com teto 0.7, máx. 3 tentativas por janela).
+   - O LLM retorna índices de unidades (`inicio_unidade`/`fim_unidade`), convertidos com folga `-0,15 s / +0,25 s`; limites fora da faixa configurada (`duracao_min`/`duracao_max`, padrão `25–55 s`) são **reparados** às fronteiras de unidade mais próximas em vez de descartados por estilo. Janelas ruins são ignoradas com log (até 220 caracteres), e há fallback heurístico determinístico completo para sempre devolver candidatos.
+   - Aplica bônus heurístico determinístico, deduplicação (`>50%` interseção), espaçamento mínimo (`>= 10 s`), guarda anti-alucinação no `gancho` (`<= 10` palavras, `>= 50%` palavras de conteúdo e zero números inventados) e resumo geral map-reduce salvo em `output/cortes/<video_id>/relatorio.json`.
+4. **Renderização (`clip_render.py` — `render_clip()`):**
+   - Compõe `1080x1920 @30fps` com corte em cima (`1080x960`, modos `"ajustar"` com fundo desfocado ou `"preencher"` com crop central) e gameplay muda embaixo (`1080x960`, lógica de escolha/loop/offset/brilho/gama/vinheta).
+   - Áudio do corte com `loudnorm=I=-14:TP=-1.5:LRA=11` e música opcional desligada por padrão.
+   - Gera `.ass` diretamente das palavras já transcritas (sem rodar Whisper novamente), com posição configurável (`juncao` ou `rodape`), título opcional nos 3 s iniciais e crédito no canto, exportando `corte_NN_<slug>.mp4` e `corte_NN_<slug>.json`.
+5. **Configurações em `settings.json` (chave `"cortes"`):**
+   - `idioma` (`"pt"`), `duracao_min` (`25.0`), `duracao_max` (`55.0`), `num_cortes` (`5`), `modo_corte` (`"ajustar"`), `posicao_legenda` (`"juncao"`), `titulo_na_tela` (`true`), `credito_na_tela` (`true`), `credito` (`""`), `musica_ativa` (`false`).
 
 ## Privacidade dos Assets
 
@@ -67,11 +89,11 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
 - O script `publicar_github.py` cria/atualiza o repositório como **privado por padrão** (use `--publico` para público), lê o token exclusivamente de `GITHUB_TOKEN` ou `getpass` (sem argumento `--token` e sem eco no terminal) e faz push sem `force`.
 - Testes que utilizam áudios de demonstração sintetizam automaticamente um WAV silencioso via módulo padrão `wave` quando o arquivo local não existir.
 
-## Suíte de Testes (97 Testes)
+## Suíte de Testes (118 Testes)
 
-- `tests/test_news_auto.py` (65 testes) e `tests/test_integration.py` (32 testes) — totalizando **97 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `numpy` ou arquivos locais de demonstração não estiverem presentes), além de `tests/fixtures/real_failures/` com 8 arquivos reais (60 tentativas) validados em regressão offline (validação estrita nos 6 antigos de 2026-11-12 + regressão DURAS x MOLES nos 8 arquivos completos). Todas as classes de teste herdam `IsolatedOutputMixin` (`tests/_isolation.py`), que faz patch de `engine.OUTPUT` para diretório temporário em `setUp` e garante via `test_item20_isolated_output_guard` que nenhum arquivo seja gravado em `output/` real. Destrutor `App.destroy()` cancela `_poll_id` e testes GUI coletam objetos na thread principal.
+- `tests/test_news_auto.py` (65 testes), `tests/test_integration.py` (32 testes), `tests/test_clipper.py` (16 testes), `tests/test_clip_render.py` (2 testes) e `tests/test_gui_cortes.py` (3 testes) — totalizando **118 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `ffmpeg` ou arquivos locais não estiverem presentes), além de `tests/fixtures/real_failures/` com 8 arquivos reais (60 tentativas) validados em regressão offline. Todas as classes de teste herdam `IsolatedOutputMixin` (`tests/_isolation.py`), que faz patch de `engine.OUTPUT` para diretório temporário em `setUp` e garante que nenhum arquivo seja gravado em `output/` real. Destrutor `App.destroy()` cancela `_poll_id` e testes GUI coletam objetos na thread principal.
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'
-.\.venv\Scripts\python.exe -m unittest tests.test_news_auto tests.test_integration -v
+.\.venv\Scripts\python.exe -m unittest tests.test_news_auto tests.test_integration tests.test_clipper tests.test_clip_render tests.test_gui_cortes -v
 ```

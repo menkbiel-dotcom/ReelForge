@@ -438,3 +438,15 @@
   - **Testes:** `tests.test_clip_render` (2 testes passando: unitário com FFmpeg mockado + integração real sintética via `lavfi` validando `1080x1920` e `30 fps`)
   - **Resumo:** `render_clip()` compõe `1080x1920 @30fps` com corte em cima (`1080x960` nos modos `"ajustar"` com fundo desfocado e `"preencher"` com crop central) e gameplay muda embaixo (`1080x960`, lógica de escolha/loop/offset/brilho/gama/vinheta copiada para `clip_render.py`), áudio do corte com `loudnorm` (`I=-14:TP=-1.5:LRA=11`) e música opcional desligada por padrão; gera `.ass` direto das palavras já existentes (deslocadas pelo início, máx. 3 palavras, contorno preto, palavra ativa destacada, posição `juncao` ou `rodape`, título 3s e crédito no canto) sem rodar Whisper novamente, salvando `corte_NN_<slug>.mp4` e `.json`.
   - **Próximo item:** ITEM 38 — Interface (`gui_cortes.py` + registro mínimo em `gui.py` + `settings.json`).
+
+- [x] **ITEM 38 — Interface (`gui_cortes.py`, `gui.py`, `settings.json`, `tests/test_gui_cortes.py`)**: feito
+  - **Commit:** `b78e92b` (`b78e92b7e35df9391761801dff1a37f43924f30d`) — *"Item 38: Aba Cortes na GUI (gui_cortes.py), registro minimo em gui.py e settings.json"*
+  - **Arquivos:** `gui_cortes.py`, `gui.py`, `settings.json`, `tests/test_gui_cortes.py`
+  - **Testes:** `tests.test_gui_cortes` (2 testes passando) + `tests.test_integration` (32 testes passando)
+  - **Resumo:** Adicionada aba `Cortes` em `gui_cortes.py` e registrada minimamente em `gui.py`: campo link/arquivo + `"Procurar…"`, checkbox obrigatório de autorização (mantendo `"Analisar vídeo"` e `"Renderizar selecionados"` desabilitados sem ele), crédito, duração mín./máx., nº de cortes, modo (`ajustar`/`preencher`), posição da legenda (`juncao`/`rodape`), título na tela, trecho opcional em minutos, gameplay compartilhada da aba Vídeo, botões Analisar/Renderizar/Cancelar/Abrir pasta, Treeview com `[x]`/`[ ]`, ajuste `±1 s` de início/fim, prévia do texto do corte, resumo geral e persistência em `settings.json["cortes"]` via `merge_settings`.
+  - **Próximo item:** ITEM 39 — Documentação e testes finais (`CLAUDE.md`, `HANDOFF.md`, suíte completa 2x).
+
+- [x] **ITEM 39 — Documentação e testes finais (`CLAUDE.md`, `HANDOFF.md`, `tests/test_gui_cortes.py`)**: feito
+  - **Arquivos:** `CLAUDE.md`, `HANDOFF.md`, `tests/test_gui_cortes.py`
+  - **Testes:** Suíte completa (`test_news_auto`, `test_integration`, `test_clipper`, `test_clip_render`, `test_gui_cortes` — 118 testes) executada 2x consecutivas com guarda de isolamento do `output/` real.
+  - **Status:** Todos os itens (34 a 39) da Rodada 9 concluídos.

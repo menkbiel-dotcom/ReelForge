@@ -145,6 +145,23 @@ class CortesGuiTests(IsolatedOutputMixin, unittest.TestCase):
                     app = None
                     gc.collect()
 
+    def test_cortes_test_modules_inherit_isolated_output_mixin(self):
+        import inspect
+        import engine
+        import tests.test_clipper as tc
+        import tests.test_clip_render as tr
+        import tests.test_gui_cortes as tg
+
+        real_output = (engine.ROOT / 'output').resolve()
+        self.assertNotEqual(engine.OUTPUT.resolve(), real_output)
+        for mod in (tc, tr, tg):
+            for _, cls in inspect.getmembers(mod, inspect.isclass):
+                if issubclass(cls, unittest.TestCase) and cls.__module__ == mod.__name__:
+                    self.assertTrue(
+                        issubclass(cls, IsolatedOutputMixin),
+                        f'{mod.__name__}.{cls.__name__} deve herdar IsolatedOutputMixin',
+                    )
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
