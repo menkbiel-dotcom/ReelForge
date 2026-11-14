@@ -775,6 +775,35 @@ def starts_with_weak_transition(text: str) -> bool:
     return bool(re.match(r'^(e galera|entao|bom|outra coisa|agora|mas|ai|olha so)\b', plain))
 
 
+AD_KEYWORD_PATTERNS: tuple[tuple[str, str], ...] = (
+    ('patrocinio', r'\bpatrocin\w*'),
+    ('parceria', r'\bparceri\w*'),
+    ('parceiro', r'\bparceir\w*'),
+    ('cupom', r'\bcupo(?:m|ns)\b'),
+    ('desconto', r'\bdescont\w*'),
+    ('codigo', r'\bcodig\w*'),
+    ('link na descricao', r'\blink\s+na\s+descric\w*'),
+    ('acesse o site', r'\bacesse\s+o\s+site\b'),
+    ('cadastre', r'\bcadastr\w*'),
+    ('baixe o app', r'\bbaixe\s+o\s+(?:app|aplicativo)\b'),
+    ('assine', r'\bassin(?:e|ar|atura)\b'),
+    ('totalmente gratuito', r'\btotalmente\s+gratuit\w*'),
+    ('sem propaganda', r'\bsem\s+propagand\w*'),
+)
+
+
+def detect_advertising(text: str) -> tuple[bool, list[str]]:
+    """Detecta indícios de publicidade/patrocínio por palavras-chave em PT-BR (>=2 ocorrências distintas)."""
+    norm = _strip_accents_lower(text)
+    if not norm:
+        return False, []
+    matched: list[str] = []
+    for label, pattern in AD_KEYWORD_PATTERNS:
+        if re.search(pattern, norm):
+            matched.append(label)
+    return len(matched) >= 2, matched
+
+
 def _normalize_tokens(text: str) -> list[str]:
     plain = _strip_accents_lower(text)
     return re.findall(r'[a-z0-9]+', plain)
@@ -964,16 +993,74 @@ def _extract_numbers_from_text(text: str) -> set[str]:
     return nums
 
 
+_PT_VERB_RE = re.compile(
+    r'\b('
+    r'e|eh|era|eram|foi|foram|ser|sera|seria|sao|esta|estao|estava|estavam|estar|esteve|'
+    r'tem|tinha|tinham|teve|tiveram|ter|tera|pode|podem|podia|deve|devem|vai|vao|ia|iam|'
+    r'faz|fez|fizeram|fazer|disse|diz|dizem|falou|fala|falam|explica|explicou|mostra|mostrou|'
+    r'revela|revelou|acontece|aconteceu|chega|chegou|saiu|sai|entra|entrou|fica|ficou|'
+    r'parece|existe|existem|precisa|quer|querem|sabe|sabem|acha|acham|pensa|pensam|ve|viu|'
+    r'deixa|deixou|passa|passou|ganha|ganhou|perde|perdeu|compra|comprou|vende|vendeu|'
+    r'usa|usou|cria|criou|muda|mudou|funciona|importa|vale|custa|custou|paga|pagou|'
+    r'\w+(?:ar|er|ir|ou|aram|eram|iram|ava|avam|ia|iam|ando|endo|indo)'
+    r')\b'
+)
+
+
+def _has_verb_or_question(text: str) -> bool:
+    if '?' in str(text or ''):
+        return True
+    norm = _strip_accents_lower(text)
+    tokens = re.findall(r'[a-z]+', norm)
+    if len(tokens) < 2:
+        return False
+    return bool(_PT_VERB_RE.search(' '.join(tokens)))
+
+
+def _is_fragment_sentence(text: str) -> bool:
+    """Retorna True se a frase é um fragmento curto sem verbo ou com menos de 5 palavras de conteúdo."""
+    words = [w for w in str(text or '').split() if w.strip()]
+    if len(words) < 5:
+        return True
+    tokens = _normalize_tokens(text)
+    content_words = [t for t in tokens if t not in _STOPWORDS_PT and not t.isdigit()]
+    if len(content_words) < 3 and not _has_verb_or_question(text):
+        return True
+    if not _has_verb_or_question(text) and len(content_words) < 5:
+        return True
+    return False
+
+
 def _truncate_first_sentence(text: str, max_words: int = 10) -> str:
     cleaned = ' '.join(str(text or '').split()).strip()
     if not cleaned:
         return ''
     sentences = [s.strip() for s in re.split(r'(?<=[.!?…])\s+', cleaned) if s.strip()]
-    first_sent = sentences[0]
+    first_sent = None
+    # 1. Primeira frase completa (>= 5 palavras, não fragmento) e sem transição fraca
     for s in sentences:
-        if not starts_with_weak_transition(s):
+        if not starts_with_weak_transition(s) and not _is_fragment_sentence(s):
             first_sent = s
             break
+    # 2. Qualquer frase completa (>= 5 palavras, não fragmento)
+    if first_sent is None:
+        for s in sentences:
+            if not _is_fragment_sentence(s):
+                first_sent = s
+                break
+    # 3. Qualquer frase com >= 5 palavras no corte
+    if first_sent is None:
+        for s in sentences:
+            if len(s.split()) >= 5:
+                first_sent = s
+                break
+    # 4. Fallback final: primeira frase sem transição fraca ou primeira frase disponível
+    if first_sent is None:
+        first_sent = sentences[0]
+        for s in sentences:
+            if not starts_with_weak_transition(s):
+                first_sent = s
+                break
     words = first_sent.split()
     if len(words) <= max_words:
         return first_sent
@@ -987,7 +1074,10 @@ def validate_or_repair_hook(gancho: str, clip_text: str, log=print) -> str:
         return _truncate_first_sentence(clip_text, 10)
 
     hook = ' '.join(str(gancho or '').split()).strip()
-    if not hook or len(hook.split()) > 10:
+    hook_words = hook.split()
+    if not hook or len(hook_words) > 10 or len(hook_words) < 3:
+        return _fallback()
+    if not _has_verb_or_question(hook) and len(hook_words) < 5:
         return _fallback()
 
     clip_tokens = set(_normalize_tokens(clip_text))
@@ -1080,7 +1170,13 @@ def heuristic_score(clip_text: str, start: float, end: float, clip_units: list[d
         bonus -= 1.0
         pure -= 1.0
 
-    bonus = round(max(-1.5, min(2.0, bonus)), 2)
+    # 8. Penalidade (-3.0) se tiver >= 2 indícios distintos de publicidade/patrocínio
+    is_publi, _ = detect_advertising(text)
+    if is_publi:
+        bonus -= 3.0
+        pure -= 3.0
+
+    bonus = round(max(-3.5, min(2.0, bonus)), 2)
     pure = round(max(1.0, min(10.0, pure)), 2)
     return bonus, pure
 
@@ -1122,7 +1218,13 @@ def select_top_candidates(candidates: list[dict], max_cuts: int = 5, min_distanc
             break
     for idx, cand in enumerate(selected, start=1):
         cand['indice'] = idx
-        cand.setdefault('inicio_fraco', starts_with_weak_transition(str(cand.get('texto', ''))))
+        texto_cand = str(cand.get('texto', ''))
+        cand.setdefault('inicio_fraco', starts_with_weak_transition(texto_cand))
+        is_publi, publi_terms = detect_advertising(texto_cand)
+        cand.setdefault('possivel_publi', is_publi)
+        cand.setdefault('termos_publi', publi_terms)
+        if cand.get('possivel_publi'):
+            cand.setdefault('selo_publi', 'PUBLI?')
     return selected
 
 
@@ -1158,6 +1260,7 @@ def fallback_heuristic_candidates(
             slice_units = units[s_idx:best_e + 1]
             texto = ' '.join(u['texto'] for u in slice_units)
             bonus, pure = heuristic_score(texto, st, en, slice_units)
+            is_publi, publi_terms = detect_advertising(texto)
             pool.append({
                 'inicio_unidade': s_idx,
                 'fim_unidade': best_e,
@@ -1171,6 +1274,9 @@ def fallback_heuristic_candidates(
                 'motivo': 'Selecionado pelo ranqueamento heurístico determinístico (gancho, densidade e ritmo).',
                 'texto': texto,
                 'inicio_fraco': starts_with_weak_transition(texto),
+                'possivel_publi': is_publi,
+                'termos_publi': publi_terms,
+                **({'selo_publi': 'PUBLI?'} if is_publi else {}),
             })
 
     if not pool:
@@ -1178,6 +1284,7 @@ def fallback_heuristic_candidates(
         st, en = _span_with_padding(units, 0, n - 1, video_duration)
         texto = ' '.join(u['texto'] for u in units)
         bonus, pure = heuristic_score(texto, st, en, units)
+        is_publi, publi_terms = detect_advertising(texto)
         pool.append({
             'inicio_unidade': 0,
             'fim_unidade': n - 1,
@@ -1191,6 +1298,9 @@ def fallback_heuristic_candidates(
             'motivo': 'Trecho único disponível dentro da duração do vídeo.',
             'texto': texto,
             'inicio_fraco': starts_with_weak_transition(texto),
+            'possivel_publi': is_publi,
+            'termos_publi': publi_terms,
+            **({'selo_publi': 'PUBLI?'} if is_publi else {}),
         })
 
     return select_top_candidates(pool, max_cuts=max_cuts, min_distance_s=10.0)
@@ -1216,7 +1326,8 @@ def _evaluate_window_cuts(
         'NÃO começar com transições/conectores ("e galera", "então", "bom", "outra coisa", "agora", "mas", "aí", "olha só").\n'
         '- Compreensível sozinha fora de contexto.\n'
         '- Surpreendente, útil ou emocional.\n'
-        '- Evite introduções ("oi pessoal"), despedidas ("se inscreve"), patrocínios e cortes no meio de frase.\n'
+        '- Evite introduções ("oi pessoal"), despedidas ("se inscreve") e cortes no meio de frase.\n'
+        '- NÃO selecione trechos de publicidade (patrocínio, parceria, divulgação de produto/serviço/site, cupom, "link na descrição").\n'
         '- Nunca invente números ou fatos no "gancho" (<= 10 palavras).\n'
         'Devolva APENAS JSON usando ÍNDICES inteiros das unidades (nunca timestamps):\n'
         '{"cortes":[{"inicio_unidade":int,"fim_unidade":int,"nota":1-10,"gancho":"...","motivo":"..."}]}\n\n'
@@ -1260,6 +1371,7 @@ def _evaluate_window_cuts(
         nota_final = round(min(10.0, max(1.0, nota_llm + bonus)), 2)
         gancho = validate_or_repair_hook(str(item.get('gancho', '')), texto, log=log)
         motivo = ' '.join(str(item.get('motivo', '')).split()).strip() or 'Trecho com boa unidade e gancho.'
+        is_publi, publi_terms = detect_advertising(texto)
         parsed.append({
             'inicio_unidade': r_start_idx,
             'fim_unidade': r_end_idx,
@@ -1273,6 +1385,9 @@ def _evaluate_window_cuts(
             'motivo': motivo,
             'texto': texto,
             'inicio_fraco': starts_with_weak_transition(texto),
+            'possivel_publi': is_publi,
+            'termos_publi': publi_terms,
+            **({'selo_publi': 'PUBLI?'} if is_publi else {}),
         })
     return parsed
 

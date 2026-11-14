@@ -628,6 +628,92 @@ class ClipperSelectionTests(IsolatedOutputMixin, unittest.TestCase):
         self.assertIn('inicio_fraco', saved['candidatos'][0])
         self.assertFalse(saved['candidatos'][0]['inicio_fraco'])
 
+    def test_item46_advertising_detection_penalty_and_fragment_hook_repair(self):
+        # (1) Detector de publicidade em PT-BR e penalidade de -3.0 no heuristic_score
+        clean_text = 'O processador moderno consome metade da energia em tarefas pesadas de renderização.'
+        publi_text = (
+            'Esse vídeo tem patrocínio oficial! Use o nosso cupom exclusivo com desconto '
+            'especial no link na descrição para assinar agora.'
+        )
+        is_publi_clean, terms_clean = clipper.detect_advertising(clean_text)
+        self.assertFalse(is_publi_clean)
+        self.assertEqual(terms_clean, [])
+
+        is_publi, terms = clipper.detect_advertising(publi_text)
+        self.assertTrue(is_publi)
+        self.assertGreaterEqual(len(terms), 3)
+
+        u_base = [{'indice': 0, 'inicio': 0.0, 'fim': 30.0, 'texto': clean_text}]
+        u_publi = [{'indice': 0, 'inicio': 0.0, 'fim': 30.0, 'texto': clean_text + ' Patrocínio oficial com cupom no link na descrição.'}]
+        b_base, p_base = clipper.heuristic_score(u_base[0]['texto'], 0.0, 30.0, u_base)
+        b_publi, p_publi = clipper.heuristic_score(u_publi[0]['texto'], 0.0, 30.0, u_publi)
+        self.assertAlmostEqual(b_base - b_publi, 3.0, places=2)
+        self.assertAlmostEqual(p_base - p_publi, 3.0, places=2)
+
+        # (2) Fragmentos como "colecionador." nunca viram gancho e logam "gancho: fallback usado"
+        clip_with_fragment = (
+            'colecionador. Muita gente acha que guardar moedas antigas dá dinheiro rápido, '
+            'mas 90% das peças comuns não valem nada no leilão.'
+        )
+        logs1 = []
+        hook1 = clipper.validate_or_repair_hook('colecionador.', clip_with_fragment, log=logs1.append)
+        self.assertNotEqual(hook1.strip().lower(), 'colecionador.')
+        self.assertGreaterEqual(len(hook1.split()), 5)
+        self.assertIn('gancho: fallback usado', logs1)
+
+        logs2 = []
+        hook2 = clipper.validate_or_repair_hook('', clip_with_fragment, log=logs2.append)
+        self.assertNotEqual(hook2.strip().lower(), 'colecionador.')
+        self.assertTrue(hook2.startswith('Muita gente acha que guardar moedas'))
+        self.assertIn('gancho: fallback usado', logs2)
+
+        # (3) Transcrição sintética: trecho com >=3 termos de publi recebe possivel_publi=True e selo "PUBLI?" sem ser excluído
+        units = [
+            {'indice': 0, 'inicio': 0.0, 'fim': 15.0, 'texto': 'colecionador.', 'palavras': []},
+            {
+                'indice': 1,
+                'inicio': 15.2,
+                'fim': 38.0,
+                'texto': (
+                    'Esse episódio tem patrocínio da plataforma parceira: use o cupom REEL10 '
+                    'no link na descrição para ganhar desconto agora mesmo.'
+                ),
+                'palavras': [],
+            },
+            {
+                'indice': 2,
+                'inicio': 38.2,
+                'fim': 65.0,
+                'texto': 'Por que 90% das moedas antigas perderam valor no mercado de leilões brasileiro?',
+                'palavras': [],
+            },
+        ]
+        info, trans = self._fake_info_and_trans(units, duracao=70.0)
+        prompts_seen = []
+
+        def fake_ask(instruction, payload, model=None, temperature=0.55, log=print, num_ctx=4096):
+            if 'ATÉ 3 trechos' in instruction:
+                prompts_seen.append(instruction)
+                return {
+                    'cortes': [
+                        {'inicio_unidade': 0, 'fim_unidade': 1, 'nota': 8, 'gancho': 'colecionador.', 'motivo': 'Trecho 1'},
+                    ]
+                }
+            if 'EXATAMENTE 2 frases' in instruction:
+                return {'resumo': 'Resumo um. Resumo dois.'}
+            return {'resumo': ['B1', 'B2', 'B3'], 'potencial_cortes': 'médio', 'justificativa_potencial': 'Ok.'}
+
+        report = clipper.select_cuts_and_report(info, trans, min_duration=25.0, max_duration=45.0, num_cuts=3, ask=fake_ask, log=lambda *_: None)
+        self.assertTrue(any('patrocínio, parceria' in p and 'link na descrição' in p for p in prompts_seen))
+        self.assertEqual(len(report['candidatos']), 1)
+        cand = report['candidatos'][0]
+        self.assertTrue(cand['possivel_publi'])
+        self.assertEqual(cand.get('selo_publi'), 'PUBLI?')
+        self.assertNotEqual(cand['gancho'].strip().lower(), 'colecionador.')
+        saved = json.loads((engine.OUTPUT / 'cortes' / 'vid_sel' / 'relatorio.json').read_text(encoding='utf-8'))
+        self.assertTrue(saved['candidatos'][0]['possivel_publi'])
+        self.assertEqual(saved['candidatos'][0].get('selo_publi'), 'PUBLI?')
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
