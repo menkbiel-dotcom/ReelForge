@@ -67,6 +67,11 @@ class CortesGuiTests(IsolatedOutputMixin, unittest.TestCase):
                 app.withdraw()
                 try:
                     tab = app.cortes_tab
+                    from tkinter import ttk
+                    style = ttk.Style(app)
+                    self.assertEqual(style.lookup('Treeview', 'background').upper(), '#1E293B')
+                    self.assertEqual(style.lookup('Treeview', 'fieldbackground').upper(), '#1E293B')
+
                     # Sem autorização marcada, botões devem ficar desabilitados
                     self.assertFalse(tab.authorized.get())
                     self.assertEqual(str(tab.btn_analyze['state']), 'disabled')
@@ -121,7 +126,9 @@ class CortesGuiTests(IsolatedOutputMixin, unittest.TestCase):
                     self.assertIn('Segunda palavra', tab.preview_text.get('1.0', 'end'))
 
                     # Desmarca segundo candidato e ajusta primeiro em -1s início / +1s fim
+                    self.assertEqual(tab.tree.item('1', 'values')[0], '✔')
                     tab._toggle_row_by_id('1')
+                    self.assertEqual(tab.tree.item('1', 'values')[0], '☐')
                     selected = tab.get_selected_candidates()
                     self.assertEqual(len(selected), 1)
                     self.assertEqual(selected[0]['gancho'], 'Gancho teste')
@@ -132,6 +139,11 @@ class CortesGuiTests(IsolatedOutputMixin, unittest.TestCase):
                     self.assertAlmostEqual(tab.candidates[0]['fim'], 36.0, places=2)
                     self.assertIn('Primeira', tab.preview_text.get('1.0', 'end'))
                     self.assertIn('final.', tab.preview_text.get('1.0', 'end'))
+
+                    # Verifica indicador de etapas e barra de progresso por log
+                    tab.on_log_message('Transcrição: 30.0s / 60.0s (50%) — decorrido 3.0s')
+                    self.assertEqual(tab.current_stage, 2)
+                    self.assertAlmostEqual(float(tab.progress_bar['value']), 50.0, places=1)
 
                     # Salva configurações e valida preservação de chaves
                     tab.modo_corte.set('preencher')
@@ -153,6 +165,30 @@ class CortesGuiTests(IsolatedOutputMixin, unittest.TestCase):
         self.assertIsNone(gui_cortes._parse_optional_crop_x(''))
         self.assertAlmostEqual(gui_cortes._parse_optional_crop_x('35'), 0.35, places=4)
         self.assertAlmostEqual(gui_cortes._parse_optional_crop_x('0.65'), 0.65, places=4)
+        self.assertEqual(gui_cortes.score_badge_colors(8.5)[1], '#34D399')
+        self.assertEqual(gui_cortes.score_badge_colors(7.0)[1], '#FACC15')
+        self.assertEqual(gui_cortes.score_badge_colors(4.5)[1], '#F87171')
+
+    def test_extract_cut_thumbnail_mocked_and_cached(self):
+        import gui_cortes
+        with tempfile.TemporaryDirectory() as td:
+            src = Path(td) / 'source.mp4'
+            src.write_bytes(b'fake-video')
+            calls = []
+
+            def fake_run(cmd, **_kw):
+                calls.append(list(map(str, cmd)))
+                Path(cmd[-1]).write_bytes(b'\x89PNG\r\n\x1a\nfake')
+
+            with patch('gui_cortes.subprocess.run', side_effect=fake_run):
+                t1 = gui_cortes.extract_cut_thumbnail(src, 'vid_th', 1, 12.5)
+                self.assertIsNotNone(t1)
+                self.assertTrue(t1.is_file())
+                self.assertEqual(len(calls), 1)
+                # Segunda chamada usa cache sem chamar ffmpeg novamente
+                t2 = gui_cortes.extract_cut_thumbnail(src, 'vid_th', 1, 12.5)
+                self.assertEqual(t2, t1)
+                self.assertEqual(len(calls), 1)
 
     def test_cortes_test_modules_inherit_isolated_output_mixin(self):
         import inspect

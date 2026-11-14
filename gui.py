@@ -207,13 +207,26 @@ class App(tk.Tk):
     def __init__(self):
         if os.name == 'nt':
             try:
+                ctypes.windll.shcore.SetProcessDpiAwareness(1)
+            except Exception:
+                pass
+            try:
                 ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('reelforge.studio.app')
             except Exception:
                 pass
         super().__init__()
         self.title('ReelForge Studio — Gerador de Reels')
-        self.geometry('1060x860')
-        self.minsize(940, 740)
+        self.geometry('1140x860')
+        self.minsize(1100, 760)
+        if os.name == 'nt':
+            try:
+                hwnd = ctypes.windll.user32.GetParent(self.winfo_id()) or self.winfo_id()
+                dark_mode = ctypes.c_int(1)
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    hwnd, 20, ctypes.byref(dark_mode), ctypes.sizeof(dark_mode)
+                )
+            except Exception:
+                pass
         try:
             import icon_gen
             icon_path = icon_gen.ensure_icon(HOME)
@@ -350,6 +363,36 @@ class App(tk.Tk):
         style.map('Chip.TButton', background=[('active', '#2A3956')], foreground=[('active', '#FFFFFF')])
         style.configure('Horizontal.TProgressbar', troughcolor='#131A29', background=cyan, bordercolor=border,
                         lightcolor=cyan, darkcolor=accent, thickness=6)
+        style.configure(
+            'Treeview',
+            background=field,
+            fieldbackground=field,
+            foreground=fg,
+            rowheight=30,
+            bordercolor=border,
+            lightcolor=field,
+            darkcolor=field,
+            font=('Segoe UI', 9),
+        )
+        style.map(
+            'Treeview',
+            background=[('selected', '#1B3A4B')],
+            foreground=[('selected', '#FFFFFF')],
+        )
+        style.configure(
+            'Treeview.Heading',
+            background='#131A29',
+            foreground=cyan,
+            bordercolor=border,
+            relief='flat',
+            padding=(8, 6),
+            font=('Segoe UI Semibold', 9, 'bold'),
+        )
+        style.map(
+            'Treeview.Heading',
+            background=[('active', '#1C263B')],
+            foreground=[('active', '#FFFFFF')],
+        )
 
     def _layout(self):
         frame = ttk.Frame(self, padding=(20, 14))
@@ -487,17 +530,27 @@ class App(tk.Tk):
             button.pack(side='left', padx=(0, 8))
             self.buttons.append(button)
         ttk.Button(actions, text='Limpar log', command=self._clear_log).pack(side='right')
+        ttk.Button(actions, text='Copiar log', command=self._copy_log).pack(side='right', padx=(0, 6))
 
         status_row = ttk.Frame(frame)
         status_row.pack(fill='x', pady=(2, 6))
+        self.status_pill = tk.Label(
+            status_row, text=' Pronto ', bg='#1B3A4B', fg='#2DDCFF',
+            font=('Segoe UI Semibold', 9, 'bold'), padx=8, pady=2,
+        )
+        self.status_pill.pack(side='left', padx=(0, 8))
         ttk.Label(status_row, textvariable=self.status, wraplength=780).pack(side='left', anchor='w')
         self.progress = ttk.Progressbar(status_row, mode='indeterminate', length=200)
         self.progress.pack(side='right', padx=(10, 0))
 
         area = ttk.LabelFrame(frame, text=' Console de Pauta, Diálogo (Sasuke & Naruto) e Progresso ', padding=8)
         area.pack(fill='both', expand=True)
-        self.log = tk.Text(area, wrap='word', font=('Consolas', 10), state='disabled', height=10,
+        self.log = tk.Text(area, wrap='word', font=('Consolas', 10), state='disabled', height=8,
                            bg='#0B0F19', fg='#E2E8F0', insertbackground='#FFFFFF', relief='flat', padx=10, pady=8)
+        self.log.tag_configure('info', foreground='#E2E8F0')
+        self.log.tag_configure('aviso', foreground='#FACC15')
+        self.log.tag_configure('erro', foreground='#F87171')
+        self.log.tag_configure('sucesso', foreground='#34D399', font=('Consolas', 10, 'bold'))
         self.log.tag_configure('sasuke', foreground='#2DDCFF', font=('Consolas', 10, 'bold'))
         self.log.tag_configure('naruto', foreground='#FF8A3D', font=('Consolas', 10, 'bold'))
         self.log.tag_configure('headline', foreground='#FACC15', font=('Consolas', 10, 'bold'))
@@ -511,6 +564,12 @@ class App(tk.Tk):
         self.log.configure(state='normal')
         self.log.delete('1.0', 'end')
         self.log.configure(state='disabled')
+
+    def _copy_log(self):
+        content = self.log.get('1.0', 'end-1c')
+        self.clipboard_clear()
+        self.clipboard_append(content)
+        self.status.set('Log copiado para a área de transferência.')
 
     def _create_shortcut(self):
         try:
@@ -701,24 +760,49 @@ class App(tk.Tk):
             os.environ['ELEVENLABS_API_KEY' if provider == 'elevenlabs' else 'FISH_API_KEY'] = self.tts_key.get().strip()
         return cfg
 
+    def _set_main_status_pill(self, state: str):
+        pill = getattr(self, 'status_pill', None)
+        if pill is None:
+            return
+        palette = {
+            'Pronto': ('#1B3A4B', '#2DDCFF'),
+            'Processando': ('#3B2F13', '#FACC15'),
+            'Erro': ('#3B1A1E', '#F87171'),
+            'Concluído': ('#133829', '#34D399'),
+        }
+        bg_c, fg_c = palette.get(state, ('#1B3A4B', '#2DDCFF'))
+        pill.configure(text=f' {state} ', bg=bg_c, fg=fg_c)
+
     def _write(self, text):
+        try:
+            at_bottom = self.log.yview()[1] >= 0.98
+        except Exception:
+            at_bottom = True
         self.log.configure(state='normal')
         msg = str(text)
-        tag = None
+        low = msg.casefold()
+        tag = 'info'
         if msg.startswith('Sasuke:'):
             tag = 'sasuke'
         elif msg.startswith('Naruto:'):
             tag = 'naruto'
         elif msg.lstrip().startswith('NOTÍCIA:') or msg.startswith('Pauta escolhida:'):
             tag = 'headline'
-        elif 'Traceback' in msg or 'Error:' in msg or msg.startswith('Erro:'):
-            tag = 'error'
-        if tag:
-            self.log.insert('end', msg + '\n', tag)
-        else:
-            self.log.insert('end', msg + '\n')
-        self.log.see('end')
+        elif 'traceback' in low or 'error:' in low or low.startswith('erro:') or low.startswith('falha'):
+            tag = 'erro'
+        elif 'aviso' in low or 'warning' in low or 'ignorada' in low or 'rejeitada' in low:
+            tag = 'aviso'
+        elif 'concluíd' in low or 'vídeo salvo' in low or 'corte salvo' in low or 'aceita' in low:
+            tag = 'sucesso'
+        self.log.insert('end', msg + '\n', tag)
+        if at_bottom:
+            self.log.see('end')
         self.log.configure(state='disabled')
+        if hasattr(self, 'cortes_tab') and hasattr(self.cortes_tab, 'on_log_message'):
+            try:
+                self.cortes_tab.on_log_message(msg)
+            except Exception:
+                pass
 
     def _job(self, fn):
         if self.busy:
@@ -742,6 +826,7 @@ class App(tk.Tk):
         if hasattr(self, 'cortes_tab'):
             self.cortes_tab.set_busy(True)
         self.progress.start(12)
+        self._set_main_status_pill('Processando')
         self.status.set('Processando... aguarde a conclusão da tarefa.')
 
         def worker():
@@ -763,6 +848,9 @@ class App(tk.Tk):
                     self._write(value)
                 elif kind == 'error':
                     self._write(value)
+                    self._set_main_status_pill('Erro')
+                    if hasattr(self, 'cortes_tab') and hasattr(self.cortes_tab, 'set_status_pill'):
+                        self.cortes_tab.set_status_pill('Erro')
                     self.status.set('Falha: veja o erro detalhado no console abaixo.')
                 elif kind == 'done':
                     self.busy = False
@@ -772,6 +860,9 @@ class App(tk.Tk):
                     if hasattr(self, 'cortes_tab'):
                         self.cortes_tab.set_busy(False)
                     if self.status.get().startswith('Processando'):
+                        self._set_main_status_pill('Concluído')
+                        if hasattr(self, 'cortes_tab') and hasattr(self.cortes_tab, 'set_status_pill'):
+                            self.cortes_tab.set_status_pill('Concluído')
                         self.status.set('Concluído com sucesso.')
                 elif hasattr(self, 'cortes_tab') and self.cortes_tab.handle_event(kind, value):
                     pass
