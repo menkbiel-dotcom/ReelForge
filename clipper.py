@@ -143,7 +143,19 @@ def _friendly_ytdlp_error(stderr: str) -> str:
     return f'Não foi possível baixar o vídeo com yt-dlp: {snippet}'
 
 
-def _run_ytdlp(args: list[str], timeout: float, label: str) -> subprocess.CompletedProcess:
+def _log_ytdlp_warnings(stderr: str, log=None) -> None:
+    if log is None or not stderr:
+        return
+    for raw_line in str(stderr).splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        low = line.casefold()
+        if 'warning' in low or 'ffmpeg' in low or 'javascript' in low:
+            log(f'yt-dlp: {line}')
+
+
+def _run_ytdlp(args: list[str], timeout: float, label: str, log=None) -> subprocess.CompletedProcess:
     cmd = [sys.executable, '-m', 'yt_dlp', *args]
     try:
         proc = subprocess.run(
@@ -163,6 +175,7 @@ def _run_ytdlp(args: list[str], timeout: float, label: str) -> subprocess.Comple
             f'Tempo esgotado ({int(timeout)} s) ao {label} com yt-dlp. '
             'Tente novamente ou baixe o vídeo localmente.'
         ) from None
+    _log_ytdlp_warnings(proc.stderr, log=log)
     if proc.returncode != 0:
         msg = _friendly_ytdlp_error(proc.stderr or proc.stdout)
         engine.log_error_traceback(RuntimeError(f'yt-dlp ({proc.returncode}): {(proc.stderr or "")[-1200:]}'))
@@ -190,6 +203,76 @@ def _refresh_cached_info(info_path: Path, fonte_url: str, credito: str, authoriz
     info.update(auth_fields)
     info_path.write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding='utf-8')
     return info
+
+
+def _ffmpeg_to_mp4(inputs: list[Path], out_path: Path) -> None:
+    input_args: list[str] = []
+    for inp in inputs:
+        input_args.extend(['-i', str(inp)])
+    try:
+        media_tools.run(['ffmpeg', '-y', *input_args, '-c', 'copy', '-movflags', '+faststart', str(out_path)])
+    except RuntimeError:
+        media_tools.run([
+            'ffmpeg', '-y', *input_args,
+            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
+            '-c:a', 'aac', '-movflags', '+faststart', str(out_path),
+        ])
+
+
+def _finalize_downloaded_source(video_dir: Path, video_path: Path, stderr_text: str = '', log=print) -> Path:
+    if video_path.is_file() and video_path.stat().st_size > 0:
+        return video_path
+
+    ignored_suffixes = {'.json', '.part', '.ytdl', '.tmp'}
+    f_frag_re = re.compile(r'\.f\d+(?:\.[^.]+)?$', re.IGNORECASE)
+
+    other_sources = [
+        p for p in sorted(video_dir.iterdir())
+        if p.is_file()
+        and p != video_path
+        and p.name.startswith('source.')
+        and p.suffix.lower() not in ignored_suffixes
+        and not f_frag_re.search(p.name)
+        and p.stat().st_size > 0
+    ]
+    if other_sources:
+        cand = max(other_sources, key=lambda p: p.stat().st_size)
+        log(f'Convertendo {cand.name} para {video_path.name} com ffmpeg...')
+        _ffmpeg_to_mp4([cand], video_path)
+        if video_path.is_file() and video_path.stat().st_size > 0:
+            try:
+                cand.unlink(missing_ok=True)
+            except OSError:
+                pass
+            return video_path
+
+    f_files = [
+        p for p in sorted(video_dir.iterdir())
+        if p.is_file()
+        and f_frag_re.search(p.name)
+        and p.suffix.lower() not in ignored_suffixes
+        and p.stat().st_size > 0
+    ]
+    if f_files:
+        inputs = f_files[:2] if len(f_files) >= 2 else [f_files[0]]
+        log(f'Unindo/convertendo arquivos temporários ({", ".join(p.name for p in inputs)}) com ffmpeg...')
+        _ffmpeg_to_mp4(inputs, video_path)
+        if video_path.is_file() and video_path.stat().st_size > 0:
+            for p in f_files:
+                try:
+                    p.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            return video_path
+
+    files_present = ', '.join(sorted(p.name for p in video_dir.iterdir())) if video_dir.is_dir() else '(pasta inexistente)'
+    files_present = files_present or '(nenhum)'
+    stderr_tail = (stderr_text or '').strip()[-600:] or 'sem saída no stderr'
+    raise RuntimeError(
+        f'O download terminou sem gerar o arquivo source.mp4. '
+        f'Arquivos encontrados em {video_dir}: [{files_present}]. '
+        f'Stderr do yt-dlp: {stderr_tail}'
+    )
 
 
 def prepare_source(
@@ -249,21 +332,22 @@ def prepare_source(
             return _refresh_cached_info(info_path, fonte_url, credito, authorized)
 
         log(f'Baixando vídeo "{title}" (até 1080p MP4)...')
+        ffmpeg_bin = str(media_tools.ffmpeg())
         fmt = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]'
-        _run_ytdlp(
+        dl_proc = _run_ytdlp(
             [
                 '-f', fmt,
                 '--merge-output-format', 'mp4',
+                '--ffmpeg-location', ffmpeg_bin,
                 '--no-playlist',
-                '--no-warnings',
                 '-o', str(video_path),
                 source_str,
             ],
             timeout=download_timeout,
             label='baixar o vídeo',
+            log=log,
         )
-        if not video_path.is_file() or video_path.stat().st_size == 0:
-            raise RuntimeError('O download terminou sem gerar o arquivo source.mp4.')
+        _finalize_downloaded_source(video_dir, video_path, stderr_text=dl_proc.stderr or '', log=log)
         if duration <= 0:
             duration = _measure_duration_safe(video_path)
 

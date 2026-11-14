@@ -67,7 +67,7 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
 > **Uso exclusivo com conteúdo autorizado:** O modo **Cortes** exige confirmação explícita (`"Confirmo que tenho autorização para cortar este vídeo"` na GUI ou `--autorizado` no CLI) e registra `fonte_url`, `canal`, `autorizado: true`, `credito` e `data` em todos os JSONs gerados. O ReelForge **não** contorna DRM, restrições de idade, login/cookies e **não** realiza postagem automática.
 
 1. **Entrada e Download (`clipper.py` — `prepare_source()`):**
-   - Aceita URL (baixada via `python -m yt_dlp` até 1080p MP4 com timeout e mensagens amigáveis em português) ou caminho de arquivo local.
+   - Aceita URL (baixada via `python -m yt_dlp` até 1080p MP4 com `--ffmpeg-location <media_tools.ffmpeg()>` sempre ativo no download, sem `--no-warnings` para capturar avisos de `WARNING`/`ffmpeg`/`JavaScript` no log, fallback de conversão/junção para `source.*`/`.f*` via `ffmpeg`, timeout e mensagens amigáveis em português) ou caminho de arquivo local.
    - Cache em `output/cortes/<video_id>/source.mp4` + `info.json`, reutilizado em execuções seguintes.
 2. **Transcrição com Palavras (`clipper.py` — `transcribe_video()`):**
    - Usa `faster-whisper` (`word_timestamps=True`, `vad_filter=True`, CPU `int8`, `local_files_only=True`, modelo de `settings.json`, idioma configurável padrão `"pt"`), com log de progresso (tempo, %, decorrido, estimativa), recorte opcional por minutos (`inicio_min`/`fim_min`), cancelamento cooperativo (`CancelledError`) e cache em `output/cortes/<video_id>/transcricao.json` (invalidado se modelo, idioma ou trecho mudarem).
@@ -89,9 +89,9 @@ Este repositório contém o **ReelForge**, um gerador local para Windows de Reel
 - O script `publicar_github.py` cria/atualiza o repositório como **privado por padrão** (use `--publico` para público), lê o token exclusivamente de `GITHUB_TOKEN` ou `getpass` (sem argumento `--token` e sem eco no terminal) e faz push sem `force`.
 - Testes que utilizam áudios de demonstração sintetizam automaticamente um WAV silencioso via módulo padrão `wave` quando o arquivo local não existir.
 
-## Suíte de Testes (118 Testes)
+## Suíte de Testes (119 Testes)
 
-- `tests/test_news_auto.py` (65 testes), `tests/test_integration.py` (32 testes), `tests/test_clipper.py` (16 testes), `tests/test_clip_render.py` (2 testes) e `tests/test_gui_cortes.py` (3 testes) — totalizando **118 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `ffmpeg` ou arquivos locais não estiverem presentes), além de `tests/fixtures/real_failures/` com 8 arquivos reais (60 tentativas) validados em regressão offline. Todas as classes de teste herdam `IsolatedOutputMixin` (`tests/_isolation.py`), que faz patch de `engine.OUTPUT` para diretório temporário em `setUp` e garante que nenhum arquivo seja gravado em `output/` real. Destrutor `App.destroy()` cancela `_poll_id` e testes GUI coletam objetos na thread principal.
+- `tests/test_news_auto.py` (65 testes), `tests/test_integration.py` (32 testes), `tests/test_clipper.py` (17 testes), `tests/test_clip_render.py` (2 testes) e `tests/test_gui_cortes.py` (3 testes) — totalizando **119 testes** automatizados (com `unittest.skipUnless` quando `tkinter`, `ffmpeg` ou arquivos locais não estiverem presentes), além de `tests/fixtures/real_failures/` com 8 arquivos reais (60 tentativas) validados em regressão offline. Todas as classes de teste herdam `IsolatedOutputMixin` (`tests/_isolation.py`), que faz patch de `engine.OUTPUT` para diretório temporário em `setUp` e garante que nenhum arquivo seja gravado em `output/` real. Destrutor `App.destroy()` cancela `_poll_id` e testes GUI coletam objetos na thread principal.
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'

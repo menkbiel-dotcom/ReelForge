@@ -114,6 +114,120 @@ class ClipperSourceTests(IsolatedOutputMixin, unittest.TestCase):
             self.assertEqual(info['duracao'], 125.0)
             self.assertTrue((engine.OUTPUT / 'cortes' / info['id'] / 'info.json').is_file())
 
+    def test_item40_ffmpeg_location_warnings_and_fragment_fallback(self):
+        fake_ffmpeg_exe = 'C:/fake_imageio/ffmpeg.exe'
+
+        # 1 & 2: --ffmpeg-location passado no download, --no-warnings removido do download, stderr WARNING/ffmpeg/JavaScript logado
+        url = 'https://www.youtube.com/watch?v=item40_a'
+        meta = {'id': 'item40_a', 'title': 'Video 40A', 'channel': 'Canal40', 'duration': 90.0, 'webpage_url': url}
+        dl_cmds = []
+        meta_cmds = []
+        logs = []
+
+        def fake_subproc_ok(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=None):
+            if '--dump-single-json' in cmd:
+                meta_cmds.append(cmd)
+                return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(meta), stderr='')
+            dl_cmds.append(cmd)
+            out_path = Path(cmd[cmd.index('-o') + 1])
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_bytes(b'ok-mp4')
+            stderr_msg = (
+                '[download] 100% of 5.00MiB\n'
+                'WARNING: [youtube] No supported JavaScript runtime could be found\n'
+                'WARNING: ffmpeg postprocessing aviso teste\n'
+                '[Merger] Merging formats into source.mp4 via ffmpeg\n'
+            )
+            return subprocess.CompletedProcess(cmd, 0, stdout='', stderr=stderr_msg)
+
+        with patch('clipper.media_tools.ffmpeg', return_value=fake_ffmpeg_exe), \
+             patch('clipper.subprocess.run', side_effect=fake_subproc_ok):
+            info = clipper.prepare_source(url, authorized=True, log=logs.append)
+
+        self.assertEqual(info['id'], 'item40_a')
+        self.assertEqual(len(meta_cmds), 1)
+        self.assertIn('--no-warnings', meta_cmds[0])
+        self.assertEqual(len(dl_cmds), 1)
+        dl_cmd = dl_cmds[0]
+        self.assertNotIn('--no-warnings', dl_cmd)
+        self.assertIn('--ffmpeg-location', dl_cmd)
+        self.assertEqual(dl_cmd[dl_cmd.index('--ffmpeg-location') + 1], fake_ffmpeg_exe)
+        self.assertTrue(any('JavaScript' in m for m in logs), logs)
+        self.assertTrue(any('WARNING:' in m and 'ffmpeg' in m for m in logs), logs)
+        self.assertFalse(any('[download] 100%' in m for m in logs), logs)
+
+        # 3: Fragmentos .f* deixados pelo yt-dlp sao unidos com ffmpeg em source.mp4
+        url_f = 'https://www.youtube.com/watch?v=item40_f'
+        meta_f = {'id': 'item40_f', 'title': 'Video 40F', 'channel': 'Canal40', 'duration': 60.0, 'webpage_url': url_f}
+        ffmpeg_calls = []
+
+        def fake_subproc_frags(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=None):
+            if '--dump-single-json' in cmd:
+                return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(meta_f), stderr='')
+            out_path = Path(cmd[cmd.index('-o') + 1])
+            out_dir = out_path.parent
+            out_dir.mkdir(parents=True, exist_ok=True)
+            (out_dir / 'source.f137.mp4').write_bytes(b'video-stream')
+            (out_dir / 'source.f140.m4a').write_bytes(b'audio-stream')
+            return subprocess.CompletedProcess(cmd, 0, stdout='', stderr='WARNING: merge left fragments')
+
+        def fake_media_run(args):
+            ffmpeg_calls.append(list(args))
+            out_mp4 = Path(args[-1])
+            out_mp4.write_bytes(b'merged-mp4')
+            return ''
+
+        with patch('clipper.media_tools.ffmpeg', return_value=fake_ffmpeg_exe), \
+             patch('clipper.subprocess.run', side_effect=fake_subproc_frags), \
+             patch('clipper.media_tools.run', side_effect=fake_media_run):
+            info_f = clipper.prepare_source(url_f, authorized=True, log=lambda *_: None)
+
+        self.assertEqual(len(ffmpeg_calls), 1)
+        self.assertTrue(Path(info_f['source_path']).is_file())
+        self.assertFalse((engine.OUTPUT / 'cortes' / 'item40_f' / 'source.f137.mp4').exists())
+        self.assertFalse((engine.OUTPUT / 'cortes' / 'item40_f' / 'source.f140.m4a').exists())
+
+        # 4: Outro arquivo source.* (ex.: source.webm) eh convertido em source.mp4 via ffmpeg
+        url_w = 'https://www.youtube.com/watch?v=item40_w'
+        meta_w = {'id': 'item40_w', 'title': 'Video 40W', 'channel': 'Canal40', 'duration': 45.0, 'webpage_url': url_w}
+
+        def fake_subproc_webm(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=None):
+            if '--dump-single-json' in cmd:
+                return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(meta_w), stderr='')
+            out_path = Path(cmd[cmd.index('-o') + 1])
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            (out_path.parent / 'source.webm').write_bytes(b'webm-data')
+            return subprocess.CompletedProcess(cmd, 0, stdout='', stderr='')
+
+        with patch('clipper.media_tools.ffmpeg', return_value=fake_ffmpeg_exe), \
+             patch('clipper.subprocess.run', side_effect=fake_subproc_webm), \
+             patch('clipper.media_tools.run', side_effect=fake_media_run):
+            info_w = clipper.prepare_source(url_w, authorized=True, log=lambda *_: None)
+
+        self.assertTrue(Path(info_w['source_path']).is_file())
+        self.assertFalse((engine.OUTPUT / 'cortes' / 'item40_w' / 'source.webm').exists())
+
+        # 5: Sem source.mp4 e sem .f*/source.*, erro inclui lista de arquivos e stderr do yt-dlp
+        url_err = 'https://www.youtube.com/watch?v=item40_err'
+        meta_err = {'id': 'item40_err', 'title': 'Video Err', 'channel': 'Canal40', 'duration': 30.0, 'webpage_url': url_err}
+
+        def fake_subproc_missing(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=None):
+            if '--dump-single-json' in cmd:
+                return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(meta_err), stderr='')
+            out_path = Path(cmd[cmd.index('-o') + 1])
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            (out_path.parent / 'sobrou.part').write_bytes(b'partial')
+            return subprocess.CompletedProcess(cmd, 0, stdout='', stderr='WARNING: formato incompleto no servidor')
+
+        with patch('clipper.media_tools.ffmpeg', return_value=fake_ffmpeg_exe), \
+             patch('clipper.subprocess.run', side_effect=fake_subproc_missing):
+            with self.assertRaises(RuntimeError) as ctx_err:
+                clipper.prepare_source(url_err, authorized=True, log=lambda *_: None)
+
+        err_msg = str(ctx_err.exception)
+        self.assertIn('sobrou.part', err_msg)
+        self.assertIn('formato incompleto no servidor', err_msg)
+
 
 class ClipperTranscriptionTests(IsolatedOutputMixin, unittest.TestCase):
     def setUp(self):

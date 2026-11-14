@@ -447,6 +447,12 @@
   - **Próximo item:** ITEM 39 — Documentação e testes finais (`CLAUDE.md`, `HANDOFF.md`, suíte completa 2x).
 
 - [x] **ITEM 39 — Documentação e testes finais (`CLAUDE.md`, `HANDOFF.md`, `tests/test_gui_cortes.py`)**: feito
+  - **Commit:** `d28151769018c8cbb8894e361a591646263f0342` (local `a7bd5f1`) — *"Item 39: Documentacao (CLAUDE.md, HANDOFF.md) e guarda final de isolamento dos testes Cortes"*
   - **Arquivos:** `CLAUDE.md`, `HANDOFF.md`, `tests/test_gui_cortes.py`
   - **Testes:** Suíte completa (`test_news_auto`, `test_integration`, `test_clipper`, `test_clip_render`, `test_gui_cortes` — 118 testes) executada 2x consecutivas com guarda de isolamento do `output/` real.
-  - **Status:** Todos os itens (34 a 39) da Rodada 9 concluídos.
+
+- [x] **ITEM 40 — `--ffmpeg-location` no `yt-dlp`, logs de warning/JavaScript/ffmpeg e fallback de fragmentos (`clipper.py`)**: feito
+  - **Arquivos:** `clipper.py`, `tests/test_clipper.py`, `CLAUDE.md`, `HANDOFF.md`
+  - **Testes:** `tests.test_clipper` (17 testes, incluindo `test_item40_ffmpeg_location_warnings_and_fragment_fallback`) — total **119 testes** em execução dupla sequencial
+  - **Resumo:** `prepare_source()` passa SEMPRE `--ffmpeg-location <media_tools.ffmpeg()>` no download do `yt-dlp` (necessário quando `ffmpeg` vem de `imageio_ffmpeg` fora do `PATH`), remove `--no-warnings` do comando de download (mantendo nos metadados), registra no log linhas do `stderr` contendo `WARNING`, `ffmpeg` ou `JavaScript`, converte/une arquivos temporários (`source.*` e `.f*`) com `ffmpeg` quando necessário em `_finalize_downloaded_source()`, e inclui lista de arquivos presentes + `stderr` em caso de falha.
+  - **Status:** Todos os itens (34 a 40) concluídos.
