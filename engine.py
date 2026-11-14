@@ -265,11 +265,12 @@ def ollama_timeout_seconds(cfg=None):
         return 300.0
 
 
-def request_json(instruction, payload, model=None, temperature=0.55, log=print):
+def request_json(instruction, payload, model=None, temperature=0.55, log=print, num_ctx=4096):
     import requests
     cfg = load_settings()
     model = model or os.getenv("OLLAMA_MODEL") or cfg.get("ollama_model") or "qwen3.5:4b"
     temp = 0.55 if temperature is None else float(temperature)
+    ctx_val = 4096 if num_ctx is None else int(num_ctx)
     read_timeout = ollama_timeout_seconds(cfg)
     timeout_disp = int(read_timeout) if float(read_timeout).is_integer() else round(read_timeout, 1)
     prompt_chars = len(str(instruction or "")) + len(str(payload or ""))
@@ -285,7 +286,7 @@ def request_json(instruction, payload, model=None, temperature=0.55, log=print):
                 "messages": [{"role": "system", "content": instruction},
                              {"role": "user", "content": payload}],
                 "keep_alive": "20m",
-                "options": {"temperature": temp, "num_ctx": 4096},
+                "options": {"temperature": temp, "num_ctx": ctx_val},
             }, timeout=(5, read_timeout), allow_redirects=False)
             elapsed = time.monotonic() - t0
             log(f"Ollama: modelo {model} respondeu em {elapsed:.1f} s")

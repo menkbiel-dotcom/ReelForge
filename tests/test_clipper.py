@@ -285,5 +285,179 @@ class ClipperTranscriptionTests(IsolatedOutputMixin, unittest.TestCase):
         self.assertIn("WhisperModel('small'", msg)
 
 
+class ClipperSelectionTests(IsolatedOutputMixin, unittest.TestCase):
+    def _build_units(self, count=12, step=10.0, text_fn=None):
+        units = []
+        for i in range(count):
+            start = i * step + 0.5
+            end = start + (step - 1.5)
+            txt = text_fn(i) if text_fn else f'Unidade numero {i} sobre energia solar com 40 porcento de economia.'
+            units.append({
+                'indice': i,
+                'inicio': round(start, 3),
+                'fim': round(end, 3),
+                'texto': txt,
+                'palavras': [],
+            })
+        return units
+
+    def _fake_info_and_trans(self, units, duracao=130.0):
+        info = {
+            'id': 'vid_sel',
+            'titulo': 'Energia Solar',
+            'duracao': duracao,
+            'fonte_url': 'https://youtu.be/vid_sel',
+            'canal': 'CanalSolar',
+            'autorizado': True,
+            'credito': '@CanalSolar',
+            'data': '2026-11-13T00:00:00Z',
+        }
+        trans = {
+            'video_id': 'vid_sel',
+            'duracao': duracao,
+            'modelo': 'small',
+            'idioma': 'pt',
+            'unidades': units,
+        }
+        return info, trans
+
+    def test_index_to_time_padding_and_duration_repair(self):
+        # Cada unidade dura ~8.5s (step=10s). Faixa 25..55s.
+        units = self._build_units(count=12, step=10.0, text_fn=lambda i: (
+            'Por que a bateria de 500 ciclos dura mais?' if i == 1
+            else f'Fato {i} mostra resultado real sem mistério!'
+        ))
+        info, trans = self._fake_info_and_trans(units, duracao=130.0)
+
+        def fake_ask(instruction, payload, model=None, temperature=0.55, log=print, num_ctx=4096):
+            self.assertEqual(num_ctx, 4096)
+            if 'ATÉ 3 trechos' in instruction:
+                return {
+                    'cortes': [
+                        # Curto demais (1 unidade ~8.5s) -> deve reparar expandindo para >=25s
+                        {'inicio_unidade': 1, 'fim_unidade': 1, 'nota': 8, 'gancho': 'Por que bateria de 500 ciclos dura mais?', 'motivo': 'Gancho forte.'},
+                        # Longo demais (7 unidades ~68.5s) -> deve reparar aparando para <=55s
+                        {'inicio_unidade': 5, 'fim_unidade': 11, 'nota': 7, 'gancho': 'Fato 5 mostra resultado real!', 'motivo': 'Explicação longa.'},
+                        # Índice inválido -> descartado sem falhar
+                        {'inicio_unidade': 99, 'fim_unidade': 102, 'nota': 9, 'gancho': 'Inválido', 'motivo': 'Fora'},
+                    ]
+                }
+            if 'EXATAMENTE 2 frases' in instruction:
+                return {'resumo': 'O vídeo explica baterias. Mostra economia prática.'}
+            return {
+                'resumo': ['Baterias duram 500 ciclos', 'Economia comprovada', 'Aplicação prática'],
+                'potencial_cortes': 'alto',
+                'justificativa_potencial': 'Ótimas explicações diretas.',
+            }
+
+        report = clipper.select_cuts_and_report(info, trans, min_duration=25.0, max_duration=55.0, num_cuts=5, ask=fake_ask, log=lambda *_: None)
+        cands = report['candidatos']
+        self.assertEqual(len(cands), 2)
+        for c in cands:
+            self.assertGreaterEqual(c['duracao'], 25.0)
+            self.assertLessEqual(c['duracao'], 55.0)
+
+        # Verifica folga (-0.15 / +0.25) no candidato reparado que começa na unidade 1 (10.5s)
+        c_first = min(cands, key=lambda x: x['inicio'])
+        self.assertEqual(c_first['inicio_unidade'], 1)
+        self.assertAlmostEqual(c_first['inicio'], 10.5 - 0.15, places=2)
+        self.assertAlmostEqual(c_first['fim'], units[c_first['fim_unidade']]['fim'] + 0.25, places=2)
+        self.assertEqual(report['potencial_cortes'], 'alto')
+        self.assertTrue((engine.OUTPUT / 'cortes' / 'vid_sel' / 'relatorio.json').is_file())
+
+    def test_impossible_duration_discarded(self):
+        # Unidade única com 80s (> max_duration=55s): impossível reparar para <=55s
+        units = [{'indice': 0, 'inicio': 0.0, 'fim': 80.0, 'texto': 'Monólogo contínuo muito longo sem pausa.', 'palavras': []}]
+        repaired = clipper._repair_unit_bounds(units, 0, 0, min_duration=25.0, max_duration=55.0, video_duration=80.0)
+        self.assertIsNone(repaired)
+
+    def test_dedupe_overlap_and_min_distance_10s(self):
+        cands = [
+            {'inicio': 10.0, 'fim': 40.0, 'nota': 9.0, 'gancho': 'A', 'motivo': 'A'},
+            # >50% interseção com [10, 40] -> deve ser removido (nota menor)
+            {'inicio': 15.0, 'fim': 45.0, 'nota': 7.5, 'gancho': 'B', 'motivo': 'B'},
+            # <10s de distância após fim=40 (começa em 44s) -> ignorado na seleção
+            {'inicio': 44.0, 'fim': 72.0, 'nota': 8.5, 'gancho': 'C', 'motivo': 'C'},
+            # >=10s de distância após fim=40 (começa em 51s) -> mantido!
+            {'inicio': 51.0, 'fim': 80.0, 'nota': 8.0, 'gancho': 'D', 'motivo': 'D'},
+        ]
+        deduped = clipper.dedupe_candidates(cands[:2])
+        self.assertEqual([c['gancho'] for c in deduped], ['A'])
+        selected = clipper.select_top_candidates(cands, max_cuts=5, min_distance_s=10.0)
+        self.assertEqual([c['gancho'] for c in selected], ['A', 'D'])
+
+    def test_invalid_hook_repaired_from_first_sentence(self):
+        clip_text = 'O motor elétrico reduziu o consumo em 30 porcento na cidade. Depois veio o teste em rodovia.'
+        # Número inventado (999) -> deve substituir pela 1ª frase truncada (<=10 palavras)
+        repaired_num = clipper.validate_or_repair_hook('Motor economizou 999 litros na cidade!', clip_text)
+        self.assertNotIn('999', repaired_num)
+        self.assertLessEqual(len(repaired_num.split()), 10)
+        self.assertTrue(repaired_num.startswith('O motor elétrico'))
+
+        # <50% palavras de conteúdo presentes -> deve substituir
+        repaired_halluc = clipper.validate_or_repair_hook('Astronautas descobriram água congelada em Marte ontem!', clip_text)
+        self.assertNotIn('Astronautas', repaired_halluc)
+        self.assertLessEqual(len(repaired_halluc.split()), 10)
+
+        # Gancho fiel -> preservado
+        valid = clipper.validate_or_repair_hook('Motor elétrico reduziu consumo em 30 porcento!', clip_text)
+        self.assertEqual(valid, 'Motor elétrico reduziu consumo em 30 porcento!')
+
+    def test_heuristic_fallback_when_all_llm_calls_fail(self):
+        units = self._build_units(count=10, step=10.0, text_fn=lambda i: (
+            'Como economizar 40 porcento de energia em casa? Veja o dado real!' if i in (0, 6)
+            else f'Explicação clara número {i} com resultado prático!'
+        ))
+        info, trans = self._fake_info_and_trans(units, duracao=100.0)
+        temps_seen = []
+
+        def failing_ask(instruction, payload, model=None, temperature=0.55, log=print, num_ctx=4096):
+            temps_seen.append(temperature)
+            raise RuntimeError('Ollama offline simulado')
+
+        report = clipper.select_cuts_and_report(info, trans, min_duration=25.0, max_duration=45.0, num_cuts=3, ask=failing_ask, log=lambda *_: None)
+        # Temperaturas de retry devem respeitar 0.55 inicial, +0.05, teto 0.7
+        self.assertEqual(temps_seen[:3], [0.55, 0.6, 0.65])
+        self.assertTrue(all(t <= 0.7 for t in temps_seen))
+        self.assertGreaterEqual(len(report['candidatos']), 1)
+        self.assertEqual(len(report['resumo']), 1)
+        self.assertIn(report['potencial_cortes'], ('alto', 'médio', 'baixo'))
+        self.assertTrue(any('heurístico' in a.casefold() for a in report['avisos']))
+
+    def test_failed_window_is_skipped_without_crashing_others(self):
+        # Gera unidades suficientes para 2 janelas (>650 palavras)
+        long_text = ' '.join(['palavra'] * 80)
+        units = self._build_units(count=12, step=15.0, text_fn=lambda i: f'Por que o teste {i} funciona? {long_text}')
+        info, trans = self._fake_info_and_trans(units, duracao=180.0)
+        windows = clipper.build_windows(units, max_words=650, overlap_seconds=60.0)
+        self.assertGreaterEqual(len(windows), 2)
+
+        cut_window_calls = {'n': 0}
+
+        def partial_ask(instruction, payload, model=None, temperature=0.55, log=print, num_ctx=4096):
+            if 'ATÉ 3 trechos' in instruction:
+                cut_window_calls['n'] += 1
+                # Primeira janela falha nas 3 tentativas
+                if cut_window_calls['n'] <= 3:
+                    raise ValueError('JSON quebrado com motivo bem detalhado ' + ('X' * 120))
+                # Segunda janela retorna corte válido
+                last_idx = int(payload.splitlines()[-1].split(']')[0].lstrip('['))
+                first_idx = max(0, last_idx - 2)
+                return {
+                    'cortes': [
+                        {'inicio_unidade': first_idx, 'fim_unidade': last_idx, 'nota': 8, 'gancho': f'Por que o teste {first_idx} funciona?', 'motivo': 'Bom trecho'}
+                    ]
+                }
+            if 'EXATAMENTE 2 frases' in instruction:
+                return {'resumo': 'Frase um do resumo. Frase dois do resumo.'}
+            return {'resumo': ['B1', 'B2', 'B3'], 'potencial_cortes': 'médio', 'justificativa_potencial': 'Bom.'}
+
+        report = clipper.select_cuts_and_report(info, trans, min_duration=25.0, max_duration=55.0, num_cuts=3, ask=partial_ask, log=lambda *_: None)
+        self.assertGreaterEqual(len(report['candidatos']), 1)
+        self.assertTrue(any('Janela 1/' in a and 'ignorada' in a for a in report['avisos']))
+        # Motivo longo preservado sem truncar abaixo de ~170-220 chars
+        self.assertTrue(any(len(a) > 120 for a in report['avisos']))
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

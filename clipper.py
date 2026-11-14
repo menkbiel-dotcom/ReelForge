@@ -1,6 +1,7 @@
 """Modo Cortes do ReelForge: entrada, download com yt-dlp, transcrição e seleção de cortes."""
 import argparse
 import hashlib
+import inspect
 import json
 import os
 import re
@@ -10,6 +11,7 @@ import sys
 import tempfile
 import threading
 import time
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -597,15 +599,757 @@ def transcribe_video(
             temp_dir_obj.cleanup()
 
 
+_STOPWORDS_PT = {
+    'a', 'o', 'e', 'de', 'do', 'da', 'dos', 'das', 'em', 'no', 'na', 'nos', 'nas',
+    'um', 'uma', 'uns', 'umas', 'para', 'pra', 'por', 'com', 'sem', 'sob', 'sobre',
+    'que', 'quem', 'qual', 'quais', 'quando', 'onde', 'como', 'porque', 'por', 'pois',
+    'mas', 'porem', 'contudo', 'entretanto', 'ou', 'nem', 'se', 'ja', 'mais', 'menos',
+    'muito', 'muita', 'muitos', 'muitas', 'pouco', 'pouca', 'todo', 'toda', 'todos',
+    'todas', 'isso', 'isto', 'aquilo', 'esse', 'essa', 'este', 'esta', 'aquele',
+    'aquela', 'ele', 'ela', 'eles', 'elas', 'eu', 'tu', 'voces', 'voce', 'nos',
+    'meu', 'minha', 'seu', 'sua', 'nosso', 'nossa', 'ao', 'aos', 'as', 'os',
+    'ate', 'ate', 'entre', 'foi', 'era', 'sao', 'ser', 'esta', 'estao', 'tem', 'ter',
+    'vai', 'vao', 'fazer', 'fez', 'diz', 'disse', 'aqui', 'ali', 'la', 'entao', 'assim',
+    'mesmo', 'mesma', 'ainda', 'tambem', 'so', 'bem', 'mal', 'sim', 'nao', 'nada',
+}
+
+_NUMBER_WORDS_PT = {
+    'zero': '0', 'um': '1', 'uma': '1', 'dois': '2', 'duas': '2', 'tres': '3',
+    'quatro': '4', 'cinco': '5', 'seis': '6', 'sete': '7', 'oito': '8', 'nove': '9',
+    'dez': '10', 'onze': '11', 'doze': '12', 'treze': '13', 'catorze': '14',
+    'quatorze': '14', 'quinze': '15', 'dezesseis': '16', 'dezessete': '17',
+    'dezoito': '18', 'dezenove': '19', 'vinte': '20', 'trinta': '30',
+    'quarenta': '40', 'cinquenta': '50', 'sessenta': '60', 'setenta': '70',
+    'oitenta': '80', 'noventa': '90', 'cem': '100', 'cento': '100',
+    'duzentos': '200', 'trezentos': '300', 'quatrocentos': '400', 'quinhentos': '500',
+    'mil': '1000', 'milhao': '1000000', 'milhoes': '1000000',
+    'bilhao': '1000000000', 'bilhoes': '1000000000',
+}
+
+
+def _strip_accents_lower(text: str) -> str:
+    norm = unicodedata.normalize('NFKD', str(text or '').casefold())
+    return ''.join(c for c in norm if not unicodedata.combining(c))
+
+
+def _normalize_tokens(text: str) -> list[str]:
+    plain = _strip_accents_lower(text)
+    return re.findall(r'[a-z0-9]+', plain)
+
+
+def _short_reason(exc_or_text, limit: int = 220) -> str:
+    txt = ' '.join(str(exc_or_text or '').split())
+    if len(txt) <= limit:
+        return txt
+    return txt[:limit - 3].rstrip() + '...'
+
+
+def format_timestamp(seconds: float) -> str:
+    total_s = max(0, int(round(float(seconds or 0.0))))
+    h = total_s // 3600
+    m = (total_s % 3600) // 60
+    s = total_s % 60
+    if h > 0:
+        return f'{h}:{m:02d}:{s:02d}'
+    return f'{m:02d}:{s:02d}'
+
+
+def build_windows(
+    units: list[dict],
+    max_words: int = 650,
+    overlap_seconds: float = 60.0,
+) -> list[list[dict]]:
+    """Divide unidades em janelas de até max_words palavras com sobreposição aproximada de overlap_seconds."""
+    if not units:
+        return []
+    windows = []
+    n = len(units)
+    start_idx = 0
+    while start_idx < n:
+        win = []
+        word_count = 0
+        idx = start_idx
+        while idx < n:
+            u = units[idx]
+            u_words = len(str(u.get('texto', '')).split())
+            if win and (word_count + u_words > max_words):
+                break
+            win.append(u)
+            word_count += u_words
+            idx += 1
+        windows.append(win)
+        if idx >= n:
+            break
+        # Recua a partir do fim da janela atual até acumular >= overlap_seconds (~1 min)
+        end_time = float(win[-1].get('fim', 0.0))
+        next_start = idx - 1
+        while next_start > start_idx and (end_time - float(units[next_start].get('inicio', 0.0))) < overlap_seconds:
+            next_start -= 1
+        if next_start <= start_idx:
+            next_start = start_idx + max(1, len(win) // 2)
+        start_idx = next_start
+    return windows
+
+
+def _format_window_text(window_units: list[dict]) -> str:
+    lines = []
+    for u in window_units:
+        idx = int(u['indice'])
+        ts = format_timestamp(float(u['inicio']))
+        txt = str(u.get('texto', '')).strip()
+        lines.append(f'[{idx}] {ts} {txt}')
+    return '\n'.join(lines)
+
+
+def _call_ask(ask, instruction: str, payload: str, model: str | None, temperature: float, log):
+    kwargs = {'model': model, 'temperature': temperature, 'log': log}
+    try:
+        sig = inspect.signature(ask)
+        if 'num_ctx' in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+            kwargs['num_ctx'] = 4096
+    except (ValueError, TypeError):
+        pass
+    return ask(instruction, payload, **kwargs)
+
+
+def _ask_with_retry(ask, instruction: str, payload: str, model: str | None, log, max_attempts: int = 3):
+    last_exc = None
+    for attempt in range(max_attempts):
+        temp = min(0.7, round(0.55 + 0.05 * attempt, 2))
+        try:
+            res = _call_ask(ask, instruction, payload, model=model, temperature=temp, log=log)
+            if not isinstance(res, dict):
+                raise ValueError(f'Resposta fora do formato objeto JSON (recebido {type(res).__name__}).')
+            return res
+        except Exception as exc:
+            last_exc = exc
+            log(f'Tentativa {attempt + 1}/{max_attempts} falhou (temp={temp:.2f}): {_short_reason(exc, 220)}')
+    raise last_exc
+
+
+def _span_with_padding(units: list[dict], s_idx: int, e_idx: int, video_duration: float) -> tuple[float, float]:
+    raw_start = float(units[s_idx]['inicio']) - 0.15
+    raw_end = float(units[e_idx]['fim']) + 0.25
+    start = max(0.0, raw_start)
+    end = min(video_duration, raw_end) if video_duration > 0 else raw_end
+    if end < start:
+        end = start
+    return round(start, 3), round(end, 3)
+
+
+def _repair_unit_bounds(
+    units: list[dict],
+    s_idx: int,
+    e_idx: int,
+    min_duration: float,
+    max_duration: float,
+    video_duration: float,
+) -> tuple[int, int] | None:
+    """Repara limites de unidades para caber em [min_duration, max_duration]. Retorna None se impossível."""
+    n = len(units)
+    if s_idx > e_idx:
+        s_idx, e_idx = e_idx, s_idx
+    if s_idx < 0 or e_idx >= n:
+        return None
+
+    def dur(a: int, b: int) -> float:
+        st, en = _span_with_padding(units, a, b, video_duration)
+        return en - st
+
+    # 1. Se curto demais, expande pelas fronteiras de unidade vizinhas
+    while dur(s_idx, e_idx) < min_duration:
+        can_right = e_idx + 1 < n
+        can_left = s_idx - 1 >= 0
+        if not can_right and not can_left:
+            break
+        d_right = dur(s_idx, e_idx + 1) if can_right else float('inf')
+        d_left = dur(s_idx - 1, e_idx) if can_left else float('inf')
+        if can_right and d_right <= max_duration and (not can_left or d_right <= d_left or d_left > max_duration):
+            e_idx += 1
+        elif can_left and d_left <= max_duration:
+            s_idx -= 1
+        elif can_right and d_right < d_left:
+            e_idx += 1
+        elif can_left:
+            s_idx -= 1
+        else:
+            break
+
+    # 2. Se longo demais, apara pelas bordas (mantendo unidades inteiras)
+    while dur(s_idx, e_idx) > max_duration and s_idx < e_idx:
+        d_trim_end = dur(s_idx, e_idx - 1)
+        d_trim_start = dur(s_idx + 1, e_idx)
+        end_ok = min_duration <= d_trim_end <= max_duration
+        start_ok = min_duration <= d_trim_start <= max_duration
+        if end_ok and not start_ok:
+            e_idx -= 1
+        elif start_ok and not end_ok:
+            s_idx += 1
+        elif abs(d_trim_end - max_duration) <= abs(d_trim_start - max_duration) and d_trim_end >= min_duration:
+            e_idx -= 1
+        elif d_trim_start >= min_duration:
+            s_idx += 1
+        elif d_trim_end >= d_trim_start:
+            e_idx -= 1
+        else:
+            s_idx += 1
+
+    final_dur = dur(s_idx, e_idx)
+    if min_duration <= final_dur <= max_duration:
+        return s_idx, e_idx
+    return None
+
+
+def _extract_numbers_from_text(text: str) -> set[str]:
+    plain = _strip_accents_lower(text)
+    nums = set()
+    for m in re.findall(r'\d+(?:[.,]\d+)?', plain):
+        nums.add(m.replace(',', '.').rstrip('0').rstrip('.') if '.' in m.replace(',', '.') else m)
+    for tok in re.findall(r'[a-z]+', plain):
+        if tok in _NUMBER_WORDS_PT and tok not in ('um', 'uma'):
+            nums.add(_NUMBER_WORDS_PT[tok])
+    return nums
+
+
+def _truncate_first_sentence(text: str, max_words: int = 10) -> str:
+    cleaned = ' '.join(str(text or '').split()).strip()
+    if not cleaned:
+        return ''
+    first_sent = re.split(r'(?<=[.!?…])\s+', cleaned, maxsplit=1)[0].strip()
+    words = first_sent.split()
+    if len(words) <= max_words:
+        return first_sent
+    return ' '.join(words[:max_words]).rstrip(',;:') + '...'
+
+
+def validate_or_repair_hook(gancho: str, clip_text: str) -> str:
+    """Garante que o gancho tenha <=10 palavras, >=50% das palavras de conteúdo no corte e zero números inventados."""
+    hook = ' '.join(str(gancho or '').split()).strip()
+    if not hook or len(hook.split()) > 10:
+        return _truncate_first_sentence(clip_text, 10)
+
+    clip_tokens = set(_normalize_tokens(clip_text))
+    hook_tokens = _normalize_tokens(hook)
+    if not hook_tokens:
+        return _truncate_first_sentence(clip_text, 10)
+
+    # Todos os números citados no gancho devem constar no texto do corte
+    hook_nums = _extract_numbers_from_text(hook)
+    clip_nums = _extract_numbers_from_text(clip_text)
+    if not hook_nums.issubset(clip_nums):
+        return _truncate_first_sentence(clip_text, 10)
+
+    content_words = [t for t in hook_tokens if t not in _STOPWORDS_PT and not t.isdigit()]
+    if content_words:
+        matched = sum(1 for t in content_words if t in clip_tokens)
+        if matched / len(content_words) < 0.5:
+            return _truncate_first_sentence(clip_text, 10)
+    else:
+        matched = sum(1 for t in hook_tokens if t in clip_tokens)
+        if matched / len(hook_tokens) < 0.5:
+            return _truncate_first_sentence(clip_text, 10)
+
+    return hook
+
+
+def heuristic_score(clip_text: str, start: float, end: float, clip_units: list[dict]) -> tuple[float, float]:
+    """Calcula (bonus_heuristico [0..2], nota_pura_heuristica [1..10])."""
+    text = ' '.join(str(clip_text or '').split()).strip()
+    dur = max(0.5, float(end) - float(start))
+    words = text.split()
+    n_words = len(words)
+    wps = n_words / dur
+
+    bonus = 0.0
+    pure = 4.5
+
+    # 1. Pergunta no início
+    first_15 = ' '.join(words[:15]).casefold()
+    interrogative_start = bool(re.match(
+        r'^(por que|porque|como|qual|quais|quem|o que|voce sabia|você sabia|sabia que|sera que|será que)\b',
+        _strip_accents_lower(first_15),
+    ))
+    if '?' in first_15 or interrogative_start:
+        bonus += 0.45
+        pure += 1.4
+
+    # 2. Presença de números / dados concretos
+    if re.search(r'\d+', text):
+        bonus += 0.35
+        pure += 1.1
+
+    # 3. Exclamações / ênfase emocional
+    if '!' in text:
+        bonus += 0.25
+        pure += 0.7
+
+    # 4. Densidade de fala saudável (1.8 a 4.2 palavras/s)
+    if 1.8 <= wps <= 4.2:
+        bonus += 0.4
+        pure += 1.2
+    elif 1.2 <= wps < 1.8:
+        bonus += 0.15
+        pure += 0.4
+
+    # 5. Ausência de silêncio interno longo (> 1.5 s)
+    max_gap = 0.0
+    for u_prev, u_curr in zip(clip_units, clip_units[1:]):
+        gap = float(u_curr['inicio']) - float(u_prev['fim'])
+        if gap > max_gap:
+            max_gap = gap
+    if max_gap <= 1.5:
+        bonus += 0.35
+        pure += 1.0
+    elif max_gap > 2.5:
+        bonus -= 0.2
+        pure -= 0.8
+
+    # 6. Penalidade mole se começar/terminar com clichê de intro/despedida/patrocínio
+    plain = _strip_accents_lower(text)
+    if re.match(r'^(oi pessoal|ola pessoal|fala galera|bom dia|boa tarde|boa noite|bem vindos|sejam bem vindos)\b', plain):
+        bonus -= 0.4
+        pure -= 1.2
+    if any(k in plain for k in ('se inscreve', 'inscreva-se', 'deixa o like', 'patrocinado por', 'ate a proxima')):
+        bonus -= 0.4
+        pure -= 1.0
+
+    bonus = round(max(-0.5, min(2.0, bonus)), 2)
+    pure = round(max(1.0, min(10.0, pure)), 2)
+    return bonus, pure
+
+
+def _overlap_ratio(a_start: float, a_end: float, b_start: float, b_end: float) -> float:
+    inter = max(0.0, min(a_end, b_end) - max(a_start, b_start))
+    if inter <= 0.0:
+        return 0.0
+    min_dur = min(max(0.001, a_end - a_start), max(0.001, b_end - b_start))
+    return inter / min_dur
+
+
+def dedupe_candidates(candidates: list[dict], max_overlap: float = 0.5) -> list[dict]:
+    """Remove duplicatas/sobreposições (>50% de interseção), mantendo sempre a de maior nota."""
+    ordered = sorted(candidates, key=lambda c: (-float(c['nota']), float(c['inicio'])))
+    kept = []
+    for cand in ordered:
+        if any(_overlap_ratio(cand['inicio'], cand['fim'], k['inicio'], k['fim']) > max_overlap for k in kept):
+            continue
+        kept.append(cand)
+    return kept
+
+
+def select_top_candidates(candidates: list[dict], max_cuts: int = 5, min_distance_s: float = 10.0) -> list[dict]:
+    """Seleciona até max_cuts melhores respeitando deduplicação (>50%) e distância >= min_distance_s."""
+    ordered = sorted(candidates, key=lambda c: (-float(c['nota']), float(c['inicio'])))
+    selected = []
+    for cand in ordered:
+        if any(_overlap_ratio(cand['inicio'], cand['fim'], s['inicio'], s['fim']) > 0.5 for s in selected):
+            continue
+        too_close = any(
+            not (cand['fim'] <= s['inicio'] - min_distance_s or cand['inicio'] >= s['fim'] + min_distance_s)
+            for s in selected
+        )
+        if too_close:
+            continue
+        selected.append(dict(cand))
+        if len(selected) >= max_cuts:
+            break
+    for idx, cand in enumerate(selected, start=1):
+        cand['indice'] = idx
+    return selected
+
+
+def fallback_heuristic_candidates(
+    units: list[dict],
+    min_duration: float,
+    max_duration: float,
+    video_duration: float,
+    max_cuts: int = 5,
+) -> list[dict]:
+    """Ranqueamento heurístico determinístico puro para sempre devolver candidatos mesmo se o LLM falhar."""
+    if not units:
+        return []
+    n = len(units)
+    target = (min_duration + max_duration) / 2.0
+    pool = []
+
+    for s_idx in range(n):
+        best_e = None
+        best_diff = float('inf')
+        for e_idx in range(s_idx, n):
+            st, en = _span_with_padding(units, s_idx, e_idx, video_duration)
+            dur = en - st
+            if dur > max_duration:
+                break
+            if dur >= min_duration:
+                diff = abs(dur - target)
+                if diff < best_diff:
+                    best_diff = diff
+                    best_e = e_idx
+        if best_e is not None:
+            st, en = _span_with_padding(units, s_idx, best_e, video_duration)
+            slice_units = units[s_idx:best_e + 1]
+            texto = ' '.join(u['texto'] for u in slice_units)
+            bonus, pure = heuristic_score(texto, st, en, slice_units)
+            pool.append({
+                'inicio_unidade': s_idx,
+                'fim_unidade': best_e,
+                'inicio': st,
+                'fim': en,
+                'duracao': round(en - st, 3),
+                'nota_llm': None,
+                'bonus_heuristico': bonus,
+                'nota': pure,
+                'gancho': _truncate_first_sentence(texto, 10),
+                'motivo': 'Selecionado pelo ranqueamento heurístico determinístico (gancho, densidade e ritmo).',
+                'texto': texto,
+            })
+
+    if not pool:
+        # Vídeo muito curto (< min_duration) ou unidade única longa (> max_duration): devolve o melhor trecho possível
+        st, en = _span_with_padding(units, 0, n - 1, video_duration)
+        texto = ' '.join(u['texto'] for u in units)
+        bonus, pure = heuristic_score(texto, st, en, units)
+        pool.append({
+            'inicio_unidade': 0,
+            'fim_unidade': n - 1,
+            'inicio': st,
+            'fim': en,
+            'duracao': round(en - st, 3),
+            'nota_llm': None,
+            'bonus_heuristico': bonus,
+            'nota': pure,
+            'gancho': _truncate_first_sentence(texto, 10),
+            'motivo': 'Trecho único disponível dentro da duração do vídeo.',
+            'texto': texto,
+        })
+
+    return select_top_candidates(pool, max_cuts=max_cuts, min_distance_s=10.0)
+
+
+def _evaluate_window_cuts(
+    window_units: list[dict],
+    all_units: list[dict],
+    min_duration: float,
+    max_duration: float,
+    video_duration: float,
+    ask,
+    model: str | None,
+    log,
+) -> list[dict]:
+    instruction = (
+        'Você é um editor de vídeos curtos (Reels/Shorts) em português brasileiro.\n'
+        'Analise a transcrição numerada por unidades "[indice] mm:ss texto" e escolha ATÉ 3 trechos autossuficientes '
+        f'com duração aproximada entre {int(round(min_duration))} e {int(round(max_duration))} segundos.\n'
+        'Critérios:\n'
+        '- Ideia completa: começa com gancho forte e termina com conclusão clara.\n'
+        '- Compreensível sozinha fora de contexto.\n'
+        '- Surpreendente, útil ou emocional.\n'
+        '- Evite introduções ("oi pessoal"), despedidas ("se inscreve"), patrocínios e cortes no meio de frase.\n'
+        '- Nunca invente números ou fatos no "gancho" (<= 10 palavras).\n'
+        'Devolva APENAS JSON usando ÍNDICES inteiros das unidades (nunca timestamps):\n'
+        '{"cortes":[{"inicio_unidade":int,"fim_unidade":int,"nota":1-10,"gancho":"...","motivo":"..."}]}\n\n'
+        'EXEMPLO FICTÍCIO APENAS DO FORMATO (não copie texto nem números):\n'
+        'Entrada:\n'
+        '[0] 00:00 Oi pessoal, sejam bem-vindos ao canal.\n'
+        '[1] 00:05 Por que o planeta fictício Zorblax brilha em azul?\n'
+        '[2] 00:18 Pesquisadores descobriram que cristais de gelo refletem 80% da luz solar lá.\n'
+        '[3] 00:34 Isso explica o fenômeno inteiro sem mistério.\n'
+        'Saída:\n'
+        '{"cortes":[{"inicio_unidade":1,"fim_unidade":3,"nota":9,"gancho":"Por que o planeta Zorblax brilha em azul?","motivo":"Começa com pergunta intrigante e fecha com explicação completa."}]}'
+    )
+    payload = _format_window_text(window_units)
+    resp = _ask_with_retry(ask, instruction, payload, model=model, log=log, max_attempts=3)
+    raw_cuts = resp.get('cortes')
+    if not isinstance(raw_cuts, list):
+        raise ValueError('Resposta do modelo sem lista "cortes".')
+
+    parsed = []
+    for item in raw_cuts[:3]:
+        if not isinstance(item, dict):
+            continue
+        try:
+            s_idx = int(item['inicio_unidade'])
+            e_idx = int(item['fim_unidade'])
+        except (KeyError, TypeError, ValueError):
+            continue
+        repaired = _repair_unit_bounds(all_units, s_idx, e_idx, min_duration, max_duration, video_duration)
+        if repaired is None:
+            continue
+        r_start_idx, r_end_idx = repaired
+        st, en = _span_with_padding(all_units, r_start_idx, r_end_idx, video_duration)
+        slice_units = all_units[r_start_idx:r_end_idx + 1]
+        texto = ' '.join(u['texto'] for u in slice_units)
+        try:
+            nota_llm = float(item.get('nota', 6.0))
+        except (TypeError, ValueError):
+            nota_llm = 6.0
+        nota_llm = max(1.0, min(10.0, nota_llm))
+        bonus, _ = heuristic_score(texto, st, en, slice_units)
+        nota_final = round(min(10.0, max(1.0, nota_llm + bonus)), 2)
+        gancho = validate_or_repair_hook(str(item.get('gancho', '')), texto)
+        motivo = ' '.join(str(item.get('motivo', '')).split()).strip() or 'Trecho com boa unidade e gancho.'
+        parsed.append({
+            'inicio_unidade': r_start_idx,
+            'fim_unidade': r_end_idx,
+            'inicio': st,
+            'fim': en,
+            'duracao': round(en - st, 3),
+            'nota_llm': round(nota_llm, 2),
+            'bonus_heuristico': bonus,
+            'nota': nota_final,
+            'gancho': gancho,
+            'motivo': motivo,
+            'texto': texto,
+        })
+    return parsed
+
+
+def summarize_video_map_reduce(
+    windows: list[list[dict]],
+    all_units: list[dict],
+    candidates: list[dict],
+    ask,
+    model: str | None,
+    avisos: list[str],
+    cancel_event=None,
+    log=print,
+) -> dict:
+    """Resumo geral map-reduce: 2 frases por janela -> 3 bullets + potencial para cortes."""
+    map_instruction = (
+        'Resuma em EXATAMENTE 2 frases curtas em português o assunto principal desta parte da transcrição. '
+        'Responda APENAS JSON: {"resumo":"..."}'
+    )
+    window_summaries = []
+    for idx, win in enumerate(windows, start=1):
+        _check_cancelled(cancel_event)
+        payload = _format_window_text(win)
+        try:
+            res = _ask_with_retry(ask, map_instruction, payload, model=model, log=log, max_attempts=2)
+            txt = ' '.join(str(res.get('resumo', '')).split()).strip()
+            if not txt:
+                raise ValueError('Resumo vazio da janela.')
+            window_summaries.append(f'Parte {idx}: {txt}')
+        except Exception as exc:
+            msg = f'Resumo da janela {idx}/{len(windows)} falhou; usando extrato local ({_short_reason(exc, 160)})'
+            avisos.append(msg[:220])
+            log(msg[:220])
+            fallback_txt = ' '.join(u['texto'] for u in win[:2]).strip()
+            if fallback_txt:
+                window_summaries.append(f'Parte {idx}: {fallback_txt[:220]}')
+
+    reduce_instruction = (
+        'Com base nos resumos das partes de um vídeo, produza uma avaliação geral em português brasileiro. '
+        'Responda APENAS JSON: '
+        '{"resumo":["bullet 1","bullet 2","bullet 3"],"potencial_cortes":"alto|médio|baixo","justificativa_potencial":"frase curta"}'
+    )
+    reduce_payload = '\n'.join(window_summaries) or ' '.join(u['texto'] for u in all_units[:6])
+    try:
+        _check_cancelled(cancel_event)
+        red = _ask_with_retry(ask, reduce_instruction, reduce_payload, model=model, log=log, max_attempts=2)
+        bullets = [str(b).strip() for b in (red.get('resumo') or []) if str(b).strip()][:3]
+        if not bullets:
+            raise ValueError('Lista "resumo" vazia no reduce.')
+        pot = str(red.get('potencial_cortes', '')).strip().casefold()
+        if pot not in ('alto', 'médio', 'medio', 'baixo'):
+            pot = 'médio'
+        if pot == 'medio':
+            pot = 'médio'
+        just = ' '.join(str(red.get('justificativa_potencial', '')).split()).strip() or 'Avaliado conforme densidade de ideias e ganchos.'
+        return {'resumo': bullets, 'potencial_cortes': pot, 'justificativa_potencial': just}
+    except Exception as exc:
+        msg = f'Resumo final map-reduce falhou; usando síntese local ({_short_reason(exc, 160)})'
+        avisos.append(msg[:220])
+        log(msg[:220])
+        bullets = [s.split(':', 1)[-1].strip() for s in window_summaries[:3] if s.strip()]
+        if not bullets:
+            bullets = [' '.join(u['texto'] for u in all_units[:3])[:180]]
+        top_score = max((float(c['nota']) for c in candidates), default=0.0)
+        if len(candidates) >= 3 and top_score >= 7.5:
+            pot = 'alto'
+            just = 'Há múltiplos trechos completos com perguntas, números ou ganchos fortes.'
+        elif candidates and top_score >= 5.5:
+            pot = 'médio'
+            just = 'Há trechos aproveitáveis, embora nem todos tenham gancho forte.'
+        else:
+            pot = 'baixo'
+            just = 'Poucos trechos autossuficientes detectados dentro da faixa de duração.'
+        return {'resumo': bullets, 'potencial_cortes': pot, 'justificativa_potencial': just}
+
+
+def select_cuts_and_report(
+    info: dict,
+    transcription: dict,
+    min_duration: float = 25.0,
+    max_duration: float = 55.0,
+    num_cuts: int = 5,
+    ask=None,
+    model: str | None = None,
+    cancel_event=None,
+    log=print,
+) -> dict:
+    """Avalia a transcrição em janelas <=650 palavras, ranqueia cortes e salva relatorio.json."""
+    require_authorization(bool(info.get('autorizado')))
+    _check_cancelled(cancel_event)
+
+    min_dur = float(min_duration)
+    max_dur = float(max_duration)
+    if min_dur <= 0 or max_dur < min_dur:
+        raise ValueError('Duração mínima e máxima inválidas para os cortes.')
+    n_cuts = max(1, int(num_cuts))
+
+    ask_fn = ask or engine.request_json
+    cfg = engine.load_settings()
+    eval_model = str(model or os.getenv('OLLAMA_MODEL') or cfg.get('ollama_model') or 'qwen3.5:4b').strip()
+    whisper_model = str(transcription.get('modelo') or _default_whisper_model())
+
+    units = list(transcription.get('unidades') or [])
+    if not units:
+        raise RuntimeError('A transcrição não contém falas reconhecidas para gerar cortes.')
+
+    video_duration = float(transcription.get('duracao') or info.get('duracao') or (units[-1]['fim'] if units else 0.0))
+    windows = build_windows(units, max_words=650, overlap_seconds=60.0)
+    log(f'Avaliando conteúdo em {len(windows)} janela(s) (≤650 palavras por janela)...')
+
+    avisos: list[str] = []
+    all_candidates: list[dict] = []
+
+    for w_idx, win in enumerate(windows, start=1):
+        _check_cancelled(cancel_event)
+        log(f'Analisando janela {w_idx}/{len(windows)} (unidades {win[0]["indice"]}–{win[-1]["indice"]})...')
+        try:
+            found = _evaluate_window_cuts(
+                win, units, min_dur, max_dur, video_duration,
+                ask=ask_fn, model=eval_model, log=log,
+            )
+            all_candidates.extend(found)
+        except CancelledError:
+            raise
+        except Exception as exc:
+            msg = f'Janela {w_idx}/{len(windows)} ignorada após erro: {_short_reason(exc, 175)}'
+            avisos.append(msg[:220])
+            log(msg[:220])
+            continue
+
+    if all_candidates:
+        selected = select_top_candidates(all_candidates, max_cuts=n_cuts, min_distance_s=10.0)
+    else:
+        selected = []
+
+    if not selected:
+        msg = 'LLM não retornou cortes válidos; usando ranqueamento heurístico determinístico.'
+        avisos.append(msg)
+        log(msg)
+        selected = fallback_heuristic_candidates(units, min_dur, max_dur, video_duration, max_cuts=n_cuts)
+
+    _check_cancelled(cancel_event)
+    summary = summarize_video_map_reduce(
+        windows, units, selected, ask=ask_fn, model=eval_model,
+        avisos=avisos, cancel_event=cancel_event, log=log,
+    )
+
+    auth_fields = build_auth_metadata(
+        info.get('fonte_url', ''),
+        info.get('canal', 'local'),
+        credito=info.get('credito', ''),
+        authorized=True,
+    )
+    report = {
+        'video_id': str(info['id']),
+        'titulo': info.get('titulo', info['id']),
+        'duracao': video_duration,
+        'resumo': summary['resumo'],
+        'potencial_cortes': summary['potencial_cortes'],
+        'justificativa_potencial': summary['justificativa_potencial'],
+        'candidatos': selected,
+        'modelos': {
+            'avaliador': eval_model,
+            'whisper': whisper_model,
+        },
+        'avisos': avisos,
+        **auth_fields,
+    }
+
+    report_path = cortes_root() / str(info['id']) / 'relatorio.json'
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
+    log(f'Relatório salvo: {report_path} ({len(selected)} candidato(s) selecionado(s)).')
+    return report
+
+
+def analyze_video(
+    source: str | Path,
+    authorized: bool = False,
+    credito: str = '',
+    language: str = 'pt',
+    whisper_model: str | None = None,
+    min_duration: float = 25.0,
+    max_duration: float = 55.0,
+    num_cuts: int = 5,
+    start_min: float | None = None,
+    end_min: float | None = None,
+    ask=None,
+    eval_model: str | None = None,
+    cancel_event=None,
+    log=print,
+) -> tuple[dict, dict, dict]:
+    """Fluxo completo de análise: prepara entrada -> transcreve -> avalia e gera relatório."""
+    require_authorization(authorized)
+    info = prepare_source(source, authorized=True, credito=credito, log=log)
+    _check_cancelled(cancel_event)
+    transcription = transcribe_video(
+        info,
+        language=language,
+        model_name=whisper_model,
+        start_min=start_min,
+        end_min=end_min,
+        cancel_event=cancel_event,
+        log=log,
+    )
+    _check_cancelled(cancel_event)
+    report = select_cuts_and_report(
+        info,
+        transcription,
+        min_duration=min_duration,
+        max_duration=max_duration,
+        num_cuts=num_cuts,
+        ask=ask,
+        model=eval_model,
+        cancel_event=cancel_event,
+        log=log,
+    )
+    return info, transcription, report
+
+
 def main():
     engine.apply_settings()
     parser = argparse.ArgumentParser(description='ReelForge Cortes: preparar, transcrever e selecionar cortes autorizados')
     parser.add_argument('--fonte', required=True, help='URL do vídeo ou caminho de arquivo local')
     parser.add_argument('--autorizado', action='store_true', help=AUTH_CONFIRM_TEXT)
     parser.add_argument('--credito', default='', help='Texto livre de crédito (ex.: @canal)')
+    parser.add_argument('--idioma', default='pt', help='Idioma da transcrição (padrão: pt)')
+    parser.add_argument('--duracao-min', type=float, default=25.0, help='Duração mínima do corte em segundos')
+    parser.add_argument('--duracao-max', type=float, default=55.0, help='Duração máxima do corte em segundos')
+    parser.add_argument('--num-cortes', type=int, default=5, help='Quantidade máxima de cortes sugeridos')
+    parser.add_argument('--inicio-min', type=float, default=None, help='Analisar a partir do minuto X')
+    parser.add_argument('--fim-min', type=float, default=None, help='Analisar até o minuto Y')
+    parser.add_argument('--somente-fonte', action='store_true', help='Prepara apenas download/cache e metadados')
     args = parser.parse_args()
-    info = prepare_source(args.fonte, authorized=args.autorizado, credito=args.credito)
-    print(json.dumps(info, ensure_ascii=False, indent=2))
+    if args.somente_fonte:
+        info = prepare_source(args.fonte, authorized=args.autorizado, credito=args.credito)
+        print(json.dumps(info, ensure_ascii=False, indent=2))
+        return
+    _, _, report = analyze_video(
+        args.fonte,
+        authorized=args.autorizado,
+        credito=args.credito,
+        language=args.idioma,
+        min_duration=args.duracao_min,
+        max_duration=args.duracao_max,
+        num_cuts=args.num_cortes,
+        start_min=args.inicio_min,
+        end_min=args.fim_min,
+    )
+    print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
 if __name__ == '__main__':

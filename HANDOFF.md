@@ -417,3 +417,10 @@
   - **Testes:** `tests.test_clipper` (6 testes passando)
   - **Resumo:** `prepare_source()` aceita URL (via `sys.executable -m yt_dlp` até 1080p mp4 com timeout e mensagens amigáveis em português sem contorno de DRM/login/cookies) ou arquivo local; cache em `output/cortes/<video_id>/source.mp4` + `info.json` reutilizado em chamadas seguintes; confirmação obrigatória (`Confirmo que tenho autorização para cortar este vídeo` / `--autorizado`) e gravação de `fonte_url`, `canal`, `autorizado`, `credito` e `data`.
   - **Próximo item:** ITEM 35 — Transcrição com palavras (`clipper.py`).
+
+- [x] **ITEM 35 — Transcrição com palavras (`clipper.py`, `tests/test_clipper.py`)**: feito
+  - **Commit:** `9b7fbda` (`9b7fbdaa7ed80bc811210335d719e8ed98880bc4`) — *"Item 35: Transcricao com palavras via faster-whisper, cache, trecho e cancelamento"*
+  - **Arquivos:** `clipper.py`, `tests/test_clipper.py`
+  - **Testes:** `tests.test_clipper` (10 testes passando)
+  - **Resumo:** `transcribe_video()` usa `faster-whisper` (`CPU`, `int8`, `local_files_only=True`, `word_timestamps=True`, `vad_filter=True`, idioma configurável padrão `"pt"`, modelo de `settings.json`, mensagem amigável de modelo ausente igual à de `captions.py`), loga progresso (tempo, %, decorrido, estimativa), cacheia em `output/cortes/<video_id>/transcricao.json` (invalidado se modelo/idioma/trecho mudarem), suporta recorte rápido `start_min`/`end_min` e cancelamento cooperativo (`CancelledError`), agrupando palavras em unidades por pontuação ou pausa `> 0,7 s`.
+  - **Próximo item:** ITEM 36 — Avaliação do conteúdo e seleção dos cortes (`engine.py` aditivo + `clipper.py`).
