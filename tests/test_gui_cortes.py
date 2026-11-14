@@ -137,6 +137,7 @@ class CortesGuiTests(IsolatedOutputMixin, unittest.TestCase):
                     tab.modo_corte.set('preencher')
                     saved = app._save()
                     self.assertEqual(saved['cortes']['modo_corte'], 'preencher')
+                    self.assertEqual(saved['cortes']['enquadramento'], 'auto')
                     self.assertEqual(saved['cortes']['extra_cortes_key'], 42)
                     disk = json.loads(cfg_file.read_text(encoding='utf-8'))
                     self.assertEqual(disk['cortes']['extra_cortes_key'], 42)
@@ -144,6 +145,14 @@ class CortesGuiTests(IsolatedOutputMixin, unittest.TestCase):
                     app.destroy()
                     app = None
                     gc.collect()
+
+        import clipper
+        import gui_cortes
+        self.assertEqual(clipper.DEFAULT_CORTES_SETTINGS['modo_corte'], 'preencher')
+        self.assertEqual(clipper.DEFAULT_CORTES_SETTINGS['enquadramento'], 'auto')
+        self.assertIsNone(gui_cortes._parse_optional_crop_x(''))
+        self.assertAlmostEqual(gui_cortes._parse_optional_crop_x('35'), 0.35, places=4)
+        self.assertAlmostEqual(gui_cortes._parse_optional_crop_x('0.65'), 0.65, places=4)
 
     def test_cortes_test_modules_inherit_isolated_output_mixin(self):
         import inspect

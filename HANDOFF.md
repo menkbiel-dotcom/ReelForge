@@ -463,7 +463,14 @@
 ## Status por Item (Rodada 10 — Itens 41 a 43: Refinamento do Modo Cortes)
 
 - [x] **ITEM 41 — Gameplay sem crossfade de loop (`clip_render.py`, `tests/test_clip_render.py`)**: feito
+  - **Commit:** `0ded4a67954369ae97456683c9dd121a4059a547` — *"Item 41: Gameplay sem crossfade de loop no render de cortes (clip_render.py)"*
   - **Arquivos:** `clip_render.py`, `tests/test_clip_render.py`
   - **Testes:** `tests.test_clip_render` (2 testes passando: filtergraph sem `xfade` e com `vstack`, `-stream_loop -1` preservado)
   - **Resumo:** Removida a dependência de `cfg['loop']` e o filtro `xfade`/`acrossfade` no render de cortes (`clip_render.py`), usando diretamente `trim=start=0:end={total:.4f},setpts=PTS-STARTPTS[bottom]` com `-stream_loop -1` na entrada da gameplay para evitar mistura de cenas no início do corte.
   - **Próximo item:** ITEM 42 — Modo `"preencher"` melhor (`crop_x` + detecção automática de rosto via OpenCV) e padrão sensato.
+
+- [x] **ITEM 42 — Modo `"preencher"` melhor e padrão sensato (`clip_render.py`, `clipper.py`, `gui_cortes.py`, `settings.json`, `tests/test_clip_render.py`, `tests/test_gui_cortes.py`)**: feito
+  - **Arquivos:** `clip_render.py`, `clipper.py`, `gui_cortes.py`, `settings.json`, `tests/test_clip_render.py`, `tests/test_gui_cortes.py`
+  - **Testes:** `tests.test_clip_render` (3 testes passando) + `tests.test_gui_cortes` (3 testes passando)
+  - **Resumo:** Adicionado `crop_x` (`0.0–1.0`, padrão `0.5`) ao modo `"preencher"` (`crop=1080:960:(in_w-1080)*{crop_x:.4f}:(in_h-960)/2`), detecção automática opcional de rostos via OpenCV em `detect_face_crop_x()` (amostrando ~5 frames do corte com import tardio de `cv2`, mediana do centro X normalizado e fallback seguro para `0.5` com aviso quando não instalado), configuração `"cortes.enquadramento": "auto"|"centro"` (padrão `"auto"`), modo padrão alterado para `"preencher"` em `DEFAULT_CORTES_SETTINGS`, `settings.json` e `gui_cortes.py` (mantendo `"ajustar"` disponível) e campo opcional `"Enquadramento (X%)"` na aba Cortes.
+  - **Próximo item:** ITEM 43 — Qualidade do começo do corte (`clipper.py`).

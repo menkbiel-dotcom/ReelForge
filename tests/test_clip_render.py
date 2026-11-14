@@ -155,9 +155,100 @@ class ClipRenderUnitTests(IsolatedOutputMixin, unittest.TestCase):
         c2 = captured[1]
         self.assertTrue(mp4_fill.name.startswith('corte_02_'))
         self.assertNotIn('boxblur', c2['fc'])
-        self.assertIn('scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960', c2['fc'])
+        self.assertNotIn('xfade', c2['fc'])
+        self.assertIn('scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960:(in_w-1080)*0.5000:(in_h-960)/2', c2['fc'])
         self.assertIn(r'\pos(540,1650)', c2['ass'])
         self.assertNotIn(',Hook,', c2['ass'])
+
+    def test_crop_x_filter_and_opencv_fallback_and_median(self):
+        vid_dir = clip_render.clipper.cortes_root() / 'vid_crop'
+        vid_dir.mkdir(parents=True, exist_ok=True)
+        src = vid_dir / 'source.mp4'
+        src.write_bytes(b'src')
+        gp = vid_dir / 'gp.mp4'
+        gp.write_bytes(b'gp')
+        info = {'id': 'vid_crop', 'source_path': str(src), 'autorizado': True}
+        trans = {'palavras': [{'texto': 'Teste', 'inicio': 1.0, 'fim': 2.0}]}
+        cand = {'indice': 1, 'inicio': 0.0, 'fim': 10.0, 'gancho': 'Gancho'}
+
+        captured = []
+
+        def fake_run(cmd):
+            fc = cmd[cmd.index('-filter_complex') + 1]
+            captured.append(fc)
+            Path(cmd[-1]).write_bytes(b'mp4')
+
+        # (1) crop_x explícito (0.25) gera filtro deslocado horizontalmente
+        with patch.object(engine, 'run', side_effect=fake_run), \
+             patch.object(engine, 'ffprobe_duration', return_value=30.0):
+            clip_render.render_clip(
+                info, trans, cand, gameplay=gp, modo_corte='preencher', crop_x=0.25, log=lambda *_: None
+            )
+        self.assertIn('crop=1080:960:(in_w-1080)*0.2500:(in_h-960)/2', captured[-1])
+
+        # (2) Sem OpenCV instalado -> volta a 0.5 sem erro e loga aviso
+        logs = []
+        with patch.dict(sys.modules, {'cv2': None}):
+            val = clip_render.detect_face_crop_x(src, 0.0, 10.0, log=logs.append)
+        self.assertEqual(val, 0.5)
+        self.assertTrue(any('0.5' in m for m in logs))
+
+        # (3) Com OpenCV mockado -> mediana do centro X normalizado dos rostos
+        class FakeFrame:
+            shape = (1080, 1920, 3)
+
+        class FakeCap:
+            def isOpened(self):
+                return True
+            def set(self, *_a):
+                pass
+            def read(self):
+                return True, FakeFrame()
+            def release(self):
+                pass
+
+        # Centros X: (192+192/2)/1920 = 0.15, (576+192/2)/1920 = 0.35, (1344+192/2)/1920 = 0.75 -> mediana 0.35
+        seq = [
+            [(192, 100, 192, 192)],
+            [(576, 100, 192, 192)],
+            [(576, 100, 192, 192)],
+            [(1344, 100, 192, 192)],
+            [(1344, 100, 192, 192)],
+        ]
+        call_idx = {'i': 0}
+
+        class FakeClassifier:
+            def empty(self):
+                return False
+            def detectMultiScale(self, *_a, **_kw):
+                i = call_idx['i']
+                call_idx['i'] += 1
+                return seq[i % len(seq)]
+
+        class FakeCv2:
+            CAP_PROP_POS_MSEC = 0
+            COLOR_BGR2GRAY = 6
+            class data:
+                haarcascades = ''
+            @staticmethod
+            def CascadeClassifier(_p):
+                return FakeClassifier()
+            @staticmethod
+            def VideoCapture(_p):
+                return FakeCap()
+            @staticmethod
+            def cvtColor(frame, _code):
+                return frame
+
+        with patch.dict(sys.modules, {'cv2': FakeCv2}), \
+             patch.object(engine, 'run', side_effect=fake_run), \
+             patch.object(engine, 'ffprobe_duration', return_value=30.0):
+            med = clip_render.detect_face_crop_x(src, 0.0, 10.0, num_samples=5, log=lambda *_: None)
+            self.assertAlmostEqual(med, 0.35, places=4)
+            clip_render.render_clip(
+                info, trans, cand, gameplay=gp, modo_corte='preencher', enquadramento='auto', log=lambda *_: None
+            )
+        self.assertIn('crop=1080:960:(in_w-1080)*0.3500:(in_h-960)/2', captured[-1])
 
 
 class ClipRenderIntegrationTests(IsolatedOutputMixin, unittest.TestCase):

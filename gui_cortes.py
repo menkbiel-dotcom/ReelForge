@@ -21,6 +21,21 @@ def _parse_optional_float(raw: str, label: str) -> float | None:
         raise ValueError(f'Valor numérico inválido para {label}: "{raw}".')
 
 
+def _parse_optional_crop_x(raw: str) -> float | None:
+    txt = str(raw or '').strip().replace('%', '').replace(',', '.').casefold()
+    if not txt or txt == 'auto':
+        return None
+    if txt == 'centro':
+        return 0.5
+    try:
+        val = float(txt)
+    except ValueError:
+        raise ValueError(f'Valor inválido para Enquadramento (X%): "{raw}". Use 0–100 (ou deixe em branco para automático).')
+    if 0.0 < val <= 1.0 and '.' in txt:
+        return max(0.0, min(1.0, val))
+    return max(0.0, min(1.0, val / 100.0))
+
+
 class CortesTab(ttk.Frame):
     """Painel completo para baixar/carregar vídeo autorizado, analisar e renderizar cortes."""
 
@@ -38,7 +53,9 @@ class CortesTab(ttk.Frame):
         self.duracao_min = tk.StringVar(value=str(int(float(cfg.get('duracao_min', 25)))))
         self.duracao_max = tk.StringVar(value=str(int(float(cfg.get('duracao_max', 55)))))
         self.num_cortes = tk.StringVar(value=str(int(cfg.get('num_cortes', 5))))
-        self.modo_corte = tk.StringVar(value=str(cfg.get('modo_corte', 'ajustar')))
+        self.modo_corte = tk.StringVar(value=str(cfg.get('modo_corte', 'preencher')))
+        self.enquadramento = tk.StringVar(value=str(cfg.get('enquadramento', 'auto')))
+        self.enquadramento_x = tk.StringVar(value=str(cfg.get('enquadramento_x', '')))
         self.posicao_legenda = tk.StringVar(value=str(cfg.get('posicao_legenda', 'juncao')))
         self.titulo_na_tela = tk.BooleanVar(value=bool(cfg.get('titulo_na_tela', True)))
         self.credito_na_tela = tk.BooleanVar(value=bool(cfg.get('credito_na_tela', True)))
@@ -95,7 +112,9 @@ class CortesTab(ttk.Frame):
         ttk.Label(cfg_row, text='Cortes:', style='Card.TLabel').pack(side='left')
         ttk.Spinbox(cfg_row, from_=1, to=15, increment=1, textvariable=self.num_cortes, width=4).pack(side='left', padx=(4, 12))
         ttk.Label(cfg_row, text='Modo:', style='Card.TLabel').pack(side='left')
-        ttk.Combobox(cfg_row, textvariable=self.modo_corte, values=['ajustar', 'preencher'], state='readonly', width=10).pack(side='left', padx=(4, 12))
+        ttk.Combobox(cfg_row, textvariable=self.modo_corte, values=['preencher', 'ajustar'], state='readonly', width=10).pack(side='left', padx=(4, 12))
+        ttk.Label(cfg_row, text='Enquadramento (X%):', style='Card.TLabel').pack(side='left')
+        ttk.Entry(cfg_row, textvariable=self.enquadramento_x, width=5).pack(side='left', padx=(4, 12))
         ttk.Label(cfg_row, text='Legenda:', style='Card.TLabel').pack(side='left')
         ttk.Combobox(cfg_row, textvariable=self.posicao_legenda, values=['juncao', 'rodape'], state='readonly', width=8).pack(side='left', padx=(4, 12))
         ttk.Label(cfg_row, text='Idioma:', style='Card.TLabel').pack(side='left')
@@ -218,7 +237,8 @@ class CortesTab(ttk.Frame):
             'duracao_min': dmin,
             'duracao_max': dmax,
             'num_cortes': max(1, ncuts),
-            'modo_corte': self.modo_corte.get().strip() or 'ajustar',
+            'modo_corte': self.modo_corte.get().strip() or 'preencher',
+            'enquadramento': self.enquadramento.get().strip() or 'auto',
             'posicao_legenda': self.posicao_legenda.get().strip() or 'juncao',
             'titulo_na_tela': bool(self.titulo_na_tela.get()),
             'credito_na_tela': bool(self.credito_na_tela.get()),
@@ -426,6 +446,12 @@ class CortesTab(ttk.Frame):
             messagebox.showinfo('Cortes', 'Marque ao menos um candidato na lista ([x]) para renderizar.')
             return
 
+        try:
+            crop_x_val = _parse_optional_crop_x(self.enquadramento_x.get())
+        except ValueError as exc:
+            messagebox.showerror('Configuração', str(exc))
+            return
+
         cfg = self.get_settings()
         gp_raw = self.app.gameplay.get().strip() if hasattr(self.app, 'gameplay') else ''
         gp_path = Path(gp_raw) if gp_raw else next(iter(engine.gameplays()), None)
@@ -456,6 +482,8 @@ class CortesTab(ttk.Frame):
                     titulo_na_tela=cfg['titulo_na_tela'],
                     credito_na_tela=cfg['credito_na_tela'],
                     musica_ativa=cfg['musica_ativa'],
+                    crop_x=crop_x_val,
+                    enquadramento=cfg.get('enquadramento', 'auto'),
                     modelos=modelos,
                     log=log_fn,
                 )

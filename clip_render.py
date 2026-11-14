@@ -181,24 +181,88 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     return dest_path
 
 
+def detect_face_crop_x(
+    source_path: str | Path,
+    start: float,
+    end: float,
+    num_samples: int = 5,
+    log=print,
+) -> float:
+    """Amostra ~5 frames do corte e retorna a mediana do centro X normalizado (0.0..1.0) dos rostos via OpenCV."""
+    try:
+        import cv2
+    except ImportError:
+        log('Aviso: opencv-python-headless não instalado; usando crop_x=0.5 (centro).')
+        return 0.5
+
+    try:
+        cascade_dir = getattr(getattr(cv2, 'data', None), 'haarcascades', '') or ''
+        cascade_file = os.path.join(cascade_dir, 'haarcascade_frontalface_default.xml')
+        classifier = cv2.CascadeClassifier(cascade_file)
+        if classifier.empty():
+            log('Aviso: classificador Haar de rosto do OpenCV indisponível; usando crop_x=0.5.')
+            return 0.5
+
+        cap = cv2.VideoCapture(str(source_path))
+        if not cap.isOpened():
+            log('Aviso: não foi possível abrir o vídeo no OpenCV para enquadramento; usando crop_x=0.5.')
+            return 0.5
+        try:
+            duration = max(0.0, float(end) - float(start))
+            n = max(1, int(num_samples))
+            centers_x: list[float] = []
+            for i in range(n):
+                ts = float(start) + (duration * (i + 0.5) / n if duration > 0 else 0.0)
+                cap.set(cv2.CAP_PROP_POS_MSEC, ts * 1000.0)
+                ok, frame = cap.read()
+                if not ok or frame is None:
+                    continue
+                shape = getattr(frame, 'shape', None)
+                if not shape or len(shape) < 2 or shape[1] <= 0:
+                    continue
+                frame_w = float(shape[1])
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = classifier.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+                if faces is not None and len(faces) > 0:
+                    for (fx, _fy, fw, _fh) in faces:
+                        cx = (float(fx) + float(fw) / 2.0) / frame_w
+                        centers_x.append(max(0.0, min(1.0, cx)))
+            if not centers_x:
+                return 0.5
+            centers_x.sort()
+            mid = len(centers_x) // 2
+            if len(centers_x) % 2 == 1:
+                med = centers_x[mid]
+            else:
+                med = (centers_x[mid - 1] + centers_x[mid]) / 2.0
+            return round(max(0.0, min(1.0, float(med))), 4)
+        finally:
+            cap.release()
+    except Exception as exc:
+        log(f'Aviso: falha na detecção facial OpenCV ({exc}); usando crop_x=0.5.')
+        return 0.5
+
+
 def render_clip(
     info: dict,
     transcription: dict,
     candidate: dict,
     gameplay: str | Path | None = None,
     cut_index: int = 1,
-    modo_corte: str = 'ajustar',
+    modo_corte: str = 'preencher',
     posicao_legenda: str = 'juncao',
     titulo_na_tela: bool = True,
     credito_na_tela: bool = True,
     musica_ativa: bool = False,
+    crop_x: float | None = None,
+    enquadramento: str | None = None,
     modelos: dict | None = None,
     log=print,
 ) -> Path:
     """Renderiza um corte 1080x1920 @30fps com corte em cima, gameplay muda embaixo e legenda .ass."""
     clipper.require_authorization(bool(info.get('autorizado')))
 
-    mode = str(modo_corte or 'ajustar').strip().casefold()
+    mode = str(modo_corte or 'preencher').strip().casefold()
     if mode not in ('ajustar', 'preencher'):
         raise ValueError('Modo de corte inválido. Use "ajustar" ou "preencher".')
 
@@ -272,6 +336,7 @@ def render_clip(
         log(f'Gameplay {gameplay_path.name}: trecho {offset:.2f}s de {available:.2f}s (áudio mudo).')
 
         chain = []
+        eff_crop_x = 0.5
         if mode == 'ajustar':
             chain.append(
                 f'[0:v]setpts=PTS-STARTPTS,fps={fps},split=2[top_a][top_b];'
@@ -281,9 +346,19 @@ def render_clip(
                 '[topbg][topfg]overlay=(W-w)/2:(H-h)/2[top]'
             )
         else:
+            if crop_x is not None:
+                eff_crop_x = max(0.0, min(1.0, float(crop_x)))
+            else:
+                cortes_cfg = cfg.get('cortes') if isinstance(cfg.get('cortes'), dict) else {}
+                enq = str(enquadramento if enquadramento is not None else cortes_cfg.get('enquadramento', 'auto')).strip().casefold()
+                if enq == 'auto':
+                    eff_crop_x = detect_face_crop_x(source_path, start, start + total, log=log)
+                else:
+                    eff_crop_x = 0.5
             chain.append(
                 f'[0:v]setpts=PTS-STARTPTS,fps={fps},'
-                'scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960,setsar=1[top]'
+                f'scale=1080:960:force_original_aspect_ratio=increase,'
+                f'crop=1080:960:(in_w-1080)*{eff_crop_x:.4f}:(in_h-960)/2,setsar=1[top]'
             )
 
         chain.append(
@@ -359,6 +434,7 @@ def render_clip(
             'motivo': candidate.get('motivo', ''),
             'texto': candidate.get('texto', ''),
             'modo_corte': mode,
+            'crop_x': eff_crop_x,
             'posicao_legenda': pos_leg,
             'titulo_na_tela': bool(titulo_na_tela),
             'credito_na_tela': bool(credito_na_tela),
