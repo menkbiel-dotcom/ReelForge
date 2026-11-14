@@ -1,0 +1,407 @@
+"""Renderização do Modo Cortes: 1080x1920 @30fps (corte em cima + gameplay embaixo + legenda .ass)."""
+import json
+import math
+import os
+import random
+import re
+import unicodedata
+from datetime import datetime
+from pathlib import Path
+
+import clipper
+import engine
+
+
+def _background_color(brightness, gamma):
+    brightness = float(str(brightness).replace(',', '.'))
+    gamma = float(str(gamma).replace(',', '.'))
+    if not -0.30 <= brightness <= 0.30 or not 0.50 <= gamma <= 1.50:
+        raise ValueError('Use brilho entre -0,30 e 0,30 e gama entre 0,50 e 1,50.')
+    return brightness, gamma
+
+
+def _music_volume(percent):
+    percent = float(str(percent).replace(',', '.').replace('%', ''))
+    if not 0 <= percent <= 40:
+        raise ValueError('Use volume da música entre 0% e 40%.')
+    return percent / 100.0
+
+
+def _ass_time(t: float) -> str:
+    cs = max(0, round(float(t) * 100))
+    return f'{cs // 360000}:{cs // 6000 % 60:02d}:{cs // 100 % 60:02d}.{cs % 100:02d}'
+
+
+def _ass_escape(text: str) -> str:
+    return str(text).replace('\\', '／').replace('{', '(').replace('}', ')').replace('\n', ' ')
+
+
+def _spring_scale(time_seconds: float, duration: float = 0.18) -> float:
+    if time_seconds >= duration:
+        return 1.0
+    progress = max(0.0, time_seconds / duration)
+    return max(0.70, min(1.18, 1.0 - math.exp(-6 * progress) * math.cos(2.5 * math.pi * progress)))
+
+
+def _word_groups(words: list[dict]):
+    from PIL import ImageFont
+    candidates = ['C:/Windows/Fonts/arialbd.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf']
+    font_path = next((x for x in candidates if Path(x).exists()), None)
+    font = ImageFont.truetype(font_path, 77) if font_path else ImageFont.load_default()
+    group = []
+    for word in words:
+        candidate = group + [word]
+        text = ' '.join(w['text'].upper() for w in candidate)
+        if group and (len(candidate) > 3 or font.getlength(text) > 890):
+            yield group
+            group = []
+        group.append(word)
+    if group:
+        yield group
+
+
+def slugify_title(text: str, max_len: int = 36) -> str:
+    norm = unicodedata.normalize('NFKD', str(text or '').casefold())
+    ascii_txt = ''.join(c for c in norm if not unicodedata.combining(c))
+    slug = re.sub(r'[^a-z0-9]+', '_', ascii_txt).strip('_')
+    if len(slug) > max_len:
+        slug = slug[:max_len].rstrip('_')
+    return slug or 'corte'
+
+
+def slice_transcription_words(transcription: dict, start: float, end: float) -> list[dict]:
+    """Extrai e desloca palavras da transcrição existente para o intervalo [0, end - start] sem rodar Whisper."""
+    raw_words = list(transcription.get('palavras') or [])
+    if not raw_words:
+        for unit in transcription.get('unidades') or []:
+            raw_words.extend(unit.get('palavras') or [])
+
+    total = max(0.05, float(end) - float(start))
+    shifted = []
+    for w in raw_words:
+        txt = str(w.get('texto', w.get('text', ''))).strip()
+        if not txt:
+            continue
+        w_start = float(w.get('inicio', w.get('start', 0.0)))
+        w_end = float(w.get('fim', w.get('end', w_start)))
+        if w_end <= start or w_start >= end:
+            continue
+        rel_start = max(0.0, min(total - 0.02, w_start - start))
+        rel_end = max(rel_start + 0.02, min(total, w_end - start))
+        shifted.append({'text': txt, 'start': round(rel_start, 3), 'end': round(rel_end, 3)})
+
+    # Garante ordem cronológica monotônica
+    prev = 0.0
+    for w in shifted:
+        w['start'] = max(prev, w['start'])
+        w['end'] = max(w['start'] + 0.02, min(total, w['end']))
+        if w['end'] <= w['start']:
+            w['end'] = w['start'] + 0.01
+        prev = w['end']
+    return shifted
+
+
+def write_clip_ass(
+    words: list[dict],
+    duration: float,
+    dest_path: Path,
+    hook_text: str = '',
+    credito: str = '',
+    posicao_legenda: str = 'juncao',
+    titulo_na_tela: bool = True,
+    credito_na_tela: bool = True,
+    simulated_gameplay: bool = False,
+) -> Path:
+    """Gera arquivo .ass com estilo do ReelForge (máx. 3 palavras, contorno preto, palavra ativa destacada)."""
+    pos_key = str(posicao_legenda or 'juncao').strip().casefold()
+    y_pos = 960 if pos_key in ('juncao', 'junção', 'centro') else 1650
+
+    header = '''[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,77,&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,6,2,5,80,80,0,1
+Style: Hook,Arial,52,&H00FFFFFF,&H00FFFFFF,&H00120C08,&H80000000,-1,0,0,0,100,100,0,0,1,5,2,8,70,70,65,1
+Style: Credit,Arial,28,&H33FFFFFF,&H33FFFFFF,&H33000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,1,9,32,36,28,1
+Style: Test,Arial,27,&H00D0E15D,&H00D0E15D,&H00120C08,&H80000000,-1,0,0,0,100,100,0,0,1,3,1,2,50,50,100,1
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+'''
+    events = []
+    total = max(0.1, float(duration))
+
+    if titulo_na_tela and str(hook_text or '').strip():
+        hook_end = min(3.0, total)
+        events.append(
+            f'Dialogue: 1,0:00:00.00,{_ass_time(hook_end)},Hook,,0,0,0,,'
+            f'{{\\fad(60,180)}}{_ass_escape(str(hook_text).strip().upper())}'
+        )
+
+    if credito_na_tela and str(credito or '').strip():
+        events.append(
+            f'Dialogue: 2,0:00:00.00,{_ass_time(total)},Credit,,0,0,0,,'
+            f'{_ass_escape(str(credito).strip())}'
+        )
+
+    if simulated_gameplay:
+        events.append(
+            f'Dialogue: 3,0:00:00.00,{_ass_time(total)},Test,,0,0,0,,'
+            'FUNDO DE TESTE · PARKOUR SIMULADO'
+        )
+
+    for group in _word_groups(words):
+        phrase_start = group[0]['start']
+        phrase_end = group[-1]['end']
+        width_chars = max(len(w['text']) for w in group)
+        size_tag = r'\fs58' if width_chars > 16 else ''
+        boundaries = sorted({phrase_start, phrase_end} | {w[k] for w in group for k in ('start', 'end')})
+        for st, en in zip(boundaries, boundaries[1:]):
+            if en - st < 0.009:
+                continue
+            mid = (st + en) / 2.0
+            rendered_words = []
+            for w in group:
+                color = r'{\c&H002DDCFF&}' if w['start'] <= mid < w['end'] else r'{\c&H00FFFFFF&}'
+                rendered_words.append(color + _ass_escape(w['text'].upper()))
+            text = ' '.join(rendered_words)
+            scale = round(_spring_scale(st - phrase_start) * 100)
+            remaining = round(max(0.0, 0.18 - (st - phrase_start)) * 1000)
+            tags = f'{{\\an5\\pos(540,{y_pos}){size_tag}'
+            if remaining:
+                tags += f'\\fscx{scale}\\fscy{scale}\\t(0,{remaining},\\fscx100\\fscy100)'
+            tags += '}'
+            events.append(f'Dialogue: 0,{_ass_time(st)},{_ass_time(en)},Default,,0,0,0,,{tags}{text}')
+
+    dest_path = Path(dest_path)
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    dest_path.write_text(header + '\n'.join(events) + '\n', encoding='utf-8')
+    return dest_path
+
+
+def render_clip(
+    info: dict,
+    transcription: dict,
+    candidate: dict,
+    gameplay: str | Path | None = None,
+    cut_index: int = 1,
+    modo_corte: str = 'ajustar',
+    posicao_legenda: str = 'juncao',
+    titulo_na_tela: bool = True,
+    credito_na_tela: bool = True,
+    musica_ativa: bool = False,
+    modelos: dict | None = None,
+    log=print,
+) -> Path:
+    """Renderiza um corte 1080x1920 @30fps com corte em cima, gameplay muda embaixo e legenda .ass."""
+    clipper.require_authorization(bool(info.get('autorizado')))
+
+    mode = str(modo_corte or 'ajustar').strip().casefold()
+    if mode not in ('ajustar', 'preencher'):
+        raise ValueError('Modo de corte inválido. Use "ajustar" ou "preencher".')
+
+    pos_leg = str(posicao_legenda or 'juncao').strip().casefold()
+    if pos_leg not in ('juncao', 'junção', 'rodape', 'rodapé'):
+        raise ValueError('Posição de legenda inválida. Use "juncao" ou "rodape".')
+    pos_leg = 'juncao' if pos_leg in ('juncao', 'junção') else 'rodape'
+
+    video_id = str(info['id'])
+    out_dir = clipper.cortes_root() / video_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    source_path = Path(info.get('source_path') or (out_dir / 'source.mp4'))
+    if not source_path.is_file():
+        raise FileNotFoundError(f'Vídeo de origem não encontrado: {source_path}')
+
+    gameplay_path = Path(gameplay) if gameplay else next(iter(engine.gameplays()), None)
+    if gameplay_path is None or not gameplay_path.is_file():
+        raise ValueError('Selecione um vídeo de gameplay existente ou adicione um MP4 em assets/gameplay/.')
+
+    start = max(0.0, float(candidate['inicio']))
+    end = float(candidate['fim'])
+    if end <= start:
+        raise ValueError('O fim do corte deve ser maior que o início.')
+
+    fps = 30
+    total = round((end - start) * fps) / fps
+    total = max(0.5, total)
+
+    slug = slugify_title(candidate.get('gancho') or candidate.get('texto') or f'corte_{cut_index}')
+    stem = f'corte_{int(cut_index):02d}_{slug}'
+    final_mp4 = out_dir / f'{stem}.mp4'
+    final_json = out_dir / f'{stem}.json'
+    work_dir = out_dir / f'_work_{stem}_{datetime.now().strftime("%H%M%S_%f")}'
+    work_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        words = slice_transcription_words(transcription, start, start + total)
+        sim_info = gameplay_path.with_suffix(gameplay_path.suffix + '.json')
+        simulated = False
+        if sim_info.is_file():
+            try:
+                simulated = json.loads(sim_info.read_text(encoding='utf-8')).get('kind') == 'simulated'
+            except (OSError, ValueError):
+                simulated = False
+
+        credito_val = str(info.get('credito') or '').strip()
+        hook_val = str(candidate.get('gancho') or '').strip()
+        ass_path = work_dir / 'subtitles.ass'
+        write_clip_ass(
+            words,
+            total,
+            ass_path,
+            hook_text=hook_val,
+            credito=credito_val,
+            posicao_legenda=pos_leg,
+            titulo_na_tela=bool(titulo_na_tela),
+            credito_na_tela=bool(credito_na_tela),
+            simulated_gameplay=simulated,
+        )
+
+        # Configura gameplay (cópia da lógica de loop/offset/brilho/gama do render_pipeline.py)
+        cfg = engine.load_settings()
+        loop = os.getenv('REELFORGE_LOOP', '1' if cfg.get('loop', True) else '0') != '0'
+        fade = min(0.6, total / 4.0) if loop else 0.0
+        brightness, gamma = _background_color(
+            os.getenv('REELFORGE_BG_BRIGHTNESS', str(cfg.get('gameplay_brightness', -0.06))),
+            os.getenv('REELFORGE_BG_GAMMA', str(cfg.get('gameplay_gamma', 0.85))),
+        )
+        available = engine.ffprobe_duration(gameplay_path)
+        latest = max(0.0, available - total - fade - 0.25)
+        offset = random.uniform(0.0, latest) if latest else 0.0
+        log(f'Gameplay {gameplay_path.name}: trecho {offset:.2f}s de {available:.2f}s (áudio mudo).')
+
+        chain = []
+        if mode == 'ajustar':
+            chain.append(
+                f'[0:v]setpts=PTS-STARTPTS,fps={fps},split=2[top_a][top_b];'
+                '[top_a]scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960,'
+                'boxblur=20:5,eq=brightness=-0.12,setsar=1[topbg];'
+                '[top_b]scale=1080:960:force_original_aspect_ratio=decrease,setsar=1[topfg];'
+                '[topbg][topfg]overlay=(W-w)/2:(H-h)/2[top]'
+            )
+        else:
+            chain.append(
+                f'[0:v]setpts=PTS-STARTPTS,fps={fps},'
+                'scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960,setsar=1[top]'
+            )
+
+        chain.append(
+            '[1:v]scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960,setsar=1,'
+            f'eq=brightness={brightness}:gamma={gamma},vignette=PI/6,fps={fps},settb=AVTB'
+            + ('[bgsrc]' if loop else '[bottom]')
+        )
+        if loop:
+            chain.append(
+                '[bgsrc]split=2[bga][bgb];'
+                f'[bga]trim=start={total:.4f}:end={total + fade:.4f},setpts=PTS-STARTPTS[bgtail];'
+                f'[bgb]trim=start=0:end={total:.4f},setpts=PTS-STARTPTS[bghead];'
+                f'[bgtail][bghead]xfade=transition=fade:duration={fade:.4f}:offset=0[bottom]'
+            )
+
+        chain.append('[top][bottom]vstack=inputs=2[stacked]')
+        chain.append(
+            f"[stacked]subtitles='{engine.escape_filter_path(ass_path)}',"
+            'scale=out_color_matrix=bt709:out_range=tv,setsar=1[vout]'
+        )
+
+        # Áudio do corte + música opcional (padrão desligada) + loudnorm
+        chain.append(
+            f'[0:a]asetpts=PTS-STARTPTS,aformat=sample_rates=48000:channel_layouts=stereo,'
+            f'apad,atrim=0:{total:.4f}[clipaudio]'
+        )
+
+        extra_inputs = []
+        track = None
+        music_offset = 0.0
+        volume = 0.0
+        if musica_ativa:
+            import music
+            track = music.pick(engine.ROOT)
+            volume = _music_volume(os.getenv('REELFORGE_MUSIC_VOLUME', str(cfg.get('music_volume', 8))))
+            length = engine.ffprobe_duration(track)
+            music_offset = random.uniform(0.0, max(0.0, length - total - fade - 0.5))
+            extra_inputs += ['-stream_loop', '-1', '-ss', f'{music_offset:.4f}', '-i', track]
+            if loop:
+                chain.append(
+                    f'[2:a]aformat=sample_rates=48000:channel_layouts=stereo,volume={volume:.3f},'
+                    f'asplit=2[ma][mb];[ma]atrim=start={total:.4f}:end={total + fade:.4f},asetpts=PTS-STARTPTS[mtail];'
+                    f'[mb]atrim=start=0:end={total:.4f},asetpts=PTS-STARTPTS[mhead];'
+                    f'[mtail][mhead]acrossfade=d={fade:.4f}:c1=tri:c2=tri[music]'
+                )
+            else:
+                chain.append(
+                    f'[2:a]aformat=sample_rates=48000:channel_layouts=stereo,volume={volume:.3f},'
+                    f'atrim=0:{total:.4f},afade=t=in:d=0.4,afade=t=out:st={max(0.0, total - 0.8):.4f}:d=0.8[music]'
+                )
+            chain.append('[clipaudio][music]amix=inputs=2:normalize=0:duration=first,loudnorm=I=-14:TP=-1.5:LRA=11[aout]')
+        else:
+            chain.append('[clipaudio]loudnorm=I=-14:TP=-1.5:LRA=11[aout]')
+
+        log(f'Renderizando corte {int(cut_index):02d} ({start:.2f}s–{start + total:.2f}s)...')
+        ffmpeg_cmd = [
+            'ffmpeg', '-y', '-v', 'error', '-threads', '0',
+            '-ss', f'{start:.4f}', '-t', f'{total:.4f}', '-i', source_path,
+            '-stream_loop', '-1', '-ss', f'{offset:.4f}', '-t', f'{total + fade + 0.5:.4f}', '-i', gameplay_path,
+            *extra_inputs,
+            '-filter_complex', ';'.join(chain),
+            '-map', '[vout]', '-map', '[aout]',
+            '-t', f'{total:.4f}', '-r', str(fps),
+            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p',
+            '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709',
+            '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-movflags', '+faststart',
+            final_mp4,
+        ]
+        engine.run(ffmpeg_cmd)
+
+        auth_fields = clipper.build_auth_metadata(
+            info.get('fonte_url', ''),
+            info.get('canal', 'local'),
+            credito=credito_val,
+            authorized=True,
+        )
+        metadata = {
+            'video_id': video_id,
+            'titulo': info.get('titulo', video_id),
+            'indice': int(cut_index),
+            'inicio': start,
+            'fim': round(start + total, 3),
+            'duracao': total,
+            'nota': candidate.get('nota'),
+            'nota_llm': candidate.get('nota_llm'),
+            'bonus_heuristico': candidate.get('bonus_heuristico'),
+            'gancho': hook_val,
+            'motivo': candidate.get('motivo', ''),
+            'texto': candidate.get('texto', ''),
+            'modo_corte': mode,
+            'posicao_legenda': pos_leg,
+            'titulo_na_tela': bool(titulo_na_tela),
+            'credito_na_tela': bool(credito_na_tela),
+            'gameplay': str(gameplay_path),
+            'gameplay_start': offset,
+            'music': str(track) if track else None,
+            'music_start': music_offset,
+            'music_volume': volume,
+            'modelos': modelos or {
+                'avaliador': engine.load_settings().get('ollama_model', 'qwen3.5:4b'),
+                'whisper': transcription.get('modelo', 'small'),
+            },
+            'arquivo_mp4': str(final_mp4),
+            **auth_fields,
+        }
+        final_json.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding='utf-8')
+        log(f'Corte salvo: {final_mp4}')
+        return final_mp4
+    finally:
+        # Limpa pasta temporária mantendo MP4, JSON e eventuais depurações limpas
+        for p in sorted(work_dir.glob('*'), reverse=True):
+            try:
+                p.unlink()
+            except OSError:
+                pass
+        try:
+            work_dir.rmdir()
+        except OSError:
+            pass

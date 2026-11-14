@@ -424,3 +424,10 @@
   - **Testes:** `tests.test_clipper` (10 testes passando)
   - **Resumo:** `transcribe_video()` usa `faster-whisper` (`CPU`, `int8`, `local_files_only=True`, `word_timestamps=True`, `vad_filter=True`, idioma configurável padrão `"pt"`, modelo de `settings.json`, mensagem amigável de modelo ausente igual à de `captions.py`), loga progresso (tempo, %, decorrido, estimativa), cacheia em `output/cortes/<video_id>/transcricao.json` (invalidado se modelo/idioma/trecho mudarem), suporta recorte rápido `start_min`/`end_min` e cancelamento cooperativo (`CancelledError`), agrupando palavras em unidades por pontuação ou pausa `> 0,7 s`.
   - **Próximo item:** ITEM 36 — Avaliação do conteúdo e seleção dos cortes (`engine.py` aditivo + `clipper.py`).
+
+- [x] **ITEM 36 — Avaliação do conteúdo e seleção dos cortes (`engine.py`, `clipper.py`, `tests/test_clipper.py`)**: feito
+  - **Commit:** `5c25323` (`5c25323c3782551fc3dad9b194665730fb5dcb46`) — *"Item 36: Avaliacao em janelas, reparo de limites, anti-alucinacao de gancho, fallback heuristico e map-reduce"*
+  - **Arquivos:** `engine.py`, `clipper.py`, `tests/test_clipper.py`
+  - **Testes:** `tests.test_clipper` (16 testes passando)
+  - **Resumo:** Adicionado `num_ctx=4096` opcional em `engine.request_json` sem alterar comportamento existente; `clipper.py` divide unidades em janelas `<= 650` palavras (~1 min de sobreposição), pede índices `[i]` ao LLM (retries 0.55/0.60/0.65 com teto 0.7), converte com folga `-0.15/+0.25 s`, repara limites às fronteiras de unidade mais próximas, remove sobreposições `>50%`, aplica bônus heurístico + fallback heurístico determinístico total, valida/repara `gancho` (>=50% palavras de conteúdo e zero números inventados), gera resumo map-reduce e salva `relatorio.json`.
+  - **Próximo item:** ITEM 37 — Render do corte (`clip_render.py`).
