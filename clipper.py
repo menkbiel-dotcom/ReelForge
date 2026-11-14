@@ -7,6 +7,9 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
+import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -16,6 +19,13 @@ import media_tools
 AUTH_CONFIRM_TEXT = 'Confirmo que tenho autorização para cortar este vídeo'
 DEFAULT_YTDLP_META_TIMEOUT_S = 60
 DEFAULT_YTDLP_DOWNLOAD_TIMEOUT_S = 600
+
+_whisper_models = {}
+_whisper_lock = threading.Lock()
+
+
+class CancelledError(RuntimeError):
+    """Exceção lançada quando o usuário cancela cooperativamente a operação."""
 
 DEFAULT_CORTES_SETTINGS = {
     'idioma': 'pt',
@@ -312,6 +322,279 @@ def prepare_source(
     info_path.write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding='utf-8')
     log(f'Arquivo local registrado em cache: {video_id}')
     return info
+
+
+def _is_cancelled(cancel_event) -> bool:
+    if cancel_event is None:
+        return False
+    if callable(cancel_event):
+        return bool(cancel_event())
+    is_set = getattr(cancel_event, 'is_set', None)
+    return bool(is_set()) if callable(is_set) else bool(cancel_event)
+
+
+def _check_cancelled(cancel_event) -> None:
+    if _is_cancelled(cancel_event):
+        raise CancelledError('Operação cancelada pelo usuário.')
+
+
+def _default_whisper_model() -> str:
+    cfg = engine.load_settings()
+    return str(cfg.get('whisper_model') or os.getenv('WHISPER_MODEL') or 'small').strip() or 'small'
+
+
+def _load_whisper_model(model_name: str, download_root: Path):
+    try:
+        from faster_whisper import WhisperModel
+    except ImportError:
+        raise RuntimeError(
+            'Instale as legendas por áudio usando instalar_legendas.bat.'
+        ) from None
+
+    download_root_str = str(download_root)
+    key = (model_name, download_root_str)
+    with _whisper_lock:
+        if key not in _whisper_models:
+            try:
+                _whisper_models[key] = WhisperModel(
+                    model_name,
+                    device='cpu',
+                    compute_type='int8',
+                    download_root=download_root_str,
+                    local_files_only=True,
+                )
+            except Exception:
+                cmd = (
+                    f'.venv\\Scripts\\python.exe -c "from faster_whisper import WhisperModel; '
+                    f"WhisperModel('{model_name}', device='cpu', compute_type='int8', "
+                    f"download_root='{download_root_str}')\""
+                )
+                raise RuntimeError(
+                    f"O modelo Whisper '{model_name}' não está baixado localmente. "
+                    f"Execute instalar_legendas.bat ou rode o comando:\n{cmd}"
+                ) from None
+        return _whisper_models[key]
+
+
+def group_words_into_units(
+    words: list[dict],
+    pause_threshold: float = 0.7,
+    max_words_per_unit: int = 35,
+) -> list[dict]:
+    """Agrupa palavras em unidades (sentenças por pontuação terminal ou pausa > 0,7 s)."""
+    cleaned_words = []
+    for raw in words or []:
+        texto = str(raw.get('texto', raw.get('text', ''))).strip()
+        if not texto:
+            continue
+        inicio = float(raw.get('inicio', raw.get('start', 0.0)))
+        fim = float(raw.get('fim', raw.get('end', inicio)))
+        if fim < inicio:
+            fim = inicio
+        cleaned_words.append({'texto': texto, 'inicio': round(inicio, 3), 'fim': round(fim, 3)})
+
+    if not cleaned_words:
+        return []
+
+    sentence_end_re = re.compile(r'[.!?…]+["\')\]]*$')
+    units = []
+    bucket = [cleaned_words[0]]
+
+    for word in cleaned_words[1:]:
+        prev = bucket[-1]
+        gap = word['inicio'] - prev['fim']
+        ends_sentence = bool(sentence_end_re.search(prev['texto']))
+        if gap > pause_threshold or ends_sentence or len(bucket) >= max_words_per_unit:
+            units.append({
+                'indice': len(units),
+                'inicio': bucket[0]['inicio'],
+                'fim': bucket[-1]['fim'],
+                'texto': ' '.join(w['texto'] for w in bucket),
+                'palavras': list(bucket),
+            })
+            bucket = [word]
+        else:
+            bucket.append(word)
+
+    if bucket:
+        units.append({
+            'indice': len(units),
+            'inicio': bucket[0]['inicio'],
+            'fim': bucket[-1]['fim'],
+            'texto': ' '.join(w['texto'] for w in bucket),
+            'palavras': list(bucket),
+        })
+    return units
+
+
+def _extract_audio_slice(source_path: Path, dest_wav: Path, start_s: float, end_s: float | None) -> None:
+    cmd = ['ffmpeg', '-y', '-v', 'error', '-ss', f'{start_s:.3f}']
+    if end_s is not None:
+        cmd += ['-to', f'{end_s:.3f}']
+    cmd += ['-i', str(source_path), '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', str(dest_wav)]
+    engine.run(cmd)
+
+
+def transcribe_video(
+    info: dict,
+    language: str = 'pt',
+    model_name: str | None = None,
+    start_min: float | None = None,
+    end_min: float | None = None,
+    cancel_event=None,
+    log=print,
+) -> dict:
+    """Transcreve o vídeo com faster-whisper (word_timestamps=True, vad_filter=True) e cacheia em transcricao.json."""
+    require_authorization(bool(info.get('autorizado')))
+    _check_cancelled(cancel_event)
+
+    lang = str(language or 'pt').strip() or 'pt'
+    model = str(model_name or _default_whisper_model()).strip() or 'small'
+    s_min = None if start_min in (None, '') else float(start_min)
+    e_min = None if end_min in (None, '') else float(end_min)
+    if s_min is not None and s_min < 0:
+        raise ValueError('O minuto inicial deve ser >= 0.')
+    if e_min is not None and e_min <= 0:
+        raise ValueError('O minuto final deve ser > 0.')
+    if s_min is not None and e_min is not None and e_min <= s_min:
+        raise ValueError('O minuto final deve ser maior que o minuto inicial.')
+
+    video_id = str(info['id'])
+    video_dir = cortes_root() / video_id
+    video_dir.mkdir(parents=True, exist_ok=True)
+    cache_path = video_dir / 'transcricao.json'
+
+    if cache_path.is_file():
+        try:
+            cached = json.loads(cache_path.read_text(encoding='utf-8'))
+            if (
+                isinstance(cached, dict)
+                and cached.get('modelo') == model
+                and cached.get('idioma') == lang
+                and cached.get('inicio_min') == s_min
+                and cached.get('fim_min') == e_min
+                and isinstance(cached.get('unidades'), list)
+            ):
+                log(f'Transcrição em cache reutilizada ({model}, idioma={lang}).')
+                return cached
+        except (OSError, ValueError):
+            pass
+
+    source_path = Path(info.get('source_path') or (video_dir / 'source.mp4'))
+    if not source_path.is_file():
+        raise FileNotFoundError(f'Vídeo de origem não encontrado para transcrição: {source_path}')
+
+    total_duration = float(info.get('duracao') or 0.0)
+    if total_duration <= 0:
+        total_duration = _measure_duration_safe(source_path)
+
+    offset_s = 0.0
+    target_duration = total_duration
+    audio_input = source_path
+    temp_dir_obj = None
+
+    try:
+        if (s_min is not None and s_min > 0) or e_min is not None:
+            start_s = (s_min or 0.0) * 60.0
+            end_s = e_min * 60.0 if e_min is not None else None
+            if total_duration > 0 and start_s >= total_duration:
+                raise ValueError('O minuto inicial escolhido está além da duração do vídeo.')
+            if end_s is not None and total_duration > 0:
+                end_s = min(end_s, total_duration)
+            temp_dir_obj = tempfile.TemporaryDirectory(dir=str(video_dir))
+            audio_input = Path(temp_dir_obj.name) / 'trecho.wav'
+            log(f'Extraindo trecho de áudio ({start_s / 60:.1f}–{(end_s / 60) if end_s else (total_duration / 60):.1f} min)...')
+            _extract_audio_slice(source_path, audio_input, start_s, end_s)
+            offset_s = start_s
+            if end_s is not None:
+                target_duration = max(0.1, end_s - start_s)
+            elif total_duration > 0:
+                target_duration = max(0.1, total_duration - start_s)
+
+        _check_cancelled(cancel_event)
+        download_root = engine.OUTPUT / 'alignment_cache' / 'models'
+        whisper_model = _load_whisper_model(model, download_root)
+        _check_cancelled(cancel_event)
+
+        log(f'Transcrevendo áudio com Whisper ({model}, idioma={lang}, CPU int8, vad_filter=True)...')
+        segments, seg_info = whisper_model.transcribe(
+            str(audio_input),
+            language=lang,
+            beam_size=5,
+            word_timestamps=True,
+            vad_filter=True,
+            condition_on_previous_text=False,
+        )
+        if target_duration <= 0:
+            target_duration = float(getattr(seg_info, 'duration', 0.0) or 0.0)
+
+        t0 = time.monotonic()
+        last_log_wall = t0
+        last_log_audio = 0.0
+        words = []
+
+        for seg in segments:
+            _check_cancelled(cancel_event)
+            seg_words = getattr(seg, 'words', None) or []
+            for w in seg_words:
+                txt = str(getattr(w, 'word', '') or '').strip()
+                if not txt:
+                    continue
+                w_start = float(w.start) + offset_s
+                w_end = float(w.end) + offset_s
+                if w_end <= w_start:
+                    w_end = w_start + 0.02
+                words.append({
+                    'texto': txt,
+                    'inicio': round(w_start, 3),
+                    'fim': round(w_end, 3),
+                })
+
+            now = time.monotonic()
+            seg_end = float(getattr(seg, 'end', 0.0) or 0.0)
+            if target_duration > 0 and (now - last_log_wall >= 2.0 or seg_end - last_log_audio >= 15.0 or seg_end >= target_duration - 0.5):
+                elapsed = max(0.01, now - t0)
+                pct = min(100.0, max(0.0, (seg_end / target_duration) * 100.0))
+                if seg_end > 0.5 and pct < 100.0:
+                    eta = elapsed * (target_duration - seg_end) / seg_end
+                    eta_txt = f'{eta:.0f}s'
+                else:
+                    eta_txt = '0s'
+                log(
+                    f'Transcrição: {seg_end:.1f}s / {target_duration:.1f}s ({pct:.0f}%) '
+                    f'— decorrido {elapsed:.1f}s, estimado ~{eta_txt}'
+                )
+                last_log_wall = now
+                last_log_audio = seg_end
+
+        _check_cancelled(cancel_event)
+        units = group_words_into_units(words)
+        elapsed_total = time.monotonic() - t0
+        log(f'Transcrição concluída em {elapsed_total:.1f}s: {len(words)} palavras, {len(units)} unidades.')
+
+        auth_fields = build_auth_metadata(
+            info.get('fonte_url', ''),
+            info.get('canal', 'local'),
+            credito=info.get('credito', ''),
+            authorized=True,
+        )
+        result = {
+            'video_id': video_id,
+            'titulo': info.get('titulo', video_id),
+            'duracao': total_duration or (words[-1]['fim'] if words else 0.0),
+            'modelo': model,
+            'idioma': lang,
+            'inicio_min': s_min,
+            'fim_min': e_min,
+            'palavras': words,
+            'unidades': units,
+            **auth_fields,
+        }
+        cache_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
+        return result
+    finally:
+        if temp_dir_obj is not None:
+            temp_dir_obj.cleanup()
 
 
 def main():

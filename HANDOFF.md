@@ -406,3 +406,14 @@
       - **Distribuição de `soft_penalty` entre as 19 candidatas:** `{1: 5, 2: 11, 3: 3}`.
       - **`41/60` (68,3%)** seguem **barradas nas regras DURAS**, garantindo rejeição de números/magnitudes inventadas (`"300"`, `"mil"`, `"2026-27"`), trechos de exemplo (`"34 milhões de sacas"`, `"investir bilhões nisso sem testar antes"`), linguagem imprópria (`"Puta que pariu"`), entidades ausentes (`"UA"`, `"Brasil"`), ganchos sem resposta, falas genéricas sem 4 detalhes concretos e citações de veículo (`"segundo o"`).
   - **Status:** Rodada 8 (Itens 31, 32 e 33) concluída por completo e verificada em dupla execução sequencial sem arquivos extras em `output/`.
+
+---
+
+# Rodada 9 — Modo "Cortes" (Itens 34 a 39)
+
+- [x] **ITEM 34 — Entrada e download (`clipper.py`, `iniciar_windows.bat`, `tests/test_clipper.py`)**: feito
+  - **Commit:** `c54f7ed` (`c54f7edd8a9956e1de0ca38431e415ed1f7adad0`) — *"Item 34: Entrada, download via yt-dlp, cache e autorizacao explicita (clipper.py)"*
+  - **Arquivos:** `clipper.py`, `iniciar_windows.bat`, `tests/test_clipper.py`
+  - **Testes:** `tests.test_clipper` (6 testes passando)
+  - **Resumo:** `prepare_source()` aceita URL (via `sys.executable -m yt_dlp` até 1080p mp4 com timeout e mensagens amigáveis em português sem contorno de DRM/login/cookies) ou arquivo local; cache em `output/cortes/<video_id>/source.mp4` + `info.json` reutilizado em chamadas seguintes; confirmação obrigatória (`Confirmo que tenho autorização para cortar este vídeo` / `--autorizado`) e gravação de `fonte_url`, `canal`, `autorizado`, `credito` e `data`.
+  - **Próximo item:** ITEM 35 — Transcrição com palavras (`clipper.py`).
