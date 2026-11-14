@@ -260,16 +260,14 @@ def render_clip(
             simulated_gameplay=simulated,
         )
 
-        # Configura gameplay (cópia da lógica de loop/offset/brilho/gama do render_pipeline.py)
+        # Configura gameplay sem crossfade de loop (corte direto 0..total com -stream_loop -1)
         cfg = engine.load_settings()
-        loop = os.getenv('REELFORGE_LOOP', '1' if cfg.get('loop', True) else '0') != '0'
-        fade = min(0.6, total / 4.0) if loop else 0.0
         brightness, gamma = _background_color(
             os.getenv('REELFORGE_BG_BRIGHTNESS', str(cfg.get('gameplay_brightness', -0.06))),
             os.getenv('REELFORGE_BG_GAMMA', str(cfg.get('gameplay_gamma', 0.85))),
         )
         available = engine.ffprobe_duration(gameplay_path)
-        latest = max(0.0, available - total - fade - 0.25)
+        latest = max(0.0, available - total - 0.25)
         offset = random.uniform(0.0, latest) if latest else 0.0
         log(f'Gameplay {gameplay_path.name}: trecho {offset:.2f}s de {available:.2f}s (áudio mudo).')
 
@@ -290,16 +288,9 @@ def render_clip(
 
         chain.append(
             '[1:v]scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960,setsar=1,'
-            f'eq=brightness={brightness}:gamma={gamma},vignette=PI/6,fps={fps},settb=AVTB'
-            + ('[bgsrc]' if loop else '[bottom]')
+            f'eq=brightness={brightness}:gamma={gamma},vignette=PI/6,fps={fps},settb=AVTB,'
+            f'trim=start=0:end={total:.4f},setpts=PTS-STARTPTS[bottom]'
         )
-        if loop:
-            chain.append(
-                '[bgsrc]split=2[bga][bgb];'
-                f'[bga]trim=start={total:.4f}:end={total + fade:.4f},setpts=PTS-STARTPTS[bgtail];'
-                f'[bgb]trim=start=0:end={total:.4f},setpts=PTS-STARTPTS[bghead];'
-                f'[bgtail][bghead]xfade=transition=fade:duration={fade:.4f}:offset=0[bottom]'
-            )
 
         chain.append('[top][bottom]vstack=inputs=2[stacked]')
         chain.append(
@@ -322,20 +313,12 @@ def render_clip(
             track = music.pick(engine.ROOT)
             volume = _music_volume(os.getenv('REELFORGE_MUSIC_VOLUME', str(cfg.get('music_volume', 8))))
             length = engine.ffprobe_duration(track)
-            music_offset = random.uniform(0.0, max(0.0, length - total - fade - 0.5))
+            music_offset = random.uniform(0.0, max(0.0, length - total - 0.5))
             extra_inputs += ['-stream_loop', '-1', '-ss', f'{music_offset:.4f}', '-i', track]
-            if loop:
-                chain.append(
-                    f'[2:a]aformat=sample_rates=48000:channel_layouts=stereo,volume={volume:.3f},'
-                    f'asplit=2[ma][mb];[ma]atrim=start={total:.4f}:end={total + fade:.4f},asetpts=PTS-STARTPTS[mtail];'
-                    f'[mb]atrim=start=0:end={total:.4f},asetpts=PTS-STARTPTS[mhead];'
-                    f'[mtail][mhead]acrossfade=d={fade:.4f}:c1=tri:c2=tri[music]'
-                )
-            else:
-                chain.append(
-                    f'[2:a]aformat=sample_rates=48000:channel_layouts=stereo,volume={volume:.3f},'
-                    f'atrim=0:{total:.4f},afade=t=in:d=0.4,afade=t=out:st={max(0.0, total - 0.8):.4f}:d=0.8[music]'
-                )
+            chain.append(
+                f'[2:a]aformat=sample_rates=48000:channel_layouts=stereo,volume={volume:.3f},'
+                f'atrim=0:{total:.4f},afade=t=in:d=0.4,afade=t=out:st={max(0.0, total - 0.8):.4f}:d=0.8[music]'
+            )
             chain.append('[clipaudio][music]amix=inputs=2:normalize=0:duration=first,loudnorm=I=-14:TP=-1.5:LRA=11[aout]')
         else:
             chain.append('[clipaudio]loudnorm=I=-14:TP=-1.5:LRA=11[aout]')
@@ -344,7 +327,7 @@ def render_clip(
         ffmpeg_cmd = [
             'ffmpeg', '-y', '-v', 'error', '-threads', '0',
             '-ss', f'{start:.4f}', '-t', f'{total:.4f}', '-i', source_path,
-            '-stream_loop', '-1', '-ss', f'{offset:.4f}', '-t', f'{total + fade + 0.5:.4f}', '-i', gameplay_path,
+            '-stream_loop', '-1', '-ss', f'{offset:.4f}', '-t', f'{total + 0.5:.4f}', '-i', gameplay_path,
             *extra_inputs,
             '-filter_complex', ';'.join(chain),
             '-map', '[vout]', '-map', '[aout]',

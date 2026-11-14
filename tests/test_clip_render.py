@@ -128,9 +128,13 @@ class ClipRenderUnitTests(IsolatedOutputMixin, unittest.TestCase):
         self.assertIn('-crf', c1['cmd'])
         self.assertEqual(c1['cmd'][c1['cmd'].index('-crf') + 1], '20')
         self.assertIn('+faststart', c1['cmd'])
+        self.assertIn('-stream_loop', c1['cmd'])
         self.assertIn('boxblur=20:5', c1['fc'])
         self.assertIn('scale=1080:960:force_original_aspect_ratio=decrease', c1['fc'])
         self.assertIn('[top][bottom]vstack=inputs=2[stacked]', c1['fc'])
+        self.assertIn('vstack', c1['fc'])
+        self.assertNotIn('xfade', c1['fc'])
+        self.assertIn('trim=start=0:end=26.0000,setpts=PTS-STARTPTS[bottom]', c1['fc'])
         self.assertIn('vignette=PI/6', c1['fc'])
         self.assertIn('loudnorm=I=-14:TP=-1.5:LRA=11', c1['fc'])
         self.assertNotIn('[1:a]', c1['fc'])  # Áudio da gameplay mudo
