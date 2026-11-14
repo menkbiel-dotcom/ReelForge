@@ -190,6 +190,14 @@ def merge_settings(current: dict, from_ui: dict) -> dict:
                 else:
                     new_profiles[prov] = prof
             merged['voice_profiles'] = new_profiles
+        elif k == 'cortes' and isinstance(v, dict):
+            existing_cortes = merged.get('cortes')
+            if isinstance(existing_cortes, dict):
+                merged_cortes = copy.deepcopy(existing_cortes)
+                merged_cortes.update(copy.deepcopy(v))
+                merged['cortes'] = merged_cortes
+            else:
+                merged['cortes'] = copy.deepcopy(v)
         else:
             merged[k] = v
     return merged
@@ -265,6 +273,7 @@ class App(tk.Tk):
         self.content_kind = tk.StringVar(value=saved.get('content_kind', 'Notícia'))
         self.repeat = tk.BooleanVar(value=False)
         self.voice_profiles = saved.get('voice_profiles', {})
+        self._saved_cortes = saved.get('cortes', {})
         self.voice_keys = {'edge': '', 'voicestudio': '', 'elevenlabs': os.getenv('ELEVENLABS_API_KEY', ''), 'fish': os.getenv('FISH_API_KEY', '')}
         self.tts_provider = tk.StringVar(value=saved.get('tts_provider', 'voicestudio'))
         self.voice_a = tk.StringVar(); self.voice_b = tk.StringVar(); self.tts_model = tk.StringVar()
@@ -366,6 +375,9 @@ class App(tk.Tk):
         tabs.add(content, text='  Conteúdo e Pauta IA  ')
         tabs.add(video, text='  Vídeo, Loop e Música  ')
         tabs.add(voices, text='  Vozes e Legendas  ')
+        import gui_cortes
+        self.cortes_tab = gui_cortes.CortesTab(tabs, self, saved_cortes=self._saved_cortes)
+        tabs.add(self.cortes_tab, text='  Cortes  ')
         for panel in (content, video, voices):
             panel.columnconfigure(1, weight=1)
 
@@ -656,6 +668,8 @@ class App(tk.Tk):
                   'director_enabled': self.director_enabled.get(), 'content_kind': self.content_kind.get(),
                   'tts_provider': self.tts_provider.get(), 'voice_profiles': self.voice_profiles,
                   'caption_timing': self.caption_timing.get(), 'whisper_model': self.whisper_model.get()}
+        if hasattr(self, 'cortes_tab'):
+            ui_cfg['cortes'] = self.cortes_tab.get_settings()
         engine.validate_hook(self.hook_text.get())
         current = {}
         if CONFIG.exists():
@@ -725,6 +739,8 @@ class App(tk.Tk):
         self.job_config['signature'] = hashlib.sha256(json.dumps([cfg, self.job_config], sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         for b in self.buttons:
             b.configure(state='disabled')
+        if hasattr(self, 'cortes_tab'):
+            self.cortes_tab.set_busy(True)
         self.progress.start(12)
         self.status.set('Processando... aguarde a conclusão da tarefa.')
 
@@ -753,8 +769,12 @@ class App(tk.Tk):
                     self.progress.stop()
                     for b in self.buttons:
                         b.configure(state='normal')
+                    if hasattr(self, 'cortes_tab'):
+                        self.cortes_tab.set_busy(False)
                     if self.status.get().startswith('Processando'):
                         self.status.set('Concluído com sucesso.')
+                elif hasattr(self, 'cortes_tab') and self.cortes_tab.handle_event(kind, value):
+                    pass
         except queue.Empty:
             pass
         self._poll_id = self.after(120, self._poll)

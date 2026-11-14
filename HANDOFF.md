@@ -431,3 +431,10 @@
   - **Testes:** `tests.test_clipper` (16 testes passando)
   - **Resumo:** Adicionado `num_ctx=4096` opcional em `engine.request_json` sem alterar comportamento existente; `clipper.py` divide unidades em janelas `<= 650` palavras (~1 min de sobreposição), pede índices `[i]` ao LLM (retries 0.55/0.60/0.65 com teto 0.7), converte com folga `-0.15/+0.25 s`, repara limites às fronteiras de unidade mais próximas, remove sobreposições `>50%`, aplica bônus heurístico + fallback heurístico determinístico total, valida/repara `gancho` (>=50% palavras de conteúdo e zero números inventados), gera resumo map-reduce e salva `relatorio.json`.
   - **Próximo item:** ITEM 37 — Render do corte (`clip_render.py`).
+
+- [x] **ITEM 37 — Render do corte (`clip_render.py`, `tests/test_clip_render.py`)**: feito
+  - **Commit:** `b747058` (`b7470585f95924491e9ba9d42d0a8a3d19a27576`) — *"Item 37: Renderizacao de cortes 1080x1920@30fps com gameplay muda e legendas ASS (clip_render.py)"*
+  - **Arquivos:** `clip_render.py`, `tests/test_clip_render.py`
+  - **Testes:** `tests.test_clip_render` (2 testes passando: unitário com FFmpeg mockado + integração real sintética via `lavfi` validando `1080x1920` e `30 fps`)
+  - **Resumo:** `render_clip()` compõe `1080x1920 @30fps` com corte em cima (`1080x960` nos modos `"ajustar"` com fundo desfocado e `"preencher"` com crop central) e gameplay muda embaixo (`1080x960`, lógica de escolha/loop/offset/brilho/gama/vinheta copiada para `clip_render.py`), áudio do corte com `loudnorm` (`I=-14:TP=-1.5:LRA=11`) e música opcional desligada por padrão; gera `.ass` direto das palavras já existentes (deslocadas pelo início, máx. 3 palavras, contorno preto, palavra ativa destacada, posição `juncao` ou `rodape`, título 3s e crédito no canto) sem rodar Whisper novamente, salvando `corte_NN_<slug>.mp4` e `.json`.
+  - **Próximo item:** ITEM 38 — Interface (`gui_cortes.py` + registro mínimo em `gui.py` + `settings.json`).

@@ -1,7 +1,7 @@
 {
   "topic": "ciência",
   "provider": "ollama",
-  "ollama_model": "qwen3.5:4b",
+  "ollama_model": "qwen3:8b",
   "judge_model": "qwen3:8b",
   "gameplay": "",
   "fps": 30,
@@ -30,5 +30,17 @@
     }
   },
   "caption_timing": "whisper",
-  "whisper_model": "small"
+  "whisper_model": "small",
+  "cortes": {
+    "idioma": "pt",
+    "duracao_min": 25.0,
+    "duracao_max": 55.0,
+    "num_cortes": 5,
+    "modo_corte": "ajustar",
+    "posicao_legenda": "juncao",
+    "titulo_na_tela": true,
+    "credito_na_tela": true,
+    "credito": "",
+    "musica_ativa": false
+  }
 }
