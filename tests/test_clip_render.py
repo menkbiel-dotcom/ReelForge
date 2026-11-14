@@ -250,6 +250,95 @@ class ClipRenderUnitTests(IsolatedOutputMixin, unittest.TestCase):
             )
         self.assertIn('crop=1080:960:(in_w-1080)*0.3500:(in_h-960)/2', captured[-1])
 
+    def test_item44_sfx_peak_early_energy_drop_filtergraph_and_migration(self):
+        import wave
+        import numpy as np
+        import sfx
+        import music_cortes
+
+        with tempfile.TemporaryDirectory() as td:
+            td_root = Path(td)
+            # (1) sfx gera WAV estéreo 44,1 kHz com pico <= -1 dBFS e energia nos primeiros 100 ms
+            for kind, expected_dur in (('impacto', 1.2), ('whoosh', 0.8)):
+                wav_path = sfx.ensure_sfx(kind, root=td_root)
+                self.assertIsNotNone(wav_path)
+                self.assertTrue(wav_path.is_file())
+                with wave.open(str(wav_path), 'rb') as wf:
+                    self.assertEqual(wf.getnchannels(), 2)
+                    self.assertEqual(wf.getframerate(), 44100)
+                    n_frames = wf.getnframes()
+                    self.assertAlmostEqual(n_frames / 44100.0, expected_dur, delta=0.05)
+                    raw = np.frombuffer(wf.readframes(n_frames), dtype='<i2').astype(np.float64) / 32767.0
+                stereo = raw.reshape(-1, 2)
+                peak = float(np.max(np.abs(stereo)))
+                limit_1dbfs = 10.0 ** (-1.0 / 20.0)
+                self.assertLessEqual(peak, limit_1dbfs + 1e-4, f'Pico de {kind} excedeu -1 dBFS: {peak}')
+                first_100ms = stereo[:int(0.10 * 44100)]
+                early_rms = float(np.sqrt(np.mean(first_100ms * first_100ms)))
+                self.assertGreater(early_rms, 0.05, f'{kind} sem energia suficiente nos primeiros 100 ms')
+
+            # (2) analyze_drop em sinal sintético (silêncio + rajada aos 10 s) devolve ~9.9 +- 0.3
+            synth_wav = td_root / 'burst_10s.wav'
+            sr = 22050
+            dur_s = 20
+            samples = np.zeros(sr * dur_s, dtype=np.float64)
+            t_burst = np.arange(sr * 10, dtype=np.float64) / sr
+            rng = np.random.default_rng(123)
+            samples[sr * 10:] = 0.7 * np.sin(2.0 * np.pi * 110.0 * t_burst) + 0.2 * rng.standard_normal(len(t_burst))
+            pcm_burst = np.clip(samples * 32767.0, -32767, 32767).astype('<i2')
+            with wave.open(str(synth_wav), 'wb') as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(sr)
+                wf.writeframes(pcm_burst.tobytes())
+
+            if HAS_FFMPEG:
+                drop_t = music_cortes.analyze_drop(synth_wav)
+                self.assertAlmostEqual(drop_t, 9.9, delta=0.3)
+                self.assertTrue((td_root / 'burst_10s.wav.drop.json').is_file())
+                # Segunda chamada lê do cache
+                self.assertAlmostEqual(music_cortes.analyze_drop(synth_wav), drop_t, places=3)
+
+            # (3) Migração musica_ativa -> musica_modo
+            m_true = clip_render.clipper.migrate_cortes_settings({'musica_ativa': True})
+            self.assertEqual(m_true['musica_modo'], 'baixa')
+            m_false = clip_render.clipper.migrate_cortes_settings({'musica_ativa': False})
+            self.assertEqual(m_false['musica_modo'], 'desligada')
+            m_default = clip_render.clipper.migrate_cortes_settings({})
+            self.assertEqual(m_default['musica_modo'], 'impacto')
+            self.assertEqual(m_default['musica_volume'], 22)
+            self.assertEqual(m_default['impacto_inicial'], 'impacto')
+            self.assertEqual(m_default['impacto_volume'], 70)
+
+            # (4) Filtergraph do modo impacto contém sidechaincompress, adelay e alimiter e grava metadados
+            info, transcription, candidate, gp = self._setup_fixture()
+            captured_fc = []
+
+            def fake_run(cmd):
+                cmd_list = list(map(str, cmd))
+                fc = cmd_list[cmd_list.index('-filter_complex') + 1]
+                captured_fc.append(fc)
+                Path(cmd_list[-1]).write_bytes(b'mp4')
+
+            with patch.object(engine, 'ROOT', td_root), \
+                 patch.object(engine, 'run', side_effect=fake_run), \
+                 patch.object(engine, 'ffprobe_duration', return_value=30.0):
+                out_imp = clip_render.render_clip(
+                    info, transcription, candidate, gameplay=gp, cut_index=3,
+                    modo_corte='preencher', musica_modo='impacto', musica_volume=22,
+                    impacto_inicial='impacto', impacto_volume=70, crop_x=0.5, log=lambda *_: None,
+                )
+            self.assertTrue(captured_fc)
+            fc_imp = captured_fc[-1]
+            self.assertIn('sidechaincompress', fc_imp)
+            self.assertIn('adelay', fc_imp)
+            self.assertIn('alimiter', fc_imp)
+            meta_imp = json.loads(out_imp.with_suffix('.json').read_text(encoding='utf-8'))
+            self.assertEqual(meta_imp['musica_modo'], 'impacto')
+            self.assertEqual(meta_imp['impacto_inicial'], 'impacto')
+            self.assertIsNotNone(meta_imp['faixa'])
+            self.assertIn('start', meta_imp)
+
 
 class ClipRenderIntegrationTests(IsolatedOutputMixin, unittest.TestCase):
     @unittest.skipUnless(HAS_FFMPEG, 'Requer FFmpeg instalado para teste de integração sintético')
@@ -305,11 +394,15 @@ class ClipRenderIntegrationTests(IsolatedOutputMixin, unittest.TestCase):
                 'motivo': 'Teste sintético.',
                 'texto': 'Teste real funcionando!',
             }
-            out_mp4 = clip_render.render_clip(
-                info, transcription, candidate, gameplay=gp, cut_index=1,
-                modo_corte='ajustar', posicao_legenda='juncao',
-                titulo_na_tela=True, credito_na_tela=True, log=lambda *_: None,
-            )
+            with patch.object(engine, 'ROOT', td_path):
+                out_mp4 = clip_render.render_clip(
+                    info, transcription, candidate, gameplay=gp, cut_index=1,
+                    modo_corte='ajustar', posicao_legenda='juncao',
+                    titulo_na_tela=True, credito_na_tela=True,
+                    musica_modo='impacto', musica_volume=22,
+                    impacto_inicial='impacto', impacto_volume=70,
+                    log=lambda *_: None,
+                )
             self.assertTrue(out_mp4.is_file())
             self.assertGreater(out_mp4.stat().st_size, 1000)
             probe = subprocess.run(
@@ -318,6 +411,9 @@ class ClipRenderIntegrationTests(IsolatedOutputMixin, unittest.TestCase):
             )
             self.assertIn('1080x1920', probe.stderr)
             self.assertIn('30 fps', probe.stderr)
+            self.assertIn('Audio:', probe.stderr)
+            dur_rendered = engine.ffprobe_duration(out_mp4)
+            self.assertAlmostEqual(dur_rendered, 3.0, delta=0.35)
 
 
 if __name__ == '__main__':

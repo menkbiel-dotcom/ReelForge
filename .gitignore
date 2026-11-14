@@ -25,3 +25,5 @@ assets/gameplay/*.mkv
 assets/gameplay/*.webm
 assets/music/*.wav
 assets/music/*.mp3
+assets/music/_sfx/*.wav
+assets/music/**/*.drop.json

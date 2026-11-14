@@ -42,9 +42,7 @@ class CortesTab(ttk.Frame):
     def __init__(self, master, app, saved_cortes=None):
         super().__init__(master, padding=12, style='Card.TFrame')
         self.app = app
-        cfg = dict(clipper.DEFAULT_CORTES_SETTINGS)
-        if isinstance(saved_cortes, dict):
-            cfg.update(saved_cortes)
+        cfg = clipper.migrate_cortes_settings(saved_cortes)
 
         self.source = tk.StringVar(value='')
         self.authorized = tk.BooleanVar(value=False)
@@ -59,7 +57,11 @@ class CortesTab(ttk.Frame):
         self.posicao_legenda = tk.StringVar(value=str(cfg.get('posicao_legenda', 'juncao')))
         self.titulo_na_tela = tk.BooleanVar(value=bool(cfg.get('titulo_na_tela', True)))
         self.credito_na_tela = tk.BooleanVar(value=bool(cfg.get('credito_na_tela', True)))
-        self.musica_ativa = tk.BooleanVar(value=bool(cfg.get('musica_ativa', False)))
+        self.musica_modo = tk.StringVar(value=str(cfg.get('musica_modo', 'impacto')))
+        self.musica_volume = tk.StringVar(value=str(int(cfg.get('musica_volume', 22))))
+        self.impacto_inicial = tk.StringVar(value=str(cfg.get('impacto_inicial', 'impacto')))
+        self.impacto_volume = tk.StringVar(value=str(int(cfg.get('impacto_volume', 70))))
+        self.musica_ativa = tk.BooleanVar(value=bool(cfg.get('musica_ativa', True)))
         self.inicio_min = tk.StringVar(value='')
         self.fim_min = tk.StringVar(value='')
         self.summary_var = tk.StringVar(
@@ -120,16 +122,21 @@ class CortesTab(ttk.Frame):
         ttk.Label(cfg_row, text='Idioma:', style='Card.TLabel').pack(side='left')
         ttk.Combobox(cfg_row, textvariable=self.idioma, values=['pt', 'en', 'es'], width=5).pack(side='left', padx=(4, 0))
 
-        # Linha 3: Opções visuais + trecho min X..Y + gameplay compartilhada
+        # Linha 3: Opções visuais + música/impacto + trecho min X..Y + gameplay compartilhada
         opt_row = ttk.Frame(self, style='Card.TFrame')
         opt_row.grid(row=3, column=0, columnspan=4, sticky='ew', pady=3)
         ttk.Checkbutton(opt_row, text='Título na tela (3s)', variable=self.titulo_na_tela).pack(side='left')
-        ttk.Checkbutton(opt_row, text='Crédito no canto', variable=self.credito_na_tela).pack(side='left', padx=(10, 0))
-        ttk.Checkbutton(opt_row, text='Música baixa', variable=self.musica_ativa).pack(side='left', padx=(10, 14))
+        ttk.Checkbutton(opt_row, text='Crédito no canto', variable=self.credito_na_tela).pack(side='left', padx=(10, 10))
+        ttk.Label(opt_row, text='Música:', style='Card.TLabel').pack(side='left')
+        ttk.Combobox(opt_row, textvariable=self.musica_modo, values=['desligada', 'baixa', 'impacto'], state='readonly', width=9).pack(side='left', padx=(4, 6))
+        ttk.Label(opt_row, text='Vol (%):', style='Card.TLabel').pack(side='left')
+        ttk.Spinbox(opt_row, from_=0, to=100, increment=2, textvariable=self.musica_volume, width=4).pack(side='left', padx=(4, 8))
+        ttk.Label(opt_row, text='Impacto inicial:', style='Card.TLabel').pack(side='left')
+        ttk.Combobox(opt_row, textvariable=self.impacto_inicial, values=['nenhum', 'impacto', 'whoosh'], state='readonly', width=8).pack(side='left', padx=(4, 10))
         ttk.Label(opt_row, text='Trecho min:', style='CardMuted.TLabel').pack(side='left')
         ttk.Entry(opt_row, textvariable=self.inicio_min, width=5).pack(side='left', padx=(4, 2))
         ttk.Label(opt_row, text='ao', style='CardMuted.TLabel').pack(side='left')
-        ttk.Entry(opt_row, textvariable=self.fim_min, width=5).pack(side='left', padx=(2, 12))
+        ttk.Entry(opt_row, textvariable=self.fim_min, width=5).pack(side='left', padx=(2, 10))
         ttk.Label(opt_row, textvariable=self.gameplay_info_var, style='CardMuted.TLabel').pack(side='left')
 
         # Linha 4: Botões principais do fluxo Cortes
@@ -142,7 +149,9 @@ class CortesTab(ttk.Frame):
         self.btn_cancel = ttk.Button(btn_row, text='Cancelar', command=self.cancel_operation, state='disabled')
         self.btn_cancel.pack(side='left', padx=(0, 8))
         self.btn_open_folder = ttk.Button(btn_row, text='Abrir pasta', command=self._open_cortes_folder)
-        self.btn_open_folder.pack(side='left')
+        self.btn_open_folder.pack(side='left', padx=(0, 8))
+        self.btn_open_music = ttk.Button(btn_row, text=r'Abrir pasta assets\music', command=self._open_music_folder)
+        self.btn_open_music.pack(side='left')
 
         # Linha 5: Resumo geral do vídeo
         ttk.Label(
@@ -232,6 +241,20 @@ class CortesTab(ttk.Frame):
             ncuts = int(float(self.num_cortes.get()))
         except ValueError:
             ncuts = 5
+        try:
+            mvol = max(0, min(100, int(round(float(str(self.musica_volume.get()).replace(',', '.'))))))
+        except ValueError:
+            mvol = 22
+        try:
+            ivol = max(0, min(100, int(round(float(str(self.impacto_volume.get()).replace(',', '.'))))))
+        except ValueError:
+            ivol = 70
+        mmodo = self.musica_modo.get().strip().casefold() or 'impacto'
+        if mmodo not in ('desligada', 'baixa', 'impacto'):
+            mmodo = 'impacto'
+        imp_ini = self.impacto_inicial.get().strip().casefold() or 'impacto'
+        if imp_ini not in ('nenhum', 'impacto', 'whoosh'):
+            imp_ini = 'impacto'
         return {
             'idioma': self.idioma.get().strip() or 'pt',
             'duracao_min': dmin,
@@ -243,7 +266,11 @@ class CortesTab(ttk.Frame):
             'titulo_na_tela': bool(self.titulo_na_tela.get()),
             'credito_na_tela': bool(self.credito_na_tela.get()),
             'credito': self.credito.get().strip(),
-            'musica_ativa': bool(self.musica_ativa.get()),
+            'musica_ativa': mmodo != 'desligada',
+            'musica_modo': mmodo,
+            'musica_volume': mvol,
+            'impacto_inicial': imp_ini,
+            'impacto_volume': ivol,
         }
 
     def refresh_action_states(self):
@@ -268,6 +295,14 @@ class CortesTab(ttk.Frame):
             candidate = target / str(self.info['id'])
             if candidate.exists():
                 target = candidate
+        target.mkdir(parents=True, exist_ok=True)
+        if os.name == 'nt':
+            os.startfile(str(target))
+        else:
+            subprocess.Popen(['xdg-open', str(target)])
+
+    def _open_music_folder(self):
+        target = engine.ROOT / 'assets' / 'music'
         target.mkdir(parents=True, exist_ok=True)
         if os.name == 'nt':
             os.startfile(str(target))
@@ -482,6 +517,10 @@ class CortesTab(ttk.Frame):
                     titulo_na_tela=cfg['titulo_na_tela'],
                     credito_na_tela=cfg['credito_na_tela'],
                     musica_ativa=cfg['musica_ativa'],
+                    musica_modo=cfg['musica_modo'],
+                    musica_volume=cfg['musica_volume'],
+                    impacto_inicial=cfg['impacto_inicial'],
+                    impacto_volume=cfg['impacto_volume'],
                     crop_x=crop_x_val,
                     enquadramento=cfg.get('enquadramento', 'auto'),
                     modelos=modelos,

@@ -20,10 +20,10 @@ def _background_color(brightness, gamma):
     return brightness, gamma
 
 
-def _music_volume(percent):
+def _music_volume(percent, max_percent: float = 100.0):
     percent = float(str(percent).replace(',', '.').replace('%', ''))
-    if not 0 <= percent <= 40:
-        raise ValueError('Use volume da música entre 0% e 40%.')
+    if not 0 <= percent <= max_percent:
+        raise ValueError(f'Use volume da música entre 0% e {int(max_percent)}%.')
     return percent / 100.0
 
 
@@ -254,6 +254,10 @@ def render_clip(
     titulo_na_tela: bool = True,
     credito_na_tela: bool = True,
     musica_ativa: bool = False,
+    musica_modo: str | None = None,
+    musica_volume: float | None = None,
+    impacto_inicial: str | None = None,
+    impacto_volume: float | None = None,
     crop_x: float | None = None,
     enquadramento: str | None = None,
     modelos: dict | None = None,
@@ -373,30 +377,121 @@ def render_clip(
             'scale=out_color_matrix=bt709:out_range=tv,setsar=1[vout]'
         )
 
-        # Áudio do corte + música opcional (padrão desligada) + loudnorm
-        chain.append(
-            f'[0:a]asetpts=PTS-STARTPTS,aformat=sample_rates=48000:channel_layouts=stereo,'
-            f'apad,atrim=0:{total:.4f}[clipaudio]'
-        )
+        # Áudio do corte + música ('desligada'|'baixa'|'impacto') + impacto inicial ('nenhum'|'impacto'|'whoosh')
+        if musica_modo is not None and str(musica_modo).strip():
+            eff_music_mode = str(musica_modo).strip().casefold()
+        else:
+            eff_music_mode = 'baixa' if bool(musica_ativa) else 'desligada'
+        if eff_music_mode not in ('desligada', 'baixa', 'impacto'):
+            raise ValueError('Modo de música inválido. Use "desligada", "baixa" ou "impacto".')
 
+        if impacto_inicial is not None and str(impacto_inicial).strip():
+            eff_impacto = str(impacto_inicial).strip().casefold()
+        else:
+            eff_impacto = 'impacto' if eff_music_mode == 'impacto' else 'nenhum'
+        if eff_impacto not in ('nenhum', 'impacto', 'whoosh'):
+            raise ValueError('Impacto inicial inválido. Use "nenhum", "impacto" ou "whoosh".')
+
+        cortes_cfg = cfg.get('cortes') if isinstance(cfg.get('cortes'), dict) else {}
         extra_inputs = []
+        next_input_idx = 2
         track = None
         music_offset = 0.0
         volume = 0.0
-        if musica_ativa:
+        music_input_idx = None
+
+        if eff_music_mode == 'baixa':
             import music
             track = music.pick(engine.ROOT)
-            volume = _music_volume(os.getenv('REELFORGE_MUSIC_VOLUME', str(cfg.get('music_volume', 8))))
+            raw_vol = musica_volume if musica_volume is not None else os.getenv('REELFORGE_MUSIC_VOLUME', str(cfg.get('music_volume', 8)))
+            volume = _music_volume(raw_vol, max_percent=100.0)
             length = engine.ffprobe_duration(track)
             music_offset = random.uniform(0.0, max(0.0, length - total - 0.5))
+            music_input_idx = next_input_idx
+            next_input_idx += 1
             extra_inputs += ['-stream_loop', '-1', '-ss', f'{music_offset:.4f}', '-i', track]
+        elif eff_music_mode == 'impacto':
+            import music_cortes
+            track, music_offset = music_cortes.pick_for_clip(engine.ROOT, total, modo='impacto')
+            raw_vol = musica_volume if musica_volume is not None else cortes_cfg.get('musica_volume', 22)
+            volume = _music_volume(raw_vol, max_percent=100.0)
+            music_input_idx = next_input_idx
+            next_input_idx += 1
+            extra_inputs += ['-stream_loop', '-1', '-ss', f'{music_offset:.4f}', '-i', track]
+
+        sfx_path = None
+        sfx_input_idx = None
+        imp_vol_pct = float(impacto_volume if impacto_volume is not None else cortes_cfg.get('impacto_volume', 70))
+        imp_gain = _music_volume(imp_vol_pct, max_percent=100.0)
+        if eff_impacto in ('impacto', 'whoosh'):
+            import sfx
+            sfx_path = sfx.ensure_sfx(eff_impacto, root=engine.ROOT)
+            if sfx_path is not None:
+                sfx_input_idx = next_input_idx
+                next_input_idx += 1
+                extra_inputs += ['-i', sfx_path]
+
+        if eff_music_mode == 'impacto':
             chain.append(
-                f'[2:a]aformat=sample_rates=48000:channel_layouts=stereo,volume={volume:.3f},'
+                f'[0:a]asetpts=PTS-STARTPTS,aformat=sample_rates=48000:channel_layouts=stereo,'
+                f'apad,atrim=0:{total:.4f},asplit=2[clipaudio][sc]'
+            )
+            chain.append(
+                f'[{music_input_idx}:a]aformat=sample_rates=48000:channel_layouts=stereo,volume={volume:.3f},'
+                f'atrim=0:{total:.4f},asetpts=PTS-STARTPTS,adelay=0|0,'
+                f'afade=t=in:d=0.05,afade=t=out:st={max(0.0, total - 0.8):.4f}:d=0.8[musicraw];'
+                f'[musicraw][sc]sidechaincompress=threshold=0.04:ratio=10:attack=5:release=300[music]'
+            )
+            if sfx_input_idx is not None:
+                chain.append(
+                    f'[{sfx_input_idx}:a]aformat=sample_rates=48000:channel_layouts=stereo,volume={imp_gain:.3f},'
+                    f'adelay=0|0,apad,atrim=0:{total:.4f}[sfx]'
+                )
+                chain.append(
+                    '[clipaudio][music][sfx]amix=inputs=3:normalize=0:duration=first,'
+                    'alimiter=limit=0.95,loudnorm=I=-14:TP=-1.5:LRA=11[aout]'
+                )
+            else:
+                chain.append(
+                    '[clipaudio][music]amix=inputs=2:normalize=0:duration=first,'
+                    'alimiter=limit=0.95,loudnorm=I=-14:TP=-1.5:LRA=11[aout]'
+                )
+        elif eff_music_mode == 'baixa':
+            chain.append(
+                f'[0:a]asetpts=PTS-STARTPTS,aformat=sample_rates=48000:channel_layouts=stereo,'
+                f'apad,atrim=0:{total:.4f}[clipaudio]'
+            )
+            chain.append(
+                f'[{music_input_idx}:a]aformat=sample_rates=48000:channel_layouts=stereo,volume={volume:.3f},'
                 f'atrim=0:{total:.4f},afade=t=in:d=0.4,afade=t=out:st={max(0.0, total - 0.8):.4f}:d=0.8[music]'
             )
-            chain.append('[clipaudio][music]amix=inputs=2:normalize=0:duration=first,loudnorm=I=-14:TP=-1.5:LRA=11[aout]')
+            if sfx_input_idx is not None:
+                chain.append(
+                    f'[{sfx_input_idx}:a]aformat=sample_rates=48000:channel_layouts=stereo,volume={imp_gain:.3f},'
+                    f'adelay=0|0,apad,atrim=0:{total:.4f}[sfx]'
+                )
+                chain.append(
+                    '[clipaudio][music][sfx]amix=inputs=3:normalize=0:duration=first,'
+                    'alimiter=limit=0.95,loudnorm=I=-14:TP=-1.5:LRA=11[aout]'
+                )
+            else:
+                chain.append('[clipaudio][music]amix=inputs=2:normalize=0:duration=first,loudnorm=I=-14:TP=-1.5:LRA=11[aout]')
         else:
-            chain.append('[clipaudio]loudnorm=I=-14:TP=-1.5:LRA=11[aout]')
+            chain.append(
+                f'[0:a]asetpts=PTS-STARTPTS,aformat=sample_rates=48000:channel_layouts=stereo,'
+                f'apad,atrim=0:{total:.4f}[clipaudio]'
+            )
+            if sfx_input_idx is not None:
+                chain.append(
+                    f'[{sfx_input_idx}:a]aformat=sample_rates=48000:channel_layouts=stereo,volume={imp_gain:.3f},'
+                    f'adelay=0|0,apad,atrim=0:{total:.4f}[sfx]'
+                )
+                chain.append(
+                    '[clipaudio][sfx]amix=inputs=2:normalize=0:duration=first,'
+                    'alimiter=limit=0.95,loudnorm=I=-14:TP=-1.5:LRA=11[aout]'
+                )
+            else:
+                chain.append('[clipaudio]loudnorm=I=-14:TP=-1.5:LRA=11[aout]')
 
         log(f'Renderizando corte {int(cut_index):02d} ({start:.2f}s–{start + total:.2f}s)...')
         ffmpeg_cmd = [
@@ -440,6 +535,11 @@ def render_clip(
             'credito_na_tela': bool(credito_na_tela),
             'gameplay': str(gameplay_path),
             'gameplay_start': offset,
+            'musica_modo': eff_music_mode,
+            'faixa': str(track) if track else None,
+            'start': round(float(music_offset), 3),
+            'impacto_inicial': eff_impacto,
+            'impacto_volume': round(float(imp_vol_pct), 1),
             'music': str(track) if track else None,
             'music_start': music_offset,
             'music_volume': volume,

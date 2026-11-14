@@ -482,3 +482,13 @@
   - **Testes:** `tests.test_clipper` (18 testes passando) + suíte completa (121 testes, 2x consecutivas)
   - **Resumo:** (1) Prompt de seleção em `_evaluate_window_cuts()` instrui explicitamente a começar com pergunta, afirmação forte ou dado surpreendente e não começar com transições/conectores (`"e galera"`, `"então"`, `"bom"`, `"outra coisa"`, `"agora"`, `"mas"`, `"aí"`, `"olha só"`). (2) `heuristic_score()` penaliza em `-1.0` cortes que começam com essas transições (`starts_with_weak_transition`). (3) `_repair_unit_bounds()` avança o início para a próxima unidade quando a primeira começa com transição e a duração resultante permanece dentro de `[min_duration, max_duration]`. (4) `validate_or_repair_hook()` pula frases iniciadas com transição ao cair no fallback e registra `"gancho: fallback usado"` no log. (5) `relatorio.json` registra `"inicio_fraco": true/false` em cada candidato.
   - **Status:** Todos os itens (41 a 43) concluídos.
+
+---
+
+## Status por Item (Rodada 11 — Itens 44 a 46: Música de Impacto, Polimento GUI e Detector de Publi)
+
+- [x] **ITEM 44 — Música de impacto + impacto inicial (modo Cortes)**: feito
+  - **Arquivos:** `sfx.py`, `music_cortes.py`, `clip_render.py`, `clipper.py`, `gui_cortes.py`, `settings.json`, `assets/music/LEIA-ME.txt`, `.gitignore`, `tests/test_clip_render.py`
+  - **Testes:** `tests.test_clip_render` (4 testes passando: picos `<= -1 dBFS` e energia em 100 ms no `sfx`, `analyze_drop` ~9.9±0.3 em rajada sintética aos 10 s, filtergraph com `sidechaincompress`/`adelay`/`alimiter`, migração `musica_ativa -> musica_modo` e render real com `lavfi`) + `tests.test_gui_cortes` (3 testes passando)
+  - **Resumo:** Criados `sfx.py` (WAVs estéreo 44,1 kHz cacheados em `assets/music/_sfx/`: `"impacto"` ~1,2 s e `"whoosh"` ~0,8 s com sementes fixas e pico `<= -1 dBFS`), `music_cortes.py` (`list_tracks`, `analyze_drop` via pipe `ffmpeg` mono 22,05 kHz float32 + envelope RMS/fluxo espectral e cache `.drop.json`, `pick_for_clip` com `start = drop - 0,1 s` e fallback sintético `generate_punchy_bed` ~128 BPM de ~24 s) e `assets/music/LEIA-ME.txt`. Em `clip_render.py`, adicionadas opções `musica_modo` (`"desligada"|"baixa"|"impacto"`), `musica_volume` (`0–100`), `impacto_inicial` (`"nenhum"|"impacto"|"whoosh"`) e `impacto_volume` (`0–100`), com ducking por `asplit` + `sidechaincompress` (`threshold=0.04:ratio=10:attack=5:release=300`), `adelay=0|0`, `alimiter` e `loudnorm`, gravando `musica_modo`, `faixa`, `start` e `impacto_inicial` no JSON do corte.
+  - **Próximo item:** ITEM 45 — Polimento da interface (`gui.py` + `gui_cortes.py`).

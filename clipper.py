@@ -41,7 +41,46 @@ DEFAULT_CORTES_SETTINGS = {
     'credito_na_tela': True,
     'credito': '',
     'musica_ativa': False,
+    'musica_modo': 'impacto',
+    'musica_volume': 22,
+    'impacto_inicial': 'impacto',
+    'impacto_volume': 70,
 }
+
+
+def migrate_cortes_settings(raw: dict | None, has_fallback: bool = True) -> dict:
+    """Normaliza configurações de cortes e migra musica_ativa (true->'baixa', false->'desligada') quando musica_modo ausente."""
+    default_mode = 'impacto' if has_fallback else 'desligada'
+    out = dict(DEFAULT_CORTES_SETTINGS)
+    out['musica_modo'] = default_mode
+    if not isinstance(raw, dict):
+        out['musica_ativa'] = out['musica_modo'] != 'desligada'
+        return out
+
+    out.update(raw)
+    raw_mode = raw.get('musica_modo')
+    if raw_mode is not None and str(raw_mode).strip():
+        mode = str(raw_mode).strip().casefold()
+        if mode not in ('desligada', 'baixa', 'impacto'):
+            mode = default_mode
+        out['musica_modo'] = mode
+    elif 'musica_ativa' in raw:
+        out['musica_modo'] = 'baixa' if bool(raw['musica_ativa']) else 'desligada'
+    else:
+        out['musica_modo'] = default_mode
+
+    out['musica_ativa'] = out['musica_modo'] != 'desligada'
+    try:
+        out['musica_volume'] = max(0, min(100, int(round(float(out.get('musica_volume', 22))))))
+    except (TypeError, ValueError):
+        out['musica_volume'] = 22
+    imp = str(out.get('impacto_inicial', 'impacto') or 'impacto').strip().casefold()
+    out['impacto_inicial'] = imp if imp in ('nenhum', 'impacto', 'whoosh') else 'impacto'
+    try:
+        out['impacto_volume'] = max(0, min(100, int(round(float(out.get('impacto_volume', 70))))))
+    except (TypeError, ValueError):
+        out['impacto_volume'] = 70
+    return out
 
 
 def cortes_root() -> Path:

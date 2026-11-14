@@ -35,13 +35,17 @@
     "idioma": "pt",
     "duracao_min": 25.0,
     "duracao_max": 55.0,
-    "num_cortes": 5,
+    "num_cortes": 7,
     "modo_corte": "preencher",
     "enquadramento": "auto",
     "posicao_legenda": "juncao",
     "titulo_na_tela": false,
     "credito_na_tela": false,
     "credito": "",
-    "musica_ativa": false
+    "musica_ativa": true,
+    "musica_modo": "impacto",
+    "musica_volume": 22,
+    "impacto_inicial": "impacto",
+    "impacto_volume": 70
   }
 }

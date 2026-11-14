@@ -1,0 +1,20 @@
+MÚSICAS DE FUNDO — REELFORGE (MODO NOTÍCIA E MODO CORTES)
+=========================================================
+
+1. LICENÇA E DIREITOS AUTORAIS
+- Utilize SOMENTE faixas musicais cuja licença permita uso comercial e publicação em redes sociais (Reels, Shorts, TikTok).
+- Guarde sempre o comprovante da licença ou o link/certificado de atribuição correspondente a cada arquivo salvo nesta pasta.
+- Nunca utilize músicas protegidas por direitos autorais sem autorização: plataformas de vídeo bloqueiam, silenciam ou desmonetizam conteúdos com trilhas não licenciadas.
+
+2. ONDE ENCONTRAR FAIXAS SEGURAS (EXEMPLOS)
+- Biblioteca de Áudio do YouTube (YouTube Studio -> Biblioteca de áudio): filtre por "Atribuição não necessária" ou siga exatamente o texto de atribuição exigido.
+- Pixabay Music (https://pixabay.com/music/): verifique a licença de cada faixa antes de publicar e salve o comprovante da licença.
+- Sempre confira individualmente os termos da licença de cada faixa antes do uso.
+
+3. PASTAS
+- Coloque faixas enérgicas para o modo "Impacto" (Cortes) em: assets/music/impacto/
+- Faixas gerais podem ficar diretamente em: assets/music/
+- Se nenhuma faixa for colocada aqui, o ReelForge gera automaticamente trilhas sintéticas locais livres de direitos.
+
+4. ALTERNATIVA RECOMENDADA PARA REDES SOCIAIS
+- Você pode renderizar o corte com "Música: Desligada" no ReelForge e adicionar o áudio em alta diretamente no aplicativo da rede social (Instagram, TikTok ou YouTube) no momento da publicação.
