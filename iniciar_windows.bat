@@ -45,6 +45,10 @@ set "TRANSFORMERS_OFFLINE=1"
 set "STAGE=Validar dependencias"
 ".venv\Scripts\python.exe" -m pip check >>"%LOG%" 2>&1
 if errorlevel 1 goto fail
+".venv\Scripts\python.exe" -c "import yt_dlp" >>"%LOG%" 2>&1
+if errorlevel 1 (
+  ".venv\Scripts\python.exe" -m pip install yt-dlp >>"%LOG%" 2>&1
+)
 ".venv\Scripts\python.exe" -c "import tkinter, feedparser, requests, edge_tts, PIL, dotenv, openai, yt_dlp; t=tkinter.Tk(); t.withdraw(); t.destroy()" >>"%LOG%" 2>&1
 if errorlevel 1 goto fail
 if not exist "assets\gameplay" mkdir "assets\gameplay"
