@@ -502,6 +502,7 @@
   - **Próximo item:** ITEM 46 — Detectar publicidade e melhorar ganchos fracos (`clipper.py`).
 
 - [x] **ITEM 46 — Detectar publicidade e melhorar ganchos fracos (`clipper.py`, `tests/test_clipper.py`, `CLAUDE.md`, `HANDOFF.md`)**: feito
+  - **Commit:** `553f8266ba344087dca37bb30ed7adc4ceab2b74` — *"Item 46: Detector de publicidade em PT, reparo de ganchos fragmentados e documentacao"*
   - **Arquivos:** `clipper.py`, `tests/test_clipper.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** `tests.test_clipper` (19 testes passando, incluindo `test_item46_advertising_detection_penalty_and_fragment_hook_repair`) — suíte completa com **124 testes** executada 2x consecutivas com guarda de isolamento do `output/` real
   - **Resumo:** (1) Prompt de seleção em `_evaluate_window_cuts()` reforça que trechos de publicidade (`patrocínio, parceria, divulgação de produto/serviço/site, cupom, "link na descrição"`) não devem ser selecionados. (2) Adicionado detector de publicidade por palavras-chave em PT-BR (`detect_advertising` com `AD_KEYWORD_PATTERNS`); com `>= 2` ocorrências distintas, `heuristic_score()` aplica penalidade de `-3.0` e marca `"possivel_publi": true` e `"selo_publi": "PUBLI?"` no candidato e em `relatorio.json` sem excluir o corte (exibido como `[PUBLI?]` na GUI). (3) `validate_or_repair_hook()` e `_truncate_first_sentence()` rejeitam ganchos fragmentados (`< 3` palavras ou sem verbo com `< 5` palavras como `"colecionador."`) e, no fallback, buscam a primeira frase completa com `>= 5` palavras sem transição fraca, logando `"gancho: fallback usado"`.
