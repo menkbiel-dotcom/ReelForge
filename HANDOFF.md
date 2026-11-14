@@ -477,6 +477,7 @@
   - **Próximo item:** ITEM 43 — Qualidade do começo do corte (`clipper.py`).
 
 - [x] **ITEM 43 — Qualidade do começo do corte (`clipper.py`, `tests/test_clipper.py`)**: feito
+  - **Commit:** `dc9a493601b1867cff6834a471e55c1fa7d34516` — *"Item 43: Qualidade do comeco do corte, penalidade de transicoes, reparo e inicio_fraco"*
   - **Arquivos:** `clipper.py`, `tests/test_clipper.py`, `CLAUDE.md`, `HANDOFF.md`
   - **Testes:** `tests.test_clipper` (18 testes passando) + suíte completa (121 testes, 2x consecutivas)
   - **Resumo:** (1) Prompt de seleção em `_evaluate_window_cuts()` instrui explicitamente a começar com pergunta, afirmação forte ou dado surpreendente e não começar com transições/conectores (`"e galera"`, `"então"`, `"bom"`, `"outra coisa"`, `"agora"`, `"mas"`, `"aí"`, `"olha só"`). (2) `heuristic_score()` penaliza em `-1.0` cortes que começam com essas transições (`starts_with_weak_transition`). (3) `_repair_unit_bounds()` avança o início para a próxima unidade quando a primeira começa com transição e a duração resultante permanece dentro de `[min_duration, max_duration]`. (4) `validate_or_repair_hook()` pula frases iniciadas com transição ao cair no fallback e registra `"gancho: fallback usado"` no log. (5) `relatorio.json` registra `"inicio_fraco": true/false` em cada candidato.
